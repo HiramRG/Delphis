@@ -132,6 +132,21 @@ object GameWatch {
     /** True when the game stopped without Delphis asking; the bottom screen offers a restart. */
     val unexpectedStop = androidx.compose.runtime.mutableStateOf(false)
 
+    /**
+     * True while the player has left the game for the home screen or another app (the game is
+     * still running in Dolphin, just in the background). The bottom screen hides meanwhile.
+     */
+    val suspended = androidx.compose.runtime.mutableStateOf(false)
+    /** Set by the in-game bottom screen: called with true when the game goes to the background. */
+    @Volatile var onSuspended: ((Boolean) -> Unit)? = null
+
+    fun setSuspended(value: Boolean) {
+        if (session == null || suspended.value == value) return
+        suspended.value = value
+        CrashLog.event(if (value) "game moved to the background (home screen or another app)" else "game back on screen")
+        onSuspended?.invoke(value)
+    }
+
     fun reportGone(how: String) {
         val s = session ?: return
         if (GameLauncher.busy || unexpectedStop.value) return

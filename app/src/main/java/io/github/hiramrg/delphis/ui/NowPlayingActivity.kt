@@ -65,6 +65,11 @@ import kotlinx.coroutines.delay
 private const val WAKE_MS = 1500L
 
 class NowPlayingActivity : ComponentActivity() {
+    companion object {
+        /** Set when the game came back from the background and this screen is shown again. */
+        const val EXTRA_RESUMED = "delphis.resumed"
+    }
+
     private enum class Mode { VIEW, CHANGE, EDIT }
 
     private lateinit var prefs: Prefs
@@ -172,6 +177,14 @@ class NowPlayingActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_RESUMED, false)) {
+            // Back from the home screen: this window came to the front, so give focus back to the game.
+            window.decorView.postDelayed({
+                val s = session ?: return@postDelayed
+                bridge.bringToFront(s.uri, DeviceInfo.screenRoles(this, prefs.swapScreens).topDisplayId)
+            }, 300)
+            return
+        }
         GameSession.from(intent)?.let { recordPlayTime(); prefs.markPlayed(it.key); session = it; startedAt = SystemClock.elapsedRealtime(); watch(it) }
     }
 
@@ -179,6 +192,9 @@ class NowPlayingActivity : ComponentActivity() {
     private fun watch(s: GameSession?) {
         GameWatch.session = s
         GameWatch.unexpectedStop.value = false
+        GameWatch.suspended.value = false
+        // The player went to the home screen / another app: hide with the game (it comes back with it).
+        GameWatch.onSuspended = { gone -> if (gone) runOnUiThread { moveTaskToBack(true) } }
     }
 
     override fun onPause() {
@@ -188,7 +204,7 @@ class NowPlayingActivity : ComponentActivity() {
 
     override fun onDestroy() {
         removeFocusSink()
-        if (isFinishing) { recordPlayTime(); GameWatch.session = null }
+        if (isFinishing) { recordPlayTime(); GameWatch.session = null; GameWatch.onSuspended = null; GameWatch.suspended.value = false }
         super.onDestroy()
     }
 
@@ -529,7 +545,7 @@ class NowPlayingActivity : ComponentActivity() {
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val wide = maxWidth > maxHeight * 1.05f
             val list: @Composable (Modifier) -> Unit = { m ->
-                PresetChooser(suggestion.question, choices, suggestion.alternatives, candidate, recommendFirst = false, modifier = m) { candidate = it }
+                PresetChooser(suggestion.question, choices, suggestion.alternatives, candidate, suggestedId = suggestion.choices.firstOrNull()?.id, modifier = m) { candidate = it }
             }
             val preview: @Composable (Modifier) -> Unit = { m ->
                 Column(m) {

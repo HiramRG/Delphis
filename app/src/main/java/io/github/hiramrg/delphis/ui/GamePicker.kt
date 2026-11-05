@@ -16,7 +16,10 @@ class GamePicker(private val act: MainActivity, val game: GameEntry) {
     var custom by mutableStateOf(act.store.customFor(game.key))
     val choices: List<Preset> get() = listOfNotNull(custom) + suggestion.choices
     val alternatives: List<Preset> get() = suggestion.alternatives
-    val everyPreset: List<Preset> get() = choices + alternatives
+    /** Same order as on screen: main list, gyro folder, other layouts. */
+    val everyPreset: List<Preset> get() = PresetGroups(choices, alternatives).ordered
+    /** The game's first suggested preset, tagged "(suggested)" in the lists. */
+    val suggestedId: String? get() = suggestion.choices.firstOrNull()?.id
     val recommendFirst: Boolean get() = !suggestion.askBeforePlaying && custom == null
 
     var selected by mutableStateOf(

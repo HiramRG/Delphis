@@ -75,7 +75,38 @@ class DolphinExitService : AccessibilityService() {
     private val checkGame = Runnable {
         if (GameWatch.session == null || GameLauncher.busy) return@Runnable
         val stillShowing = DolphinBridge.KNOWN_PACKAGES.any { find(it, "frame_emulation_fragment") != null }
-        if (!stillShowing) GameWatch.reportGone("Dolphin's game screen closed (Dolphin may have crashed)")
+        if (stillShowing) {
+            if (GameWatch.suspended.value) bringBottomScreenBack()
+            return@Runnable
+        }
+        val app = topScreenApp()
+        when {
+            // Dolphin itself is showing, but not the game: the game was closed or Dolphin crashed.
+            app != null && app in DolphinBridge.KNOWN_PACKAGES -> GameWatch.reportGone("Dolphin's game screen closed (Dolphin may have crashed)")
+            // Our own game list: MainActivity.onResume decides.
+            app == packageName -> Unit
+            // The home screen, another app, or nothing (screen off): the game is just in the background.
+            else -> GameWatch.setSuspended(true)
+        }
+    }
+
+    /** Package of the app shown on the top screen, if any. */
+    private fun topScreenApp(): String? = runCatching {
+        val top = DeviceInfo.screenRoles(this, Prefs(this).swapScreens).topDisplayId
+        val list = if (android.os.Build.VERSION.SDK_INT >= 30) windowsOnAllDisplays.get(top).orEmpty() else windows
+        list.firstOrNull { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION }
+            ?.root?.packageName?.toString()
+    }.getOrNull()
+
+    /** The game is back on the top screen: show the in-game bottom screen again. */
+    private fun bringBottomScreenBack() {
+        GameWatch.setSuspended(false)
+        val bottom = DeviceInfo.screenRoles(this, Prefs(this).swapScreens).bottomDisplayId ?: return
+        val intent = Intent(this, io.github.hiramrg.delphis.ui.NowPlayingActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            .putExtra(io.github.hiramrg.delphis.ui.NowPlayingActivity.EXTRA_RESUMED, true)
+        val options = android.app.ActivityOptions.makeBasic().setLaunchDisplayId(bottom).toBundle()
+        runCatching { startActivity(intent, options) }.onFailure { CrashLog.event("couldn't bring the bottom screen back: ${it.message}") }
     }
 
     /**

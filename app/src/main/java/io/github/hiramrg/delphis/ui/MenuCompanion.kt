@@ -200,15 +200,8 @@ private fun PickerPanel(act: MainActivity, p: GamePicker) {
         return
     }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(p.game.info.title, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Text("How do you want to play?", fontSize = 12.sp, color = c.textDim)
-        }
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(p.everyPreset, key = { it.id }) { preset ->
-                PickerCard(preset, p.selected?.id == preset.id) { p.selected = preset }
-            }
-        }
+        Text(p.game.info.title, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        PresetChooser(p.suggestion.question, p.choices, p.alternatives, p.selected, p.suggestedId, Modifier.weight(1f)) { p.selected = it }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             WiiButton("Ⓧ Edit", onClick = { p.editing = true }, enabled = p.selected != null, modifier = Modifier.weight(1f))
             WiiButton("Ⓐ Play", onClick = { p.play() }, primary = true, enabled = p.selected != null, modifier = Modifier.weight(2f), fontSize = 18.sp)
@@ -219,7 +212,7 @@ private fun PickerPanel(act: MainActivity, p: GamePicker) {
 
 /** One preset with a mini preview of its main in-game tiles (in the real control colours). */
 @Composable
-fun PickerCard(preset: Preset, selected: Boolean, onClick: () -> Unit) {
+fun PickerCard(preset: Preset, selected: Boolean, suggested: Boolean = false, onClick: () -> Unit) {
     val c = LocalWii.current
     val main = remember(preset.id) { summarize(preset).main.map { it.controls.first() } }
     WiiCard(Modifier.fillMaxWidth(), selected = selected, radius = 18.dp, padding = 8.dp, onClick = onClick) {
@@ -237,7 +230,7 @@ fun PickerCard(preset: Preset, selected: Boolean, onClick: () -> Unit) {
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(withOrangeTags(preset.name, c.orange), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(presetTitle(preset.name, suggested), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 17.sp)
                 Text(preset.summary, fontSize = 11.sp, color = c.textDim, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }

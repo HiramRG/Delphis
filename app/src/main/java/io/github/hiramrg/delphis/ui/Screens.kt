@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -471,7 +472,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             val sel = p.selected
             WiiCard(Modifier.fillMaxWidth().weight(1f), radius = 20.dp, padding = 12.dp) {
                 Text("CONTROLS", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
-                Text(withOrangeTags(sel?.name ?: p.suggestion.question, c.orange), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(if (sel != null) presetTitle(sel.name, sel.id == p.suggestedId) else androidx.compose.ui.text.AnnotatedString(p.suggestion.question), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(6.dp))
                 if (companion) {
                     if (sel != null) ControlsOverview(sel, Modifier.weight(1f).fillMaxWidth())
@@ -479,7 +480,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                         Text("Pick a control style on the bottom screen (or with the D-pad).", color = c.textDim, textAlign = TextAlign.Center)
                     }
                 } else {
-                    PresetChooser(p.suggestion.question, p.choices, p.alternatives, sel, p.recommendFirst, Modifier.weight(1f)) { p.selected = it }
+                    PresetChooser(p.suggestion.question, p.choices, p.alternatives, sel, p.suggestedId, Modifier.weight(1f)) { p.selected = it }
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -493,39 +494,97 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     }
 }
 
-/** List of presets: the suggested ones first, the rest under "Other layouts". Reused on the bottom screen in game. */
+/** Gyro presets (marked "(experimental)") are grouped in their own folder in every preset list. */
+fun Preset.isGyro(): Boolean =
+    mappings.any { it.target is io.github.hiramrg.delphis.core.Target.GyroPointer } || name.contains("(experimental)")
+
+/** How a game's presets are shown: the main list, the gyro folder, and "Other layouts". */
+class PresetGroups(choices: List<Preset>, alternatives: List<Preset>) {
+    val main = choices.filterNot { it.isGyro() }
+    val gyro = (choices + alternatives).filter { it.isGyro() }.distinctBy { it.id }
+    val others = alternatives.filterNot { it.isGyro() }
+    /** Top-to-bottom order, used for D-pad navigation. */
+    val ordered get() = main + gyro + others
+}
+
+/** The preset's name with its "(experimental)" tag in orange and, if suggested, "(suggested)" in green. */
+@Composable
+fun presetTitle(name: String, suggested: Boolean): androidx.compose.ui.text.AnnotatedString {
+    val c = LocalWii.current
+    return androidx.compose.ui.text.buildAnnotatedString {
+        append(withOrangeTags(name, c.orange))
+        if (suggested) {
+            append(" ")
+            withStyle(androidx.compose.ui.text.SpanStyle(color = c.green, fontWeight = FontWeight.ExtraBold)) { append("(suggested)") }
+        }
+    }
+}
+
+/** A folder row in a preset list (tap to open or close it). */
+@Composable
+private fun PresetFolder(title: String, count: Int, open: Boolean, onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        Modifier.fillMaxWidth().clip(shape).background(c.accentSoft).border(2.dp, c.accent.copy(alpha = 0.5f), shape)
+            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(if (open) "▾" else "▸", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
+        Spacer(Modifier.width(8.dp))
+        Text(withOrangeTags(title, c.orange), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("$count", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText,
+            modifier = Modifier.clip(RoundedCornerShape(50)).background(c.card).padding(horizontal = 8.dp, vertical = 2.dp))
+    }
+}
+
+/**
+ * List of a game's presets: the suggested one first (tagged "(suggested)"), then the gyro presets in a
+ * "Gyro aiming (experimental)" folder and the rest in an "Other layouts" folder. Used on the game page,
+ * the bottom-screen picker and "Change controls" in game.
+ */
 @Composable
 fun PresetChooser(
     question: String,
     choices: List<Preset>,
     alternatives: List<Preset>,
     selected: Preset?,
-    recommendFirst: Boolean,
+    suggestedId: String?,
     modifier: Modifier = Modifier,
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
     onSelect: (Preset) -> Unit,
 ) {
-    var showOthers by remember { mutableStateOf(selected != null && selected in alternatives) }
-    // Keep the selected preset visible (it can change from the controller), opening "Other layouts" if needed.
+    val groups = remember(choices, alternatives) { PresetGroups(choices, alternatives) }
+    var showGyro by remember { mutableStateOf(groups.gyro.any { it.id == selected?.id }) }
+    var showOthers by remember { mutableStateOf(groups.others.any { it.id == selected?.id }) }
+    // Keep the selected preset visible (it can change from the controller), opening its folder if needed.
     LaunchedEffect(selected?.id) {
-        val sel = selected ?: return@LaunchedEffect
-        val inChoices = choices.indexOfFirst { it.id == sel.id }
-        val inOthers = alternatives.indexOfFirst { it.id == sel.id }
+        val id = selected?.id ?: return@LaunchedEffect
+        val m = groups.main.size
+        val g = groups.gyro.indexOfFirst { it.id == id }
+        val o = groups.others.indexOfFirst { it.id == id }
+        if (g >= 0) showGyro = true
+        if (o >= 0) showOthers = true
+        val gyroRows = if (groups.gyro.isEmpty()) 0 else 1 + if (showGyro) groups.gyro.size else 0
         val index = when {
-            inChoices >= 0 -> 1 + inChoices
-            inOthers >= 0 -> { showOthers = true; 1 + choices.size + 1 + inOthers }
+            groups.main.any { it.id == id } -> 1 + groups.main.indexOfFirst { it.id == id }
+            g >= 0 -> 1 + m + 1 + g
+            o >= 0 -> 1 + m + gyroRows + 1 + o
             else -> return@LaunchedEffect
         }
         runCatching { listState.animateScrollToItem(index) }
     }
+    @Composable fun card(p: Preset) = PickerCard(p, selected?.id == p.id, suggested = p.id == suggestedId) { onSelect(p) }
     LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         item { Text(question, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 4.dp)) }
-        items(choices, key = { it.id }) { p -> PickerCard(p, selected?.id == p.id) { onSelect(p) } }
-        if (alternatives.isNotEmpty()) {
-            item {
-                TextButton(onClick = { showOthers = !showOthers }) { Text(if (showOthers) "Hide other layouts" else "Other layouts (${alternatives.size})") }
-            }
-            if (showOthers) items(alternatives, key = { "alt-" + it.id }) { p -> PickerCard(p, selected?.id == p.id) { onSelect(p) } }
+        items(groups.main, key = { it.id }) { p -> card(p) }
+        if (groups.gyro.isNotEmpty()) {
+            item(key = "gyro-folder") { PresetFolder("Gyro aiming (experimental)", groups.gyro.size, showGyro) { showGyro = !showGyro } }
+            if (showGyro) items(groups.gyro, key = { "gyro-" + it.id }) { p -> Box(Modifier.padding(start = 14.dp)) { card(p) } }
+        }
+        if (groups.others.isNotEmpty()) {
+            item(key = "others-folder") { PresetFolder("Other layouts", groups.others.size, showOthers) { showOthers = !showOthers } }
+            if (showOthers) items(groups.others, key = { "alt-" + it.id }) { p -> Box(Modifier.padding(start = 14.dp)) { card(p) } }
         }
         item { Spacer(Modifier.height(8.dp)) }
     }

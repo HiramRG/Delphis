@@ -42,6 +42,8 @@ data class WiiColors(
     val orange: Color,
     val bar: Color, val barBorder: Color,
     val sidebar: Color,
+    /** "(suggested)" tag on the first preset of each game. */
+    val green: Color = Color(0xFF2E7D32),
 )
 
 val LightWii = WiiColors(
@@ -66,6 +68,7 @@ val DarkWii = WiiColors(
     orange = Color(0xFFF08A24),
     bar = Color(0xFF15181C), barBorder = Color(0xFF2E343C),
     sidebar = Color(0xFF22272D),
+    green = Color(0xFF6BCB77),
 )
 
 val LocalWii = staticCompositionLocalOf { LightWii }

@@ -280,7 +280,9 @@ class MainActivity : ComponentActivity() {
         setupVersion++ // re-read things that can change in system settings (e.g. the close-games helper)
         // The game list showing up while a game is running (and Delphis didn't close it) means
         // Dolphin's game screen went away, most likely because Dolphin crashed.
-        io.github.hiramrg.delphis.platform.GameWatch.reportGone("Delphis' game list came back on screen")
+        // (Unless the player had left the game for the home screen and opened Delphis from there.)
+        if (!io.github.hiramrg.delphis.platform.GameWatch.suspended.value)
+            io.github.hiramrg.delphis.platform.GameWatch.reportGone("Delphis' game list came back on screen")
         // Coming back from the "Install unknown apps" screen: continue if it's now allowed.
         if (updateState is UpdateState.NeedsPermission && updater.canInstall()) checkForUpdates()
         // Bottom-screen menu (quick tiles / touch preset picker), shortly after we're on screen.
@@ -293,6 +295,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        // Leaving for the home screen / another app (Back or Home): the bottom-screen menu goes too.
+        // It comes back in onResume.
+        MenuCompanion.close()
         io.github.hiramrg.delphis.platform.MenuMusic.pause()
         super.onStop()
     }
