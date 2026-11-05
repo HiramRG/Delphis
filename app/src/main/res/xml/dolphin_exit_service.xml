@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Used to press Dolphin's own "Exit Emulation" button when you leave or restart a game, and to
+  notice when Dolphin's game screen closes on its own (e.g. a Dolphin crash).
+  - No flagRequestFilterKeyEvents: it never sees or delays key / controller input.
+  - Only typeWindowsChanged events, which the system generates; apps (Dolphin included) don't
+    send any accessibility events because of this service.
+  Window contents are only read on demand (when closing a game, or once after a window change).
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowsChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
+    android:canRetrieveWindowContent="true"
+    android:canPerformGestures="false"
+    android:notificationTimeout="300"
+    android:description="@string/exit_service_description" />

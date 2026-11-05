@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Box art downloads from GameTDB. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lets Delphis fully close Dolphin so a restarted game picks up new controls. -->
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+    <!-- In-app updates: install new versions downloaded from the GitHub release. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+
+    <!-- Lets us check whether Dolphin is installed (package visibility, Android 11+). -->
+    <queries>
+        <package android:name="org.dolphinemu.dolphinemu" />
+        <package android:name="org.dolphinemu.dolphinemu.debug" />
+        <package android:name="org.dolphinemu.dolphinemu.benchmark" />
+    </queries>
+
+    <application
+        android:name=".platform.CompanionApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Delphis">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Always-on controls view for the bottom screen; its own task so it can live on another display. -->
+        <activity
+            android:name=".ui.NowPlayingActivity"
+            android:exported="false"
+            android:resizeableActivity="true"
+            android:taskAffinity="io.github.hiramrg.delphis.nowplaying"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation" />
+        <activity
+            android:name=".ui.MenuCompanionActivity"
+            android:exported="false"
+            android:resizeableActivity="true"
+            android:taskAffinity="io.github.hiramrg.delphis.menu"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation" />
+        <activity
+            android:name=".platform.CoverActivity"
+            android:exported="false"
+            android:resizeableActivity="true"
+            android:taskAffinity="io.github.hiramrg.delphis.cover"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+        <receiver android:name=".platform.InstallReceiver" android:exported="false" />
+        <!-- Presses Dolphin's "Exit Emulation" so games close cleanly (see res/xml/dolphin_exit_service.xml). -->
+        <service
+            android:name=".platform.DolphinExitService"
+            android:exported="true"
+            android:label="@string/exit_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/dolphin_exit_service" />
+        </service>
+    </application>
+</manifest>

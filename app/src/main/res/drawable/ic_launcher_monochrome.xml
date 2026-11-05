@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:translateX="19.44" android:translateY="19.44" android:scaleX="0.72" android:scaleY="0.72">
+        <!-- Themed-icon (Android 13) version: the Thor's outline with screens and controls cut out. -->
+        <path android:fillColor="#FFFFFF" android:fillType="evenOdd" android:pathData="M20,10 H76 A8,8 0 0 1 84,18 V42 A8,8 0 0 1 76,50 H20 A8,8 0 0 1 12,42 V18 A8,8 0 0 1 20,10 Z M20,52 H76 A8,8 0 0 1 84,60 V78 A8,8 0 0 1 76,86 H20 A8,8 0 0 1 12,78 V60 A8,8 0 0 1 20,52 Z M21,14.5 H75 A4,4 0 0 1 79,18.5 V41.5 A4,4 0 0 1 75,45.5 H21 A4,4 0 0 1 17,41.5 V18.5 A4,4 0 0 1 21,14.5 Z M37,56 H59 A3,3 0 0 1 62,59 V75 A3,3 0 0 1 59,78 H37 A3,3 0 0 1 34,75 V59 A3,3 0 0 1 37,56 Z M18.8,61 A4.2,4.2 0 1 1 27.2,61 A4.2,4.2 0 1 1 18.8,61 Z M21.85,69.6 H24.65 V72.5 H27.5 V75.3 H24.65 V78.1 H21.85 V75.3 H19 V72.5 H21.85 Z M71,57.8 A2,2 0 1 1 75,57.8 A2,2 0 1 1 71,57.8 Z M67.3,61.5 A2,2 0 1 1 71.3,61.5 A2,2 0 1 1 67.3,61.5 Z M74.7,61.5 A2,2 0 1 1 78.7,61.5 A2,2 0 1 1 74.7,61.5 Z M71,65.2 A2,2 0 1 1 75,65.2 A2,2 0 1 1 71,65.2 Z M68.8,75 A4.2,4.2 0 1 1 77.2,75 A4.2,4.2 0 1 1 68.8,75 Z"/>
+    </group>
+</vector>

@@ -1,0 +1,283 @@
+package io.github.hiramrg.delphis.ui
+
+import android.app.ActivityOptions
+import android.content.Intent
+import android.graphics.PixelFormat
+import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.view.Gravity
+import android.view.InputDevice
+import android.view.KeyEvent
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import io.github.hiramrg.delphis.core.Preset
+import io.github.hiramrg.delphis.platform.DeviceInfo
+import io.github.hiramrg.delphis.platform.GameWatch
+import java.lang.ref.WeakReference
+
+/**
+ * The bottom screen while you're in Delphis' menus (not in a game): quick tiles on Home, the
+ * touch preset picker on a game's page, details of the highlighted game in All games.
+ *
+ * It mirrors MainActivity's state (same process, shared Compose state). Like the in-game screen its
+ * window never takes focus, so the controller keeps driving the top screen; a 1x1 focus sink
+ * catches keys meant for the bottom display (avoiding "isn't responding") and hands gamepad input
+ * back to the top screen.
+ */
+object MenuCompanion {
+    private var activity: WeakReference<MenuCompanionActivity>? = null
+    var main: WeakReference<MainActivity>? = null
+        private set
+    /** True while the bottom-screen menu is up (the top screen can then leave the picker to it). */
+    val showing = mutableStateOf(false)
+
+    internal fun attach(a: MenuCompanionActivity?) { activity = a?.let { WeakReference(it) }; showing.value = a != null }
+
+    @Suppress("DEPRECATION")
+    fun show(main: MainActivity) {
+        this.main = WeakReference(main)
+        if (activity?.get() != null || GameWatch.session != null) return
+        val roles = DeviceInfo.screenRoles(main, main.prefs.swapScreens)
+        val bottom = roles.bottomDisplayId ?: return
+        val mainDisplay = runCatching { if (Build.VERSION.SDK_INT >= 30) main.display!!.displayId else main.windowManager.defaultDisplay.displayId }.getOrNull()
+        if (mainDisplay == bottom) return // Delphis itself was opened on the bottom screen
+        val intent = Intent(main, MenuCompanionActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val ok = runCatching { main.startActivity(intent, ActivityOptions.makeBasic().setLaunchDisplayId(bottom).toBundle()) }.isSuccess
+        // Starting it moves focus to the bottom display; give it straight back to the top screen.
+        if (ok) Handler(Looper.getMainLooper()).postDelayed({ main.bringSelfToFront() }, 350)
+    }
+
+    fun close() { activity?.get()?.finish() }
+}
+
+class MenuCompanionActivity : ComponentActivity() {
+    private var focusSink: View? = null
+    private var lastBounce = 0L
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+        MenuCompanion.attach(this)
+        setContent {
+            val main = MenuCompanion.main?.get()
+            if (main == null) { LaunchedEffect(Unit) { finish() }; return@setContent }
+            // A game started: the in-game screen takes over the bottom display.
+            if (GameWatch.session != null) { LaunchedEffect(Unit) { finish() }; return@setContent }
+            WiiTheme(main.darkTheme) { CompanionContent(main) }
+        }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (focusSink != null) return
+        val sink = object : View(this) {
+            override fun dispatchKeyEvent(event: KeyEvent): Boolean = onSinkKey(event)
+            override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean = if (isGamepad(event.source)) { bounce(); true } else false
+        }.apply { isFocusable = true; isFocusableInTouchMode = true }
+        val lp = WindowManager.LayoutParams(
+            1, 1, WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, PixelFormat.TRANSLUCENT,
+        ).apply { token = window.decorView.windowToken; gravity = Gravity.TOP or Gravity.START; title = "Delphis menu focus" }
+        runCatching { windowManager.addView(sink, lp); focusSink = sink; sink.requestFocus() }
+    }
+
+    private fun isGamepad(source: Int) =
+        (source and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+            (source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK ||
+            (source and InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD
+
+    private fun onSinkKey(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+            if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) MenuCompanion.main?.get()?.onBackPressedDispatcher?.onBackPressed()
+            return true
+        }
+        if (isGamepad(event.source)) { bounce(); return true }
+        return false
+    }
+
+    /** The controller's input landed here: move focus back to the top screen. */
+    private fun bounce() {
+        val now = SystemClock.uptimeMillis()
+        if (now - lastBounce < 1000) return
+        lastBounce = now
+        MenuCompanion.main?.get()?.bringSelfToFront()
+    }
+
+    override fun onDestroy() {
+        focusSink?.let { runCatching { windowManager.removeViewImmediate(it) } }
+        focusSink = null
+        MenuCompanion.attach(null)
+        super.onDestroy()
+    }
+}
+
+// ---------------------------------------------------------------------------------------- content
+
+@Composable
+private fun CompanionContent(act: MainActivity) {
+    Box(Modifier.fillMaxSize().padding(14.dp)) {
+        when (val s = act.screen) {
+            Screen.Home -> QuickMenu(act)
+            is Screen.Game -> act.picker?.let { PickerPanel(act, it) } ?: IdlePanel()
+            Screen.Library -> FocusedGamePanel(act)
+            else -> IdlePanel()
+        }
+    }
+}
+
+@Composable
+private fun QuickMenu(act: MainActivity) {
+    val c = LocalWii.current
+    val last = act.lastGame()
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("QUICK MENU", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
+        val tiles = listOf(
+            Triple("▶", "Play", last?.info?.title ?: "Pick a game first"),
+            Triple("☰", "All games", "${act.games.size} games · search & sort"),
+            Triple("✚", "Controls", "Change or edit the preset"),
+            Triple("⚙", "Settings", "Theme, gyro, brightness, updates"),
+        )
+        val actions = listOf<() -> Unit>(
+            { last?.let { act.quickPlay(it) } ?: run { act.screen = Screen.Library } },
+            { act.screen = Screen.Library },
+            { last?.let { act.openGame(it) } ?: run { act.screen = Screen.Library } },
+            { act.screen = Screen.Settings },
+        )
+        for (row in 0..1) Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            for (col in 0..1) {
+                val i = row * 2 + col
+                val (icon, title, sub) = tiles[i]
+                WiiCard(Modifier.weight(1f).fillMaxHeight(), selected = i == 0, radius = 22.dp, padding = 14.dp, onClick = actions[i]) {
+                    Box(
+                        Modifier.size(40.dp).clip(RoundedCornerShape(50)).background(if (i == 0) c.accent else c.accentSoft),
+                        contentAlignment = Alignment.Center,
+                    ) { Text(icon, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = if (i == 0) c.onAccent else c.accentText) }
+                    Spacer(Modifier.weight(1f))
+                    Text(title, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(sub, fontSize = 12.sp, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+        HintLine("Touch a channel, or use the D-pad + Ⓐ on the top screen")
+    }
+}
+
+@Composable
+private fun PickerPanel(act: MainActivity, p: GamePicker) {
+    val c = LocalWii.current
+    if (p.editing) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Editing the preset on the top screen…", color = c.textDim, fontSize = 15.sp)
+        }
+        return
+    }
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(p.game.info.title, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text("How do you want to play?", fontSize = 12.sp, color = c.textDim)
+        }
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(p.everyPreset, key = { it.id }) { preset ->
+                PickerCard(preset, p.selected?.id == preset.id) { p.selected = preset }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            WiiButton("Ⓧ Edit", onClick = { p.editing = true }, enabled = p.selected != null, modifier = Modifier.weight(1f))
+            WiiButton("Ⓐ Play", onClick = { p.play() }, primary = true, enabled = p.selected != null, modifier = Modifier.weight(2f), fontSize = 18.sp)
+        }
+        HintLine("✚ choose · Ⓨ remember choice · Ⓑ back")
+    }
+}
+
+/** One preset with a mini preview of its main in-game tiles (in the real control colours). */
+@Composable
+fun PickerCard(preset: Preset, selected: Boolean, onClick: () -> Unit) {
+    val c = LocalWii.current
+    val main = remember(preset.id) { summarize(preset).main.map { it.controls.first() } }
+    WiiCard(Modifier.fillMaxWidth(), selected = selected, radius = 18.dp, padding = 8.dp, onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(
+                Modifier.size(width = 66.dp, height = 48.dp).clip(RoundedCornerShape(10.dp)).background(c.bg).padding(4.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                for (r in 0..1) Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    for (k in 0..1) {
+                        val ctl = main.getOrNull(r * 2 + k)
+                        Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(5.dp)).background(ctl?.let { controlColor(it) } ?: c.cardBorder.copy(alpha = 0.4f)))
+                    }
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(withOrangeTags(preset.name, c.orange), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(preset.summary, fontSize = 11.sp, color = c.textDim, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FocusedGamePanel(act: MainActivity) {
+    val c = LocalWii.current
+    val g = act.focusedGame
+    if (g == null) { IdlePanel("Pick a game on the top screen"); return }
+    @Suppress("UNUSED_VARIABLE") val v = act.statsVersion
+    val preset = act.prefs.presetFor(g.key)?.let { act.store.byId(it) }
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Cover(act, g, act.prefs.showCovers, Modifier.size(width = 70.dp, height = 98.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(g.info.title, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(playSummary(act, g), fontSize = 12.sp, color = c.textDim)
+            }
+        }
+        WiiCard(Modifier.fillMaxWidth(), padding = 12.dp) {
+            Text("CONTROLS", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
+            Text(withOrangeTags(preset?.name ?: "Not chosen yet", c.orange), fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+        }
+        Spacer(Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            WiiButton(if (act.prefs.isFavorite(g.key)) "★ Favorite" else "☆ Favorite", onClick = { act.prefs.toggleFavorite(g.key); act.statsVersion++ }, modifier = Modifier.weight(1f))
+            WiiButton("Ⓐ Choose controls", onClick = { act.openGame(g) }, primary = true, modifier = Modifier.weight(1.6f))
+        }
+    }
+}
+
+@Composable
+private fun IdlePanel(message: String = "") {
+    val c = LocalWii.current
+    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text("Delphis", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
+        Text(rememberClock(withDate = true), fontSize = 18.sp, color = c.textDim, modifier = Modifier.padding(top = 6.dp))
+        if (message.isNotEmpty()) Text(message, fontSize = 13.sp, color = c.textDim, modifier = Modifier.padding(top = 14.dp))
+    }
+}

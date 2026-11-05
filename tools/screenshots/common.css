@@ -1,0 +1,10 @@
+*{box-sizing:border-box}html,body{margin:0;font-family:Inter,sans-serif;color:#3A3F45}
+.stripes{background-color:#F3F5F7;background-image:repeating-linear-gradient(0deg,#F3F5F7 0,#F3F5F7 3px,#E9EDF1 3px,#E9EDF1 4px)}
+.card{background:#fff;border:2px solid #CDD4DC;border-radius:20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 18px;border-radius:22px;border:2px solid #CDD4DC;background:#fff;font-weight:800;font-size:15px;color:#3A3F45}
+.btn.p{background:#34BEED;border-color:#1A9BD7;color:#fff}
+.chip{display:inline-flex;align-items:center;height:30px;padding:0 12px;border-radius:16px;border:2px solid #CDD4DC;background:#fff;font-weight:700;font-size:12px}
+.chip.on{background:#E6F6FD;border-color:#34BEED;color:#0F7FB8}
+.cover{border-radius:10px;display:flex;align-items:flex-end;padding:6px;color:#fff;font-weight:800;font-size:11px;line-height:1.15}
+.dim{color:#6B737D}.acc{color:#0F7FB8}.org{color:#C96400;font-weight:800}
+.hint{font-size:11px;color:#6B737D}

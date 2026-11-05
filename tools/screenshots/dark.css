@@ -1,0 +1,4 @@
+.dstripes{background-color:#1D2127;background-image:repeating-linear-gradient(0deg,#1D2127 0,#1D2127 3px,#191C21 3px,#191C21 4px);color:#E8ECF0}
+.dcard{background:#2A3038;border:2px solid #4A535E;border-radius:16px}
+.badge{width:30px;height:30px;border-radius:15px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:15px;flex:none}
+.dbtn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 14px;border-radius:20px;border:2px solid #4A535E;background:#2A3038;font-weight:800;font-size:13px;color:#E8ECF0}
