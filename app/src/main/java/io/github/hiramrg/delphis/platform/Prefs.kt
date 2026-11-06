@@ -51,6 +51,11 @@ class Prefs(context: Context) {
 
     /** "Don't show again" on the Back to main menu warning. */
     /** Menu theme: false = light (classic Wii), true = dark. The in-game bottom screen is always dark. */
+    /** The last [io.github.hiramrg.delphis.core.WhatsNew.RELEASE] whose notes were shown (or skipped on a fresh install). */
+    var whatsNewSeen: Int
+        get() = sp.getInt("whats_new_seen", 0)
+        set(v) = sp.edit().putInt("whats_new_seen", v).apply()
+
     var themeDark: Boolean
         get() = sp.getBoolean("theme_dark", false)
         set(v) = sp.edit().putBoolean("theme_dark", v).apply()

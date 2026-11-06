@@ -110,7 +110,8 @@ private val NUNCHUK_SHAKE = arrayOf("Nunchuk/Shake/X", "Nunchuk/Shake/Y", "Nunch
  * Some games (New Super Mario Bros. Wii's pause menu, for one) let the pointer override the D-pad.
  * With nothing driving the pointer Dolphin parks it in the middle of the screen, right on top of the
  * first menu item, so the D-pad can never move the selection away. Auto-Hide takes the idle pointer
- * off-screen, which is what a real remote held sideways does.
+ * off-screen after a moment without movement (what a real remote held sideways does); moving a
+ * stick that drives the pointer brings it straight back.
  */
 private fun PresetBuilder.hideIdlePointer() = option("IR/Auto-Hide", "True")
 
@@ -184,6 +185,7 @@ object PresetLibrary {
         directional(ThorControl.RIGHT_STICK, "Menu pointer", "IR")
         wiiSystemButtons()
         option("Extension", "Nunchuk")
+        hideIdlePointer()
         tip("Select \"Wii Remote + Nunchuk\" on the controller screen before a race.")
         tip("Shake for a trick right as you leave a ramp for a speed boost.")
     }
@@ -204,6 +206,7 @@ object PresetLibrary {
         wiiSystemButtons()
         option("Extension", "None")
         option("Options/Sideways Wiimote", "True")
+        hideIdlePointer()
         tip("Flick the right stick up as you leave a ramp to do a trick.")
     }
 
@@ -224,6 +227,7 @@ object PresetLibrary {
         wiiSystemButtons()
         option("Extension", "None")
         option("Options/Sideways Wiimote", "True")
+        hideIdlePointer()
         tip("Hold the Thor level when the race starts. If steering is reversed, turn on \"Invert motion steering\" in Settings and apply again.")
     }
 

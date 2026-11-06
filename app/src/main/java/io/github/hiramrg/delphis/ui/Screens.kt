@@ -469,10 +469,17 @@ fun LibraryIcon(section: LibSection, tint: Color, modifier: Modifier) {
                 drawCircle(tint, 1f * u, o(12f, 14.5f))
                 drawCircle(tint, 1f * u, o(12f, 17.5f))
             }
-            LibSection.GAMECUBE -> { // a small disc
-                drawCircle(tint, 9f * u, o(12f, 12f), style = stroke)
-                drawCircle(tint, 2.6f * u, o(12f, 12f), style = stroke)
-                drawArc(tint, -150f, 55f, false, o(6f, 6f), sz(12f, 12f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.6f * u, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+            LibSection.GAMECUBE -> { // a soft cube, top face tinted like the star
+                fun poly(vararg pts: Float) = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(pts[0] * u, pts[1] * u)
+                    for (k in 2 until pts.size step 2) lineTo(pts[k] * u, pts[k + 1] * u)
+                    close()
+                }
+                val top = poly(12f, 2.9f, 20f, 7.4f, 12f, 11.9f, 4f, 7.4f)
+                drawPath(top, tint, alpha = 0.25f)
+                drawPath(poly(12f, 2.9f, 20f, 7.4f, 20f, 16.6f, 12f, 21.1f, 4f, 16.6f, 4f, 7.4f), tint, style = stroke)
+                drawPath(top, tint, style = stroke)
+                drawLine(tint, o(12f, 11.9f), o(12f, 21.1f), strokeWidth = sw, cap = androidx.compose.ui.graphics.StrokeCap.Round)
             }
         }
     }

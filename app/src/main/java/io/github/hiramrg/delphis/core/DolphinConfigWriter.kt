@@ -49,9 +49,9 @@ object DolphinConfigWriter {
             options.remove("IR/Relative Input")
             lines.putAll(if (g.precision) precisionPointerBindings(g, lines, controller, hold) else gyroPointerBindings(g, lines, controller))
             options["IR/Relative Input"] = "False"
+            // Gyro aiming needs the pointer on screen the whole time.
+            options.remove("IR/Auto-Hide")
         }
-        // Something drives the pointer now, so keep it on screen.
-        if (lines.keys.any { it.startsWith("IR/") && it != "IR/Recenter" }) options.remove("IR/Auto-Hide")
 
         return buildString {
             appendLine("[Profile]")

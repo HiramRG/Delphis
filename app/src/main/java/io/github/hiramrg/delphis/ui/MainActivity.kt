@@ -97,6 +97,9 @@ class MainActivity : ComponentActivity() {
     /** Set when starting a game needs the close-games helper, which isn't turned on yet. */
     var exitHelperPrompt by mutableStateOf<(() -> Unit)?>(null)
 
+    /** Non-null while the "What's new" card is showing (holds the version name). */
+    private var whatsNewVersion by mutableStateOf<String?>(null)
+
     /** Set by the Controller Check / Diagnostics screens to receive raw gamepad input. */
     var keyListener: ((KeyEvent) -> Boolean)? = null
     var motionListener: ((MotionEvent) -> Boolean)? = null
@@ -143,6 +146,14 @@ class MainActivity : ComponentActivity() {
         updater = Updater(this)
         checkForUpdates(silent = true)
         darkTheme = prefs.themeDark
+        // Release notes: once after an update; a fresh install just marks them as seen.
+        val pkg = runCatching { packageManager.getPackageInfo(packageName, 0) }.getOrNull()
+        val isUpdate = pkg != null && pkg.lastUpdateTime > pkg.firstInstallTime
+        if (io.github.hiramrg.delphis.core.WhatsNew.shouldShow(prefs.whatsNewSeen, isUpdate) && isSetUp()) {
+            whatsNewVersion = pkg?.versionName.orEmpty()
+        } else if (prefs.whatsNewSeen < io.github.hiramrg.delphis.core.WhatsNew.RELEASE) {
+            prefs.whatsNewSeen = io.github.hiramrg.delphis.core.WhatsNew.RELEASE
+        }
         games = library.cached()
         if (!isSetUp()) screen = Screen.Setup
         else if (games.isEmpty()) rescan()
@@ -190,6 +201,12 @@ class MainActivity : ComponentActivity() {
                             }) { androidx.compose.material3.Text("Not now") }
                         },
                     )
+                }
+                whatsNewVersion?.let { v ->
+                    WhatsNewDialog(v) {
+                        whatsNewVersion = null
+                        prefs.whatsNewSeen = io.github.hiramrg.delphis.core.WhatsNew.RELEASE
+                    }
                 }
                 when (val s = screen) {
                     Screen.Setup -> SetupScreen(this)
