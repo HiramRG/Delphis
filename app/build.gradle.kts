@@ -19,28 +19,14 @@ android {
         versionName = "1.0.$code"
     }
 
-    // One fixed signing key for every build. Android only installs an update over an existing app
-    // when both are signed with the same key, which the in-app updater relies on.
-    // If the SIGNING_KEYSTORE_PATH env var is set (e.g. from a GitHub secret) that key is used instead.
-    signingConfigs {
-        create("release") {
-            storeFile = file(System.getenv("SIGNING_KEYSTORE_PATH") ?: "../signing/release.jks")
-            storePassword = System.getenv("SIGNING_STORE_PASSWORD") ?: "delphis"
-            keyAlias = System.getenv("SIGNING_KEY_ALIAS") ?: "delphis"
-            keyPassword = System.getenv("SIGNING_KEY_PASSWORD") ?: "delphis"
-        }
-    }
-
+    // Release APKs are built unsigned; CI signs both APKs with apksigner (see .github/workflows/build.yml
+    // and signing/README.md), using the encrypted key in signing/ and the SIGNING_PASSWORD secret.
     buildTypes {
         release {
             isMinifyEnabled = true
             // Drops unused resources (e.g. unused icons) for a smaller APK.
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
-            signingConfig = signingConfigs.getByName("release")
-        }
-        debug {
-            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

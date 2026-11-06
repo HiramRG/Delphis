@@ -8,3 +8,15 @@
 .cover{border-radius:10px;display:flex;align-items:flex-end;padding:6px;color:#fff;font-weight:800;font-size:11px;line-height:1.15}
 .dim{color:#6B737D}.acc{color:#0F7FB8}.org{color:#C96400;font-weight:800}
 .hint{font-size:11px;color:#6B737D}
+.col{background:#fff;border:2px solid #CDD4DC;border-radius:20px;margin:8px 0 8px 8px;padding:10px 8px;display:flex;flex-direction:column;gap:4px}
+.lrow{display:flex;align-items:center;gap:10px;white-space:nowrap;padding:8px 10px;border-radius:14px;border:2px solid transparent;font-weight:800;font-size:14px}
+.lrow.on{background:#E6F6FD;border-color:#34BEED;color:#0F7FB8}
+.lrow .n{margin-left:auto;font-weight:400;font-size:12px;color:#6B737D}
+.bar{height:48px;margin:0 8px 8px;border-radius:24px;background:#DDE2E7;border:2px solid #C3CAD2;display:flex;align-items:center;padding:0 16px 0 6px;gap:12px}
+.gear{width:36px;height:36px;border-radius:18px;background:#fff;border:2px solid #CDD4DC;display:flex;align-items:center;justify-content:center;color:#6B737D;font-size:18px}
+.sug{color:#2E7D32;font-weight:800}
+.gc{border-radius:16px;padding:5px;background:#fff;border:2px solid #CDD4DC}
+.gc .t{font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:4px 3px 0}
+.gc .p{font-size:10px;color:#6B737D;padding:0 3px 2px}
+.tag{position:absolute;top:4px;right:4px;background:rgba(255,255,255,.85);border-radius:6px;padding:1px 5px;font-size:10px;font-weight:800;color:#3A3F45}
+.star{position:absolute;top:2px;left:5px;color:#FFD34D;font-size:16px}

@@ -52,6 +52,8 @@ import io.github.hiramrg.delphis.platform.DeviceInfo
 import io.github.hiramrg.delphis.platform.DolphinExitService
 import io.github.hiramrg.delphis.platform.GameEntry
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -631,10 +633,36 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         return
     }
 
-    // Physical buttons: A / Start = Play, D-pad or left stick = pick a preset, X = Edit, Y = Remember. B = Back.
+    // Earlier autosaves (kept before each autosave overwrites Dolphin's Quick Save slot).
+    var backupsVersion by remember { mutableIntStateOf(0) }
+    var showBackups by remember { mutableStateOf(false) }
+    val backups by produceState(emptyList<io.github.hiramrg.delphis.platform.DolphinBridge.AutosaveBackup>(), game.key, act.statsVersion, backupsVersion) {
+        value = if (!act.prefs.autoSaveResume) emptyList()
+        else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.autosaveBackups(game.info.gameId) }
+    }
+    if (showBackups && backups.isNotEmpty()) {
+        EarlierAutosavesDialog(backups, onDismiss = { showBackups = false }) { chosen ->
+            showBackups = false
+            val id = game.info.gameId ?: return@EarlierAutosavesDialog
+            act.lifecycleScope.launch {
+                val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.restoreAutosave(id, chosen) }
+                android.widget.Toast.makeText(
+                    act.applicationContext,
+                    if (ok) "Restored. Play continues from the save of ${formatSaveTime(chosen.savedAt)}." else "Couldn't restore that autosave.",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+                backupsVersion++
+                act.statsVersion++
+            }
+        }
+    }
+
+    // Physical buttons: A / Start = Play, D-pad or left stick = pick a preset, X = Edit, Y = Remember,
+    // R1 = earlier autosaves. B = Back.
     val onKey by rememberUpdatedState<(KeyEvent) -> Boolean> { e ->
         if (p.editing || e.action != KeyEvent.ACTION_DOWN) false
         else when (e.keyCode) {
+            KeyEvent.KEYCODE_BUTTON_R1 -> { if (e.repeatCount == 0 && backups.isNotEmpty()) showBackups = true; backups.isNotEmpty() }
             KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> { if (e.repeatCount == 0) p.play(); true }
             KeyEvent.KEYCODE_DPAD_DOWN -> { p.move(1); true }
             KeyEvent.KEYCODE_DPAD_UP -> { p.move(-1); true }
@@ -656,6 +684,10 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             Text(game.info.title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(platformLabel(game.info.platform) + " · " + playSummary(act, game), fontSize = 11.sp, color = c.textDim, maxLines = 2)
             if (rememberHasAutosave(act, game)) Text("▶ Continues from your autosave", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.accentText)
+            if (backups.isNotEmpty()) Text(
+                "↺ Earlier autosaves (${backups.size}) · R1", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.textDim,
+                modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { showBackups = true }.padding(vertical = 2.dp),
+            )
         }
         // Right: controls preview (picker on the bottom screen) or the picker itself (single screen).
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -679,7 +711,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                 WiiButton("Ⓧ Edit", onClick = { p.editing = true }, enabled = sel != null)
                 WiiButton(if (sel == null) "Choose a style" else "Ⓐ Play", onClick = { p.play() }, primary = true, enabled = sel != null, fontSize = 17.sp)
             }
-            HintLine("Ⓐ Play · ✚ choose · Ⓧ Edit · Ⓨ Remember · Ⓑ Back" + if (companion) " · or tap a style on the bottom screen" else "")
+            HintLine("Ⓐ Play · ✚ choose · Ⓧ Edit · Ⓨ Remember · Ⓑ Back" + (if (backups.isNotEmpty()) " · R1 Earlier autosaves" else "") + if (companion) " · or tap a style on the bottom screen" else "")
         }
     }
 }
@@ -1019,6 +1051,34 @@ private fun ClosingSettings(act: MainActivity) {
             "⚠ Dolphin's save states are turned off, so nothing could be saved. Delphis has switched them on in Dolphin's settings file; if it still doesn't work, open Dolphin → Settings → Config → General → Enable Savestates.",
             fontSize = 12.sp, color = LocalWii.current.orange,
         )
+    }
+    var backupsVersion by remember { mutableIntStateOf(0) }
+    val backupsSize by produceState(0L, backupsVersion) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.backupsSize() }
+    }
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Earlier autosaves", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Before each autosave, the one before it is kept (up to ${io.github.hiramrg.delphis.core.AutosaveBackups.KEEP} per game), so a broken save never loses much. Restore one with R1 on the game's page." +
+                    if (backupsSize > 0) " Using ${formatSize(backupsSize)}." else "",
+                fontSize = 12.sp, color = LocalWii.current.textDim,
+            )
+        }
+        if (backupsSize > 0) {
+            Spacer(Modifier.width(10.dp))
+            var confirm by remember { mutableStateOf(false) }
+            LaunchedEffect(confirm) { if (confirm) { delay(4000); confirm = false } }
+            WiiButton(if (confirm) "Press again to delete" else "Delete all", primary = confirm, onClick = {
+                if (!confirm) { confirm = true; return@WiiButton }
+                confirm = false
+                act.lifecycleScope.launch {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.deleteAllBackups() }
+                    backupsVersion++
+                    act.statsVersion++
+                }
+            })
+        }
     }
     SwitchRow(
         "Warn before \"Back to main menu\"",

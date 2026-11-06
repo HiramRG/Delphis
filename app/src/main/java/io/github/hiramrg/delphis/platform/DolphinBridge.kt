@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.DocumentsContract
+import io.github.hiramrg.delphis.core.AutosaveBackups
 import io.github.hiramrg.delphis.core.DolphinConfigWriter
 import io.github.hiramrg.delphis.core.ControllerProfile
 import io.github.hiramrg.delphis.core.Preset
@@ -323,6 +324,8 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
 
     /** Presses Dolphin's Quick Save and waits (up to 10 s) for the state file to be written. */
     private suspend fun autoSave(pkg: String, gameId: String) {
+        // Keep a copy of what's in the slot now, in case the new save turns out broken.
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { backupCurrentAutosave(gameId) }
         val before = stateTime(gameId) ?: 0L
         when (DolphinExitService.quickSave(pkg)) {
             DolphinExitService.StateResult.DONE -> {
@@ -350,6 +353,93 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         if (result == DolphinExitService.StateResult.DONE) prefs.saveStatesOff = false
         CrashLog.event("resume $gameId: $result")
     }
+
+    // ------------------------------------------------------------------ earlier autosaves
+
+    /** An earlier autosave kept in Delphis' own storage (see [AutosaveBackups]). */
+    data class AutosaveBackup(val file: java.io.File, val savedAt: Long, val size: Long)
+
+    private val backupsRoot get() = java.io.File(context.filesDir, "autosave-backups")
+    private fun backupDir(gameId: String) = java.io.File(backupsRoot, gameId.filter { it.isLetterOrDigit() })
+
+    /** The game's earlier autosaves, newest first. Call off the main thread. */
+    fun autosaveBackups(gameId: String?): List<AutosaveBackup> {
+        if (gameId.isNullOrBlank()) return emptyList()
+        val dir = backupDir(gameId)
+        val names = dir.list()?.toList() ?: return emptyList()
+        return AutosaveBackups.newestFirst(names).map { n ->
+            val f = java.io.File(dir, n)
+            AutosaveBackup(f, AutosaveBackups.savedAt(n)!!, f.length())
+        }
+    }
+
+    /**
+     * Copies the game's current Quick Save state into Delphis' storage (unless that exact save is
+     * already there) and keeps only the newest [AutosaveBackups.KEEP]. Call off the main thread.
+     */
+    fun backupCurrentAutosave(gameId: String): Boolean {
+        val tree = prefs.dolphinTreeUri ?: return false
+        return runCatching {
+            val savedAt = quickStateTime(gameId) ?: return false
+            val uri = resolve(tree, DolphinConfigWriter.quickStatePath(gameId), create = false) ?: return false
+            val dir = backupDir(gameId).apply { mkdirs() }
+            val target = java.io.File(dir, AutosaveBackups.fileName(savedAt))
+            if (!target.exists()) {
+                val tmp = java.io.File(dir, target.name + ".tmp")
+                resolver.openInputStream(uri)?.use { input -> tmp.outputStream().use { input.copyTo(it, 256 * 1024) } }
+                    ?: error("couldn't read the save state")
+                if (!tmp.renameTo(target)) { tmp.delete(); error("couldn't store the copy") }
+                CrashLog.event("kept earlier autosave of $gameId (${target.length() / 1024} KB)")
+            }
+            pruneBackups(gameId)
+            true
+        }.getOrElse {
+            CrashLog.event("couldn't keep earlier autosave of $gameId: ${it.message}")
+            false
+        }
+    }
+
+    private fun pruneBackups(gameId: String) {
+        val dir = backupDir(gameId)
+        val names = dir.list()?.toList() ?: return
+        names.filter { it.endsWith(".tmp") }.forEach { java.io.File(dir, it).delete() }
+        AutosaveBackups.toDelete(names.filterNot { it.endsWith(".tmp") }).forEach { java.io.File(dir, it).delete() }
+    }
+
+    /**
+     * Puts [backup] back in Dolphin's Quick Save slot, so the next Play continues from it. The save
+     * that was in the slot becomes an earlier autosave itself, so restoring can be undone.
+     * Call off the main thread.
+     */
+    fun restoreAutosave(gameId: String, backup: AutosaveBackup): Boolean {
+        val tree = prefs.dolphinTreeUri ?: return false
+        return runCatching {
+            if (!backup.file.exists()) return false
+            // Hold the chosen copy aside first: keeping the current save could otherwise prune it.
+            val chosen = java.io.File(backup.file.parentFile, "restoring.bin")
+            if (!backup.file.renameTo(chosen)) error("couldn't prepare the copy")
+            try {
+                backupCurrentAutosave(gameId)
+                val uri = resolve(tree, DolphinConfigWriter.quickStatePath(gameId), create = true) ?: error("couldn't open the save slot")
+                resolver.openOutputStream(uri, "wt")?.use { out -> chosen.inputStream().use { it.copyTo(out, 256 * 1024) } }
+                    ?: error("couldn't write the save slot")
+                chosen.delete()
+            } catch (e: Exception) {
+                chosen.renameTo(backup.file) // put it back so nothing is lost
+                throw e
+            }
+            CrashLog.event("restored earlier autosave of $gameId from ${backup.savedAt}")
+            true
+        }.getOrElse {
+            CrashLog.event("couldn't restore autosave of $gameId: ${it.message}")
+            false
+        }
+    }
+
+    /** Space used by all earlier autosaves, in bytes. */
+    fun backupsSize(): Long = backupsRoot.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+
+    fun deleteAllBackups() { backupsRoot.deleteRecursively() }
 
     // ------------------------------------------------------------------ SAF helpers
 

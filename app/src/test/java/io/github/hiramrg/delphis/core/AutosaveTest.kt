@@ -22,4 +22,17 @@ class AutosaveTest {
         // Dolphin's Quick Save is NativeLibrary.SaveState(9) → "<GAMEID>.s09" in StateSaves.
         assertEquals(listOf("StateSaves", "RMGE01.s09"), DolphinConfigWriter.quickStatePath("RMGE01"))
     }
+
+    @Test
+    fun backupsKeepTheNewestThree() {
+        assertEquals("1700000000000.s09", AutosaveBackups.fileName(1_700_000_000_000))
+        assertEquals(1_700_000_000_000, AutosaveBackups.savedAt("1700000000000.s09"))
+        assertEquals(null, AutosaveBackups.savedAt("notes.txt"))
+        assertEquals(null, AutosaveBackups.savedAt("abc.s09"))
+        assertEquals(null, AutosaveBackups.savedAt("1700.s09.tmp"))
+        val names = listOf("100.s09", "400.s09", "200.s09", "300.s09", "500.s09.tmp", "x.s09")
+        assertEquals(listOf("400.s09", "300.s09", "200.s09", "100.s09"), AutosaveBackups.newestFirst(names))
+        assertEquals(listOf("100.s09"), AutosaveBackups.toDelete(names))
+        assertTrue(AutosaveBackups.toDelete(listOf("1.s09", "2.s09")).isEmpty())
+    }
 }

@@ -7,11 +7,11 @@
 Pick a game and Delphis sets up the controls that suit it (pointer, sideways Wii Remote, wheel, gyro aiming…), launches it in Dolphin on the top screen, and turns the bottom screen into a live guide to your buttons. It lets you change controls mid-game, autosaves when you quit and picks up where you left off.
 
 <p align="center">
-  <img src="docs/images/thor-home.png" width="49%" alt="Home: continue playing, recent games and quick tiles on the bottom screen">
+  <img src="docs/images/thor-home.png" width="49%" alt="Home: Library column, continue playing, recently played and the start of the library; quick tiles on the bottom screen">
   <img src="docs/images/thor-ingame.png" width="49%" alt="In game: the bottom screen shows what each button does">
 </p>
 <p align="center">
-  <img src="docs/images/thor-library.png" width="49%" alt="All games with sections, search and sorting">
+  <img src="docs/images/thor-library.png" width="49%" alt="The library further down the home screen, with the Library column, search and sorting">
   <img src="docs/images/thor-game.png" width="49%" alt="Choosing a control style, with a touch picker on the bottom screen">
 </p>
 <p align="center"><sub>Illustrations of the app's screens. In the app, the coloured boxes are replaced by real cover art.</sub></p>
@@ -36,6 +36,7 @@ Pick a game and Delphis sets up the controls that suit it (pointer, sideways Wii
 
 ### Autosave and resume
 * When you close a game from Delphis, it saves a Dolphin save state first, and the next time you start that game from Delphis, it continues from there. You can turn this off in *Settings → Closing games*.
+* **Earlier autosaves are kept.** Before each autosave, Delphis keeps a copy of the one before it (the last three per game). If a save ever won't load, press R1 on the game's page to go back to an earlier one; the space they use and a delete button are in *Settings → Closing games*.
 
 ### A Wii-style home
 * **One scrolling home:** a **Continue playing** card for your last game, a recently played row, then your whole library, with a retractable column for All games, Favorites, Wii and GameCube, plus search and sorting by Recent / A–Z / Most played.
@@ -43,13 +44,13 @@ Pick a game and Delphis sets up the controls that suit it (pointer, sideways Wii
 * **Menus work with the D-pad:** when nothing is moving the Wii pointer, Delphis hides it so it can't sit in the middle of the screen and take over menu selection.
 * **What's new card:** after an update, Delphis shows the changes once.
 * **Loading screen:** while Delphis saves, closes or starts a game (with the close-games helper on), a loading screen covers Dolphin's menus.
-* **Made for buttons:** everything on the top screen is reachable with the D-pad, with a blue outline on what's selected; the search box only opens the keyboard when you press A. Theme: Light, Dark or Auto.
+* **Made for buttons:** everything on the top screen is reachable with the D-pad, with a blue outline on what's selected; the search box only opens the keyboard when you press A.
 * **Play time** and **last played** for every game, and HD cover art from GameTDB.
-* **Light (classic Wii) or Dark theme.** The in-game bottom screen is always dark.
+* **Light (classic Wii), Dark or Auto theme.** The in-game bottom screen is always dark.
 * **Menu music:** an original, Wii-style loop that plays only in the menus, or your own audio file, with its own volume slider.
 * A **first-run walkthrough**, controller hints on every screen, and full controller navigation.
 
-<p align="center"><img src="docs/images/settings.png" width="70%" alt="Settings with the light and dark theme cards"></p>
+<p align="center"><img src="docs/images/settings.png" width="70%" alt="Settings: Light, Dark and Auto theme cards"></p>
 
 ### Behind the scenes
 * **Clean game closing.** An optional accessibility helper presses Dolphin's own *Exit Emulation* so the next game starts cleanly (Android on the Thor won't let other apps force-close Dolphin). It never reads or changes your controller input.
@@ -95,7 +96,7 @@ gradle :app:testDebugUnitTest    # core logic tests
 
 Every push builds the APKs on GitHub Actions; pushes to `main` publish them to the `latest` release.
 
-**Signing:** builds are signed with `signing/release.jks` so updates install over each other. This key is in the public repository, so anyone could sign an APK Android would accept as an update. Before sharing the app widely, move the key into GitHub secrets: the build reads `SIGNING_KEYSTORE_PATH`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS` and `SIGNING_KEY_PASSWORD` when they're set.
+**Signing:** CI signs the APKs with a key that's stored encrypted in `signing/` and unlocked by the `SIGNING_PASSWORD` repository secret; see [signing/README.md](signing/README.md). Local release builds are unsigned.
 
 ## Adding a game
 

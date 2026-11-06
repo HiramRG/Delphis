@@ -28,11 +28,44 @@ jobs:
         run: |
           set -o pipefail
           gradle :app:assembleDebug :app:assembleRelease -PversionCode=${{ github.run_number }} 2>&1 | tee build.log
-      - name: Rename APKs
+      # Signs both APKs. The keys are in signing/delphis-keys.p12.gpg, encrypted with the
+      # SIGNING_PASSWORD secret (see signing/README.md). "delphis" is the original key and
+      # "delphis-2" the current one; the rotation lineage lets installed copies update to the new key.
+      - name: Sign APKs
+        env:
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: |
+          set -euo pipefail
           mkdir dist
-          cp app/build/outputs/apk/release/app-release.apk dist/Delphis.apk
-          cp app/build/outputs/apk/debug/app-debug.apk dist/Delphis-debug.apk
+          if [ -z "${SIGNING_PASSWORD:-}" ]; then
+            if [ "$GITHUB_REF" = refs/heads/main ] && [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+              echo "::error::The SIGNING_PASSWORD secret isn't set, so this build can't be released." | tee signing.log
+              exit 1
+            fi
+            echo "SIGNING_PASSWORD isn't available; this build is not signed." | tee signing.log
+            cp app/build/outputs/apk/release/app-release-unsigned.apk dist/Delphis-unsigned.apk
+            exit 0
+          fi
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          KS="$RUNNER_TEMP/keys.p12"
+          trap 'rm -f "$KS" "$RUNNER_TEMP/lineage"' EXIT
+          gpg --quiet --batch --yes --pinentry-mode loopback --decrypt --passphrase-fd 0 -o "$KS" signing/delphis-keys.p12.gpg <<< "$SIGNING_PASSWORD"
+          OLD=(--ks "$KS" --ks-type PKCS12 --ks-key-alias delphis --ks-pass env:SIGNING_PASSWORD --key-pass env:SIGNING_PASSWORD)
+          NEW=(--ks "$KS" --ks-type PKCS12 --ks-key-alias delphis-2 --ks-pass env:SIGNING_PASSWORD --key-pass env:SIGNING_PASSWORD)
+          "$BT/apksigner" rotate --out "$RUNNER_TEMP/lineage" --old-signer "${OLD[@]}" --new-signer "${NEW[@]}"
+          sign() {
+            "$BT/apksigner" sign "${OLD[@]}" --next-signer "${NEW[@]}" --lineage "$RUNNER_TEMP/lineage" \
+              --rotation-min-sdk-version 28 --out "$2" "$1"
+          }
+          sign app/build/outputs/apk/release/app-release-unsigned.apk dist/Delphis.apk
+          sign app/build/outputs/apk/debug/app-debug.apk dist/Delphis-debug.apk
+          rm -f dist/*.idsig
+          {
+            echo "build-tools: $(basename "$BT")"
+            "$BT/apksigner" verify -v --print-certs dist/Delphis.apk
+            echo "--- lineage"
+            "$BT/apksigner" lineage --in dist/Delphis.apk --print-certs -v
+          } 2>&1 | tee signing.log
       - uses: actions/upload-artifact@v4
         with:
           name: delphis-apk
@@ -73,6 +106,7 @@ jobs:
         run: |
           mkdir -p /tmp/report && cd /tmp/report && git init -q
           printf 'status: %s\nsha: %s\nrun: %s\n' "${{ job.status }}" "${{ github.sha }}" "${{ github.run_number }}" > status.txt
+          cp "$GITHUB_WORKSPACE/signing.log" . 2>/dev/null || true
           for f in test build; do
             if [ -f "$GITHUB_WORKSPACE/$f.log" ]; then
               grep -E "^e: |error:|FAILED|Exception|expected:|What went wrong" -A3 "$GITHUB_WORKSPACE/$f.log" | head -400 > "$f-errors.txt" || true
