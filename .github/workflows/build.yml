@@ -21,9 +21,13 @@ jobs:
         with:
           gradle-version: "8.11.1"
       - name: Unit tests
-        run: gradle :app:testDebugUnitTest
+        run: |
+          set -o pipefail
+          gradle :app:testDebugUnitTest 2>&1 | tee test.log
       - name: Build APKs
-        run: gradle :app:assembleDebug :app:assembleRelease -PversionCode=${{ github.run_number }}
+        run: |
+          set -o pipefail
+          gradle :app:assembleDebug :app:assembleRelease -PversionCode=${{ github.run_number }} 2>&1 | tee build.log
       - name: Rename APKs
         run: |
           mkdir dist
@@ -62,3 +66,19 @@ jobs:
           for asset in $(gh release view latest --json assets -q '.assets[].name'); do
             case "$asset" in Delphis*) ;; *) gh release delete-asset latest "$asset" -y ;; esac
           done
+      # Save the result and any errors to a hidden ref (refs/ci/<branch>; not shown on the site) so
+      # they can be read with plain git: git fetch origin refs/ci/<branch>.
+      - name: Save build report
+        if: always() && github.event_name != 'pull_request'
+        run: |
+          mkdir -p /tmp/report && cd /tmp/report && git init -q
+          printf 'status: %s\nsha: %s\nrun: %s\n' "${{ job.status }}" "${{ github.sha }}" "${{ github.run_number }}" > status.txt
+          for f in test build; do
+            if [ -f "$GITHUB_WORKSPACE/$f.log" ]; then
+              grep -E "^e: |error:|FAILED|Exception|expected:|What went wrong" -A3 "$GITHUB_WORKSPACE/$f.log" | head -400 > "$f-errors.txt" || true
+              tail -150 "$GITHUB_WORKSPACE/$f.log" > "$f-tail.txt"
+            fi
+          done
+          grep -l "<failure" -r "$GITHUB_WORKSPACE/app/build/test-results" 2>/dev/null | head -5 | while read x; do cp "$x" .; done || true
+          git add -A && git -c user.name=ci -c user.email=ci@localhost commit -qm "build report"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD:refs/ci/${GITHUB_REF_NAME}

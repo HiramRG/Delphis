@@ -24,7 +24,7 @@ Pick a game and Delphis sets up the controls that suit it (pointer, sideways Wii
   * **Mario Kart Wii:** Wii Remote + Nunchuk, Wii Wheel on the stick, or Wii Wheel by tilting the Thor.
   * **New Super Mario Bros. Wii:** the Wii Remote held sideways.
   * **Metroid Prime 3 / Trilogy, Twilight Princess, Donkey Kong Country Returns, Kirby's Return to Dream Land, Super Paper Mario, Smash Bros. Brawl**, plus generic presets for everything else (pointer, sideways, Classic Controller, GameCube).
-* **Gyro aiming (experimental).** Aim the Wii pointer by moving the Thor. *Precision gyro* moves finely when you move slowly and far when you move fast, and you can hold R1 to freeze the pointer and re-position (like lifting a mouse). Every gyro preset also comes in inverted versions, and there's a built-in test screen with a speed slider.
+* **Gyro aiming (Experimental).** Aim the Wii pointer by moving the Thor, with two styles: *Gyro aiming* and *Precision gyro*, which moves finely when you move slowly and far when you move fast, and lets you hold R1 to freeze the pointer and re-position (like lifting a mouse). Invert up/down or left/right in Settings, and try it all on the built-in test screen.
 * **Edit any preset.** Change what any button does for one game; your version is saved for that game.
 * **Change controls mid-game.** Pick another layout from the bottom screen; the game restarts with it and, with autosave on, continues from the same spot.
 
@@ -38,7 +38,8 @@ Pick a game and Delphis sets up the controls that suit it (pointer, sideways Wii
 * When you close a game from Delphis, it saves a Dolphin save state first, and the next time you start that game from Delphis, it continues from there. You can turn this off in *Settings → Closing games*.
 
 ### A Wii-style home
-* **Continue playing** card for your last game, recently played row, and an **All games** grid with Favorites, Recently played, Wii and GameCube sections, search, and sorting by Recent / A–Z / Most played.
+* **One scrolling home:** a **Continue playing** card for your last game, a recently played row, then your whole library, with a retractable column for All games, Favorites, Wii and GameCube, plus search and sorting by Recent / A–Z / Most played.
+* **Proper game names** from Delphis' game database and GameTDB, and an illustration for each control style (Wii Remote + Nunchuk, sideways, Wii Wheel, Classic, GameCube, gyro).
 * **Play time** and **last played** for every game, and HD cover art from GameTDB.
 * **Light (classic Wii) or Dark theme.** The in-game bottom screen is always dark.
 * **Menu music:** an original, Wii-style loop that plays only in the menus, or your own audio file, with its own volume slider.
@@ -107,7 +108,7 @@ option("Options/Sideways Wiimote", "True")
 ```
 core/       pure Kotlin (unit-tested): disc header reader, presets, game database, gyro maths, INI writer
 platform/   Android glue: Dolphin folder access, launching, closing/autosave helper, updates, prefs, music
-ui/         Jetpack Compose: home, all games, game page, settings, walkthrough, in-game bottom screen
+ui/         Jetpack Compose: home and library, game page, settings, walkthrough, in-game bottom screen
 tools/      menu-music generator and the HTML sources of the README illustrations
 ```
 

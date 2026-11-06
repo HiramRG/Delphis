@@ -60,6 +60,9 @@ data class ControllerProfile(
     val calibrated: Map<String, List<String>> = emptyMap(),
     /** Flip motion steering if the Thor's sensor axes turn out to be mirrored. */
     val invertMotion: Boolean = false,
+    /** Settings → Gyro aiming → Invert left/right / Invert up/down (applied to every gyro preset). */
+    val gyroInvertX: Boolean = false,
+    val gyroInvertY: Boolean = false,
     /** Gyro aiming speed: pointer travel (half-screens) per radian the Thor is turned. ~4.5 ≈ a real Wii Remote. */
     val gyroSpeed: Double = 4.5,
     /** Which rotation moves the gyro pointer left/right. */

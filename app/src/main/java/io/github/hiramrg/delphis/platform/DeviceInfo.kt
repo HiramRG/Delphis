@@ -79,6 +79,8 @@ object DeviceInfo {
             invertMotion = prefs.invertMotion,
             gyroSpeed = prefs.gyroSensitivity * 0.9,
             gyroHorizontal = prefs.gyroHorizontal,
+            gyroInvertX = prefs.gyroInvertX,
+            gyroInvertY = prefs.gyroInvertY,
         )
     }
 

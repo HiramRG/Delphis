@@ -17,6 +17,8 @@ class PresetStore(context: Context) {
     fun customIdFor(gameKey: String) = "custom-" + gameKey.replace(Regex("[^A-Za-z0-9]"), "").take(40)
 
     fun byId(id: String): Preset? = PresetLibrary.byId(id) ?: sp.getString(id, null)?.let(::decode)
+        // Remembered choices of the removed inverted gyro presets fall back to the plain one.
+        ?: PresetLibrary.byId(id.replace(Regex("-i(x|y|xy)$"), ""))
 
     fun customFor(gameKey: String): Preset? = byId(customIdFor(gameKey))
 

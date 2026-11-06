@@ -127,10 +127,10 @@ fun ControllerCheckScreen(act: MainActivity) {
                         Button(onClick = {
                             act.prefs.calibration = recorded.toMap()
                             act.prefs.calibratedDeviceName = devices.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
-                            act.screen = if (act.isSetUp()) Screen.Library else Screen.Setup
+                            act.screen = if (act.isSetUp()) Screen.Home else Screen.Setup
                         }) { Text("Save") }
                     }
-                    if (!done) TextButton(onClick = { act.screen = if (act.isSetUp()) Screen.Library else Screen.Setup }) { Text("Cancel") }
+                    if (!done) TextButton(onClick = { act.screen = if (act.isSetUp()) Screen.Home else Screen.Setup }) { Text("Cancel") }
                 }
                 if (done) {
                     Text(

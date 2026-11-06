@@ -141,6 +141,12 @@ object GameDatabase {
         }
     }
 
+    /** The proper name of a game Delphis has presets for (matched by game ID), or null. */
+    fun titleFor(game: GameInfo): String? {
+        val prefix = game.gameId?.take(3)?.uppercase() ?: return null
+        return rules.firstOrNull { prefix in it.idPrefixes }?.title
+    }
+
     private fun findRule(game: GameInfo): GameRule? {
         val prefix = game.gameId?.take(3)?.uppercase()
         if (prefix != null) rules.firstOrNull { prefix in it.idPrefixes }?.let { return it }

@@ -30,21 +30,25 @@ class GyroAimingTest {
         assertTrue(p.getValue("IR/Up").contains("Gyro Pitch Up"))
         // Up/down is anchored to the tilt measured from gravity.
         assertTrue(p.getValue("IR/Up").contains("atan2(`Android/0/Device Sensors:Accel Forward`, `Android/0/Device Sensors:Accel Up`)"))
-        assertTrue(PresetLibrary.GALAXY_GYRO_ALL.all { it.name.endsWith("(experimental)") })
+        assertTrue(PresetLibrary.GALAXY_GYRO_ALL.all { it.name.endsWith("(Experimental)") })
         // Dolphin's IMU pointing isn't used any more.
         assertFalse(p.keys.any { it.startsWith("IMUIR/") || it.startsWith("IMUGyroscope/") })
     }
 
     @Test
-    fun invertedVariantsFlipOnlyTheirAxis() {
-        val normal = profile(PresetLibrary.GALAXY_GYRO_ALL[0])
-        val invY = profile(PresetLibrary.GALAXY_GYRO_ALL[1])
-        val invX = profile(PresetLibrary.GALAXY_GYRO_ALL[2])
-        assertEquals(normal["IR/Right"], invY["IR/Right"])
-        assertTrue(normal["IR/Up"] != invY["IR/Up"])
-        assertEquals(normal["IR/Up"], invX["IR/Up"])
-        assertTrue(normal["IR/Right"] != invX["IR/Right"])
-        assertEquals(4, PresetLibrary.GALAXY_GYRO_ALL.map { it.id }.distinct().size)
+    fun invertSettingsFlipOnlyTheirAxis() {
+        for (preset in listOf(PresetLibrary.GALAXY_GYRO, PresetLibrary.GALAXY_PRECISION)) {
+            val normal = profile(preset)
+            val invY = profile(preset, pad.copy(gyroInvertY = true))
+            val invX = profile(preset, pad.copy(gyroInvertX = true))
+            assertEquals(normal["IR/Right"], invY["IR/Right"])
+            assertTrue(normal["IR/Up"] != invY["IR/Up"])
+            assertEquals(normal["IR/Up"], invX["IR/Up"])
+            assertTrue(normal["IR/Right"] != invX["IR/Right"])
+        }
+        // Only one preset of each kind now; inverting is a setting.
+        assertEquals(1, PresetLibrary.GALAXY_GYRO_ALL.size)
+        assertEquals(1, PresetLibrary.GALAXY_PRECISION_ALL.size)
     }
 
     @Test
@@ -86,16 +90,16 @@ class GyroAimingTest {
 
     @Test
     fun gyroOptionsOnlyForWiiRemoteStyles() {
-        assertEquals(9, ActionCatalog.optionsFor(ThorControl.GYRO, EmulatedController.WIIMOTE_NUNCHUK).size)
+        assertEquals(3, ActionCatalog.optionsFor(ThorControl.GYRO, EmulatedController.WIIMOTE_NUNCHUK).size)
         assertEquals(1, ActionCatalog.optionsFor(ThorControl.GYRO, EmulatedController.GAMECUBE).size)
     }
 
     @Test
     fun galaxyOffersStickAndAllGyroVariants() {
         val s = GameDatabase.suggest(GameInfo("SB4E01", "Super Mario Galaxy 2", Platform.WII))
-        assertEquals(listOf("galaxy-rstick", "galaxy-precise", "galaxy-precise-iy", "galaxy-precise-ix", "galaxy-precise-ixy"), s.choices.map { it.id })
+        assertEquals(listOf("galaxy-rstick", "galaxy-precise"), s.choices.map { it.id })
         // The classic gyro presets are still there, first under "Other layouts".
-        assertEquals(listOf("galaxy-gyro", "galaxy-gyro-iy", "galaxy-gyro-ix", "galaxy-gyro-ixy"), s.alternatives.take(4).map { it.id })
+        assertEquals("galaxy-gyro", s.alternatives.first().id)
     }
 
     @Test
@@ -115,8 +119,7 @@ class GyroAimingTest {
         assertFalse(p.keys.any { it.startsWith("Delphis") })
         assertFalse(p.getValue("Shake/X").contains("Button R1"))
         assertTrue(p.getValue("Shake/X").contains("Button Y"))
-        assertTrue(PresetLibrary.GALAXY_PRECISION_ALL.all { it.name.endsWith("(experimental)") })
-        assertEquals(4, PresetLibrary.GALAXY_PRECISION_ALL.map { it.id }.distinct().size)
+        assertTrue(PresetLibrary.GALAXY_PRECISION_ALL.all { it.name.endsWith("(Experimental)") })
     }
 
     @Test

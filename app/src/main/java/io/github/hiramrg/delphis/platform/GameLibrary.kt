@@ -30,7 +30,10 @@ data class GameEntry(
 class GameLibrary(private val context: Context, private val prefs: Prefs) {
 
     /** Only GameCube and Wii games are ever shown; everything else in the folder is ignored. */
-    fun cached(): List<GameEntry> = prefs.libraryCache?.let(::decode)?.filter { it.isDolphinGame } ?: emptyList()
+    fun cached(): List<GameEntry> = prefs.libraryCache?.let(::decode)?.filter { it.isDolphinGame }?.map(::withProperName) ?: emptyList()
+
+    /** The game with its proper name (see [GameTitles]); only for display, the cache keeps the disc's name. */
+    private fun withProperName(g: GameEntry) = g.copy(info = g.info.copy(title = GameTitles.titleFor(g.info)))
 
     suspend fun scan(onProgress: (Int) -> Unit = {}): List<GameEntry> = withContext(Dispatchers.IO) {
         val tree = prefs.gamesTreeUri ?: return@withContext emptyList()
@@ -44,7 +47,7 @@ class GameLibrary(private val context: Context, private val prefs: Prefs) {
         }
         val sorted = found.sortedBy { it.info.title.lowercase() }
         prefs.libraryCache = encode(sorted) // non-games are cached too so rescans stay fast
-        sorted.filter { it.isDolphinGame }
+        sorted.filter { it.isDolphinGame }.map(::withProperName)
     }
 
     /** Reads the disc header with random access (needed for WBFS/CISO/GCZ, where it isn't at offset 0). */

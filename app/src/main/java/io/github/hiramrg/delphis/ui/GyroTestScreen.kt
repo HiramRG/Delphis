@@ -61,8 +61,8 @@ fun GyroTestScreen(act: MainActivity) {
     val prefs = act.prefs
     var mode by remember { mutableStateOf(prefs.gyroHorizontal) }
     var speedLevel by remember { mutableFloatStateOf(prefs.gyroSensitivity.toFloat()) }
-    var invertX by remember { mutableStateOf(false) }
-    var invertY by remember { mutableStateOf(false) }
+    var invertX by remember { mutableStateOf(prefs.gyroInvertX) }
+    var invertY by remember { mutableStateOf(prefs.gyroInvertY) }
     var precision by remember { mutableStateOf(true) }
     val state = remember { GyroState() }
     var frame by remember { mutableLongStateOf(0L) }
@@ -197,12 +197,12 @@ fun GyroTestScreen(act: MainActivity) {
                 Text(mode.description, fontSize = 11.sp, color = c.textDim, maxLines = 3)
                 Text("Speed: ${speedLevel.toInt()}  (5 ≈ a real Wii Remote)", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 4.dp))
                 Slider(value = speedLevel, onValueChange = { speedLevel = it }, onValueChangeFinished = { prefs.gyroSensitivity = speedLevel.toInt() }, valueRange = 1f..10f, steps = 8)
-                Text("Try inverted", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+                Text("Invert", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    WiiChip("Up/down", invertY, { invertY = !invertY })
-                    WiiChip("Left/right", invertX, { invertX = !invertX })
+                    WiiChip("Up/down", invertY, { invertY = !invertY; prefs.gyroInvertY = invertY })
+                    WiiChip("Left/right", invertX, { invertX = !invertX; prefs.gyroInvertX = invertX })
                 }
-                Text("In games, pick the matching \"inverted\" gyro preset.", fontSize = 11.sp, color = c.textDim)
+                Text("Saved for every gyro preset (also in Settings → Gyro aiming).", fontSize = 11.sp, color = c.textDim)
             }
         }
     }

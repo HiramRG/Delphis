@@ -87,8 +87,8 @@ object DolphinConfigWriter {
         val dz = GyroAim.DEAD_ZONE
         val pull = GyroAim.TILT_PULL
         val turnLeft = GyroAim.turnLeftExpression(controller.gyroHorizontal, d)
-        val xRate = if (g.invertX) turnLeft else "(0 - $turnLeft)"
-        val ySign = if (g.invertY) "(0 - 1)" else "1"
+        val xRate = if (g.invertX != controller.gyroInvertX) turnLeft else "(0 - $turnLeft)"
+        val ySign = if (g.invertY != controller.gyroInvertY) "(0 - 1)" else "1"
 
         fun stick(key: String) = existing[key]?.let { "($it) * 2" } ?: "0" // 2 = Dolphin's own relative-pointer speed
         val r = existing["IR/Recenter"]?.let { "($it)" }
@@ -129,8 +129,8 @@ object DolphinConfigWriter {
         val k = n(controller.gyroSpeed)
         val dz = GyroAim.DEAD_ZONE
         val turnLeft = GyroAim.turnLeftExpression(controller.gyroHorizontal, d)
-        val xRate = if (g.invertX) turnLeft else "(0 - $turnLeft)"
-        val ySign = if (g.invertY) "(0 - 1)" else "1"
+        val xRate = if (g.invertX != controller.gyroInvertX) turnLeft else "(0 - $turnLeft)"
+        val ySign = if (g.invertY != controller.gyroInvertY) "(0 - 1)" else "1"
         val slow = n(GyroAim.PRECISION_SLOW)
         val span = n(GyroAim.PRECISION_FAST - GyroAim.PRECISION_SLOW)
         val ramp = n(GyroAim.PRECISION_RAMP)

@@ -50,11 +50,11 @@ fun withOrangeTags(text: String, orange: Color = ExperimentalOrange): androidx.c
         val tag = "(experimental)"
         var i = 0
         while (true) {
-            val j = text.indexOf(tag, i)
+            val j = text.indexOf(tag, i, ignoreCase = true)
             if (j < 0) { append(text.substring(i)); break }
             append(text.substring(i, j))
             pushStyle(androidx.compose.ui.text.SpanStyle(color = orange, fontWeight = FontWeight.Bold))
-            append(tag)
+            append("(Experimental)") // always shown capitalised, also in older saved presets
             pop()
             i = j + tag.length
         }

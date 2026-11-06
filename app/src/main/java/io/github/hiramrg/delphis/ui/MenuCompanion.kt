@@ -145,9 +145,9 @@ class MenuCompanionActivity : ComponentActivity() {
 private fun CompanionContent(act: MainActivity) {
     Box(Modifier.fillMaxSize().padding(14.dp)) {
         when (val s = act.screen) {
-            Screen.Home -> QuickMenu(act)
+            // A game highlighted in Home's lists shows its details; otherwise the quick tiles.
+            Screen.Home -> if (act.focusedGame != null) FocusedGamePanel(act) else QuickMenu(act)
             is Screen.Game -> act.picker?.let { PickerPanel(act, it) } ?: IdlePanel()
-            Screen.Library -> FocusedGamePanel(act)
             else -> IdlePanel()
         }
     }
@@ -166,9 +166,9 @@ private fun QuickMenu(act: MainActivity) {
             Triple("⚙", "Settings", "Theme, gyro, brightness, updates"),
         )
         val actions = listOf<() -> Unit>(
-            { last?.let { act.quickPlay(it) } ?: run { act.screen = Screen.Library } },
-            { act.screen = Screen.Library },
-            { last?.let { act.openGame(it) } ?: run { act.screen = Screen.Library } },
+            { last?.let { act.quickPlay(it) } ?: act.showAllGames() },
+            { act.showAllGames() },
+            { last?.let { act.openGame(it) } ?: act.showAllGames() },
             { act.screen = Screen.Settings },
         )
         for (row in 0..1) Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -210,24 +210,14 @@ private fun PickerPanel(act: MainActivity, p: GamePicker) {
     }
 }
 
-/** One preset with a mini preview of its main in-game tiles (in the real control colours). */
+/** One preset in a list: its illustration, name (with tags) and summary. */
 @Composable
 fun PickerCard(preset: Preset, selected: Boolean, suggested: Boolean = false, onClick: () -> Unit) {
     val c = LocalWii.current
-    val main = remember(preset.id) { summarize(preset).main.map { it.controls.first() } }
     WiiCard(Modifier.fillMaxWidth(), selected = selected, radius = 18.dp, padding = 8.dp, onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(
-                Modifier.size(width = 66.dp, height = 48.dp).clip(RoundedCornerShape(10.dp)).background(c.bg).padding(4.dp),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                for (r in 0..1) Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    for (k in 0..1) {
-                        val ctl = main.getOrNull(r * 2 + k)
-                        Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(5.dp)).background(ctl?.let { controlColor(it) } ?: c.cardBorder.copy(alpha = 0.4f)))
-                    }
-                }
-            }
+            // An illustration of how you'd hold the Wii controller with this preset.
+            PresetIcon(preset, Modifier.size(width = 66.dp, height = 48.dp).clip(RoundedCornerShape(10.dp)).background(c.bg).padding(2.dp))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(presetTitle(preset.name, suggested), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 17.sp)

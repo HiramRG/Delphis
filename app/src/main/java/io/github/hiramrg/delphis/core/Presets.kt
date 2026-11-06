@@ -367,12 +367,9 @@ object PresetLibrary {
         )
     }
 
-    /** The four invert combinations of a gyro preset, as separate presets the user can pick. */
+    /** A gyro preset (inverting up/down or left/right is a setting: Settings → Gyro aiming). */
     private fun gyroVariants(base: Preset, idBase: String, name: String, summary: String) = listOf(
-        withGyroAiming(base, idBase, "$name (experimental)", summary, invertX = false, invertY = false),
-        withGyroAiming(base, "$idBase-iy", "$name · inverted up/down (experimental)", "$summary Tilting up moves the pointer down.", invertX = false, invertY = true),
-        withGyroAiming(base, "$idBase-ix", "$name · inverted left/right (experimental)", "$summary Turning left moves the pointer right.", invertX = true, invertY = false),
-        withGyroAiming(base, "$idBase-ixy", "$name · both inverted (experimental)", "$summary Both directions inverted.", invertX = true, invertY = true),
+        withGyroAiming(base, idBase, "$name (Experimental)", summary, invertX = false, invertY = false),
     )
 
     val GALAXY_GYRO_ALL = gyroVariants(
@@ -411,15 +408,7 @@ object PresetLibrary {
     private fun precisionVariants(
         base: Preset, idBase: String, summary: String, relabel: Map<ThorControl, Mapping>, extraTips: List<String> = emptyList(),
     ): List<Preset> {
-        val name = "Precision gyro"
-        fun v(suffix: String, label: String, extra: String, ix: Boolean, iy: Boolean) =
-            withPrecisionAim(base, idBase + suffix, "$name$label (experimental)", summary + extra, ix, iy, relabel, extraTips)
-        return listOf(
-            v("", "", "", ix = false, iy = false),
-            v("-iy", " · inverted up/down", " Tilting up moves the pointer down.", ix = false, iy = true),
-            v("-ix", " · inverted left/right", " Turning left moves the pointer right.", ix = true, iy = false),
-            v("-ixy", " · both inverted", " Both directions inverted.", ix = true, iy = true),
-        )
+        return listOf(withPrecisionAim(base, idBase, "Precision gyro (Experimental)", summary, false, false, relabel, extraTips))
     }
 
     val GALAXY_PRECISION_ALL = precisionVariants(

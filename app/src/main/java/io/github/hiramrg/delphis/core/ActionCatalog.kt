@@ -58,14 +58,8 @@ object ActionCatalog {
 
     /** Gyro aiming needs a Wii Remote pointer, so only Wii Remote styles (not the wheel) offer it. */
     val GYRO_AIM = listOf(
-        Option("Aim pointer (turn the Thor) (experimental)", Target.GyroPointer()),
-        Option("Aim pointer · inverted up/down (experimental)", Target.GyroPointer(invertY = true)),
-        Option("Aim pointer · inverted left/right (experimental)", Target.GyroPointer(invertX = true)),
-        Option("Aim pointer · both inverted (experimental)", Target.GyroPointer(invertX = true, invertY = true)),
-        Option("Precision aim (experimental)", Target.GyroPointer(precision = true)),
-        Option("Precision aim · inverted up/down (experimental)", Target.GyroPointer(invertY = true, precision = true)),
-        Option("Precision aim · inverted left/right (experimental)", Target.GyroPointer(invertX = true, precision = true)),
-        Option("Precision aim · both inverted (experimental)", Target.GyroPointer(invertX = true, invertY = true, precision = true)),
+        Option("Gyro aiming (Experimental)", Target.GyroPointer()),
+        Option("Precision gyro (Experimental)", Target.GyroPointer(precision = true)),
     )
 
     fun gyroOptions(c: EmulatedController): List<Option> = listOf(NOTHING) + when (c) {

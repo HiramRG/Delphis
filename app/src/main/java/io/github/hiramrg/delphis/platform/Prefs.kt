@@ -106,6 +106,14 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("save_states_off", false)
         set(v) = sp.edit().putBoolean("save_states_off", v).apply()
 
+    /** Settings → Gyro aiming: invert the gyro pointer's left/right and up/down (every gyro preset). */
+    var gyroInvertX: Boolean
+        get() = sp.getBoolean("gyro_invert_x", false)
+        set(v) = sp.edit().putBoolean("gyro_invert_x", v).apply()
+    var gyroInvertY: Boolean
+        get() = sp.getBoolean("gyro_invert_y", false)
+        set(v) = sp.edit().putBoolean("gyro_invert_y", v).apply()
+
     /** Background music in Delphis' menus (not during games). */
     var menuMusicOn: Boolean
         get() = sp.getBoolean("menu_music_on", true)

@@ -35,7 +35,6 @@ import kotlinx.coroutines.withContext
 sealed interface Screen {
     data object Setup : Screen
     data object Home : Screen
-    data object Library : Screen
     data class Game(val entry: GameEntry) : Screen
     data object Settings : Screen
     data object ControllerCheck : Screen
@@ -78,6 +77,18 @@ class MainActivity : ComponentActivity() {
     var settingsSection by mutableStateOf(SettingsSection.APPEARANCE)
     /** True while a Recently played tile (not the hero card) has controller focus on Home. */
     var homeFocusedTile = false
+    /** Home's scroll position (kept while visiting a game page). */
+    val homeGrid = androidx.compose.foundation.lazy.grid.LazyGridState()
+    /** Library column on Home: open (labels) or retracted (icons only). */
+    var libraryOpen by mutableStateOf(true)
+    /** Bumped to scroll Home down to the game list. */
+    var scrollToGamesRequest by mutableIntStateOf(0)
+
+    /** Shows Home scrolled down to the game list. */
+    fun showAllGames() {
+        screen = Screen.Home
+        scrollToGamesRequest++
+    }
     var games by mutableStateOf<List<GameEntry>>(emptyList())
     var scanning by mutableStateOf(false)
     var scanCount by mutableIntStateOf(0)
@@ -135,13 +146,22 @@ class MainActivity : ComponentActivity() {
         games = library.cached()
         if (!isSetUp()) screen = Screen.Setup
         else if (games.isEmpty()) rescan()
+        // Proper game names (GameTDB's list, downloaded once a month), then refresh the list.
+        lifecycleScope.launch {
+            val ids = games.mapNotNull { it.info.gameId }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                io.github.hiramrg.delphis.platform.GameTitles.load(this@MainActivity, ids)
+                io.github.hiramrg.delphis.platform.GameTitles.refresh(this@MainActivity, ids)
+            }
+            if (!scanning) games = library.cached()
+        }
 
         setContent {
             WiiTheme(darkTheme) {
                 BackHandler(enabled = screen != Screen.Home && screen != Screen.Setup) {
                     screen = when (screen) {
                         Screen.Diagnostics, Screen.GyroTest, Screen.ControllerCheck -> if (isSetUp()) Screen.Settings else Screen.Setup
-                        is Screen.Game -> Screen.Library
+                        is Screen.Game -> Screen.Home
                         else -> Screen.Home
                     }
                 }
@@ -174,7 +194,6 @@ class MainActivity : ComponentActivity() {
                 when (val s = screen) {
                     Screen.Setup -> SetupScreen(this)
                     Screen.Home -> HomeScreen(this)
-                    Screen.Library -> LibraryScreen(this)
                     is Screen.Game -> GameScreen(this, s.entry)
                     Screen.Settings -> SettingsScreen(this)
                     Screen.ControllerCheck -> ControllerCheckScreen(this)
@@ -205,6 +224,7 @@ class MainActivity : ComponentActivity() {
 
     /** Opens a game's page (preset choice). */
     fun openGame(game: GameEntry) {
+        focusedGame = null
         picker = GamePicker(this, game)
         screen = Screen.Game(game)
     }
@@ -239,6 +259,13 @@ class MainActivity : ComponentActivity() {
         scanCount = 0
         lifecycleScope.launch {
             games = library.scan { n -> lifecycleScope.launch { scanCount = n } }
+            // Names for games that were just added.
+            val ids = games.mapNotNull { it.info.gameId }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                io.github.hiramrg.delphis.platform.GameTitles.load(this@MainActivity, ids)
+                io.github.hiramrg.delphis.platform.GameTitles.refresh(this@MainActivity, ids)
+            }
+            games = library.cached()
             scanning = false
         }
     }
