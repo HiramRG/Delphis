@@ -361,7 +361,10 @@ class NowPlayingActivity : ComponentActivity() {
 
                 // ---------------- middle
                 when (mode) {
-                    Mode.VIEW -> ControlsOverview(preset, Modifier.weight(1f).fillMaxWidth())
+                    // Same Thor button map as the game page.
+                    Mode.VIEW -> WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
+                        ControlsMap(preset, Modifier.fillMaxSize())
+                    }
                     Mode.CHANGE -> LayoutSwitcher(s, preset, onCancel = { mode = Mode.VIEW }) { chosen ->
                         restartAction = { mode = Mode.VIEW; applyAndRestart(s, chosen, remember = true) }
                     }
