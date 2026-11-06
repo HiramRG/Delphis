@@ -56,9 +56,10 @@ class Prefs(context: Context) {
         get() = sp.getInt("whats_new_seen", 0)
         set(v) = sp.edit().putInt("whats_new_seen", v).apply()
 
-    var themeDark: Boolean
-        get() = sp.getBoolean("theme_dark", false)
-        set(v) = sp.edit().putBoolean("theme_dark", v).apply()
+    /** "light", "dark" or "auto" (follow Android's dark theme setting). Older installs only stored a boolean. */
+    var themeMode: String
+        get() = sp.getString("theme_mode", null) ?: if (sp.getBoolean("theme_dark", false)) "dark" else "light"
+        set(v) = sp.edit().putString("theme_mode", v).apply()
 
     // ---------------------------------------------------------------- favorites, last played, play time
     private fun readMap(key: String): Map<String, Long> =

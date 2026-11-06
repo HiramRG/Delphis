@@ -51,6 +51,22 @@ class DolphinExitService : AccessibilityService() {
 
         /** See [pressQuickLoad]. Null when the service isn't running. */
         suspend fun quickLoad(pkg: String): StateResult? = instance?.pressQuickLoad(pkg)
+
+        /** Covers the top screen with the loading screen (no-op without the service). Returns whether it's showing. */
+        fun showLoading(phase: LoadingOverlay.Phase, title: String?, gameId: String?, line: String, displayId: Int?): Boolean {
+            val s = instance ?: return false
+            s.handler.post { s.loading.show(phase, title, gameId, line, displayId) }
+            return true
+        }
+
+        fun hideLoading(delayMs: Long = 0) { instance?.let { s -> s.handler.post { s.loading.hide(delayMs) } } }
+
+        /** True if Dolphin's game screen is up. */
+        fun gameShowing(pkg: String): Boolean = instance?.find(pkg, "frame_emulation_fragment") != null
+
+        /** Waits (up to [timeoutMs]) for Dolphin's game screen to appear. */
+        suspend fun awaitGameScreen(pkg: String, timeoutMs: Long): Boolean =
+            instance?.waitFor(timeoutMs) { instance?.find(pkg, "frame_emulation_fragment") != null } ?: false
     }
 
     enum class Result { NO_GAME, EXITED, FAILED }
@@ -66,12 +82,14 @@ class DolphinExitService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        loading.hide()
         handler.removeCallbacksAndMessages(null)
         instance = null
         super.onDestroy()
     }
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val loading by lazy { LoadingOverlay(this) }
     private val checkGame = Runnable {
         if (GameWatch.session == null || GameLauncher.busy) return@Runnable
         val stillShowing = DolphinBridge.KNOWN_PACKAGES.any { find(it, "frame_emulation_fragment") != null }

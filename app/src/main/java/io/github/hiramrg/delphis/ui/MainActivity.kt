@@ -64,6 +64,8 @@ class MainActivity : ComponentActivity() {
 
     var screen by mutableStateOf<Screen>(Screen.Home)
     /** Light (classic Wii, default) or dark menus. The in-game bottom screen is always dark. */
+    /** "light", "dark" or "auto"; [darkTheme] is what's actually shown (Auto follows Android). */
+    var themeMode by mutableStateOf("light")
     var darkTheme by mutableStateOf(false)
     /** Bumped when favorites / play stats change so lists re-read them. */
     var statsVersion by mutableIntStateOf(0)
@@ -77,6 +79,10 @@ class MainActivity : ComponentActivity() {
     var settingsSection by mutableStateOf(SettingsSection.APPEARANCE)
     /** True while a Recently played tile (not the hero card) has controller focus on Home. */
     var homeFocusedTile = false
+    /** Replaces the home bar's button hints while something special is focused (column button, search). */
+    var homeHint by mutableStateOf<String?>(null)
+    /** True while the search box has the keyboard open: Home's button shortcuts stay off. */
+    var searchEditing = false
     /** Home's scroll position (kept while visiting a game page). */
     val homeGrid = androidx.compose.foundation.lazy.grid.LazyGridState()
     /** Library column on Home: open (labels) or retracted (icons only). */
@@ -145,7 +151,7 @@ class MainActivity : ComponentActivity() {
         store = PresetStore(this)
         updater = Updater(this)
         checkForUpdates(silent = true)
-        darkTheme = prefs.themeDark
+        themeMode = prefs.themeMode
         // Release notes: once after an update; a fresh install just marks them as seen.
         val pkg = runCatching { packageManager.getPackageInfo(packageName, 0) }.getOrNull()
         val isUpdate = pkg != null && pkg.lastUpdateTime > pkg.firstInstallTime
@@ -168,7 +174,10 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            WiiTheme(darkTheme) {
+            val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
+            val dark = when (themeMode) { "dark" -> true; "auto" -> systemDark; else -> false }
+            androidx.compose.runtime.SideEffect { darkTheme = dark }
+            WiiTheme(dark) {
                 BackHandler(enabled = screen != Screen.Home && screen != Screen.Setup) {
                     screen = when (screen) {
                         Screen.Diagnostics, Screen.GyroTest, Screen.ControllerCheck -> if (isSetUp()) Screen.Settings else Screen.Setup
@@ -231,7 +240,7 @@ class MainActivity : ComponentActivity() {
         return super.dispatchGenericMotionEvent(event)
     }
 
-    fun setTheme(dark: Boolean) { darkTheme = dark; prefs.themeDark = dark }
+    fun setTheme(mode: String) { themeMode = mode; prefs.themeMode = mode }
 
     /** The most recently played game that's still in the library. */
     fun lastGame(): GameEntry? {
@@ -380,7 +389,7 @@ class MainActivity : ComponentActivity() {
             val resumeId = entry.info.gameId?.takeIf {
                 prefs.autoSaveResume && withContext(Dispatchers.IO) { bridge.hasAutosave(it) }
             }
-            if (!bridge.launchFresh(entry.uri, roles.topDisplayId, resumeId)) {
+            if (!bridge.launchFresh(entry.uri, roles.topDisplayId, resumeId, entry.info.title, entry.info.gameId)) {
                 Toast.makeText(applicationContext, "Dolphin isn't installed.", Toast.LENGTH_LONG).show()
             }
         }

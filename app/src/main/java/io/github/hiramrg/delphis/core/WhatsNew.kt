@@ -5,16 +5,16 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 1
+    const val RELEASE = 2
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("One scrolling home.", "Continue playing, recently played and your whole library on one screen, with a Library column you can hide with L1."),
-        Item("Layout pictures.", "Each control layout shows how you hold the controller: sideways remote, remote + Nunchuk, wheel and more."),
-        Item("Simpler gyro.", "Two gyro styles; invert up/down and left/right in Settings."),
-        Item("Fixed:", "the Wii pointer no longer sits in the middle of the screen and steals the D-pad's selection in menus (New Super Mario Bros. Wii's \"Exit Course\", Mario Kart Wii and more).", fix = true),
-        Item("Fixed:", "Super Mario Galaxy 2 shows its proper name.", fix = true),
+        Item("Loading screen.", "While Delphis saves, closes or starts a game, a loading screen covers Dolphin's menus (needs the \"close games\" helper)."),
+        Item("Easier with buttons.", "The Library column button is reachable with the D-pad (or press L1), and everything you move onto gets a blue outline."),
+        Item("Search on your terms.", "The keyboard only opens when you press Ⓐ on the search box; Ⓑ closes it."),
+        Item("Auto theme.", "Settings → Appearance now has Light, Dark and Auto (follows Android)."),
+        Item("Softer corners", "on the Library column and the bottom bar."),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

@@ -243,7 +243,7 @@ class NowPlayingActivity : ComponentActivity() {
             if (remember) prefs.setPresetFor(s.key, preset.id)
             val roles = DeviceInfo.screenRoles(this@NowPlayingActivity, prefs.swapScreens)
             // With autosave on, the game was just saved while closing, so it picks up right there.
-            bridge.launchFresh(s.uri, roles.topDisplayId, s.info.gameId?.takeIf { prefs.autoSaveResume })
+            bridge.launchFresh(s.uri, roles.topDisplayId, s.info.gameId?.takeIf { prefs.autoSaveResume }, s.info.title, s.info.gameId)
             session = s.copy(presetId = preset.id, applied = applied)
             watch(session)
             startedAt = SystemClock.elapsedRealtime()
@@ -262,6 +262,8 @@ class NowPlayingActivity : ComponentActivity() {
             val onTop = roles.topDisplayId?.let { ActivityOptions.makeBasic().setLaunchDisplayId(it).toBundle() }
             if (runCatching { startActivity(menu, onTop) }.isFailure) runCatching { startActivity(menu) }
             CoverActivity.dismiss()
+            // Lift the loading screen once the game list is up.
+            io.github.hiramrg.delphis.platform.DolphinExitService.hideLoading(900)
             busy = null
             finish()
         }

@@ -25,6 +25,10 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.composed
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -177,6 +181,7 @@ fun HomeScreen(act: MainActivity) {
 
     val onKey by rememberUpdatedState<(KeyEvent) -> Boolean> { e ->
         val target = act.focusedGame ?: hero
+        if (act.searchEditing) return@rememberUpdatedState false
         when (e.keyCode) {
             KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_START ->
                 if (act.homeFocusedTile || hero == null) false else { if (e.firstPress()) act.quickPlay(hero); true }
@@ -187,7 +192,7 @@ fun HomeScreen(act: MainActivity) {
             else -> false
         }
     }
-    DisposableEffect(Unit) { act.keyListener = { onKey(it) }; onDispose { act.keyListener = null; act.homeFocusedTile = false } }
+    DisposableEffect(Unit) { act.keyListener = { onKey(it) }; onDispose { act.keyListener = null; act.homeFocusedTile = false; act.homeHint = null; act.searchEditing = false } }
 
     Column(Modifier.fillMaxSize()) {
         UpdateBanner(act)
@@ -196,7 +201,7 @@ fun HomeScreen(act: MainActivity) {
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(96.dp), state = grid,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                contentPadding = PaddingValues(start = 12.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 item(key = "hero", span = { GridItemSpan(maxLineSpan) }) {
@@ -245,24 +250,90 @@ fun HomeScreen(act: MainActivity) {
 @Composable
 private fun GamesHeader(act: MainActivity, count: Int) {
     val c = LocalWii.current
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.padding(top = 4.dp).onFocusChanged { if (it.hasFocus) { act.homeFocusedTile = true; act.focusedGame = null } },
+    ) {
         Text(act.librarySection.label, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
         Text("$count", fontSize = 12.sp, color = c.textDim, modifier = Modifier.weight(1f))
-        Row(
-            Modifier.width(150.dp).height(34.dp).clip(RoundedCornerShape(50)).background(c.card).border(2.dp, c.cardBorder, RoundedCornerShape(50)).padding(horizontal = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Filled.Search, null, tint = c.textDim, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Box(Modifier.weight(1f)) {
-                if (act.libraryQuery.isEmpty()) Text("Search", color = c.textDim, fontSize = 13.sp)
+        SearchBox(act)
+        LibSort.entries.forEach { s -> WiiChip(s.label, act.librarySort == s, { act.librarySort = s }, Modifier.focusRing(RoundedCornerShape(50))) }
+    }
+}
+
+/**
+ * The search box never opens the keyboard by itself: moving onto it with the D-pad only highlights
+ * it, A starts typing, and B (or the keyboard's Done) closes the keyboard and returns to the box.
+ */
+@Composable
+private fun SearchBox(act: MainActivity) {
+    val c = LocalWii.current
+    var editing by remember { mutableStateOf(false) }
+    var focused by remember { mutableStateOf(false) }
+    val pillFocus = remember { FocusRequester() }
+    val fieldFocus = remember { FocusRequester() }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    var returnFocus by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(50)
+    fun stop() {
+        keyboard?.hide()
+        editing = false
+        act.searchEditing = false
+        returnFocus = true
+    }
+    Row(
+        Modifier.width(150.dp).height(34.dp).clip(shape).background(c.card)
+            .border(if (focused || editing) 3.dp else 2.dp, if (focused || editing) c.accent else c.cardBorder, shape)
+            .then(
+                if (editing) Modifier
+                else Modifier.focusRequester(pillFocus)
+                    .onFocusChanged {
+                        focused = it.isFocused
+                        if (it.isFocused) act.homeHint = "Ⓐ Type to search" else if (act.homeHint == "Ⓐ Type to search") act.homeHint = null
+                    }
+                    .clickable { editing = true; act.searchEditing = true },
+            )
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.Search, null, tint = c.textDim, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Box(Modifier.weight(1f)) {
+            if (editing) {
                 BasicTextField(
                     act.libraryQuery, { act.libraryQuery = it }, singleLine = true,
-                    textStyle = TextStyle(color = c.text, fontSize = 13.sp), cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth(),
+                    textStyle = TextStyle(color = c.text, fontSize = 13.sp), cursorBrush = SolidColor(c.accent),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { stop() }),
+                    modifier = Modifier.fillMaxWidth().focusRequester(fieldFocus)
+                        .onPreviewKeyEvent { e ->
+                            val code = e.nativeKeyEvent.keyCode
+                            if (code == KeyEvent.KEYCODE_BUTTON_B || code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_ESCAPE) {
+                                if (e.nativeKeyEvent.action == KeyEvent.ACTION_UP) stop()
+                                true
+                            } else false
+                        }
+                        .onFocusChanged { if (!it.isFocused && editing) { editing = false; act.searchEditing = false } },
                 )
+            } else {
+                Text(act.libraryQuery.ifEmpty { "Search" }, color = if (act.libraryQuery.isEmpty()) c.textDim else c.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        LibSort.entries.forEach { s -> WiiChip(s.label, act.librarySort == s, { act.librarySort = s }) }
+        if (!editing && focused) Text("Ⓐ type", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
+    }
+    LaunchedEffect(editing) {
+        if (editing) {
+            kotlinx.coroutines.delay(50)
+            runCatching { fieldFocus.requestFocus() }
+            keyboard?.show()
+        }
+    }
+    LaunchedEffect(returnFocus) {
+        if (returnFocus) {
+            kotlinx.coroutines.delay(50)
+            runCatching { pillFocus.requestFocus() }
+            returnFocus = false
+        }
     }
 }
 
@@ -352,18 +423,28 @@ private fun AllGamesTile(act: MainActivity, height: androidx.compose.ui.unit.Dp)
 @Composable
 private fun HomeBar(act: MainActivity) {
     val c = LocalWii.current
+    val shape = RoundedCornerShape(50)
     Row(
-        Modifier.fillMaxWidth().height(50.dp).background(c.bar).border(BorderStroke(2.dp, c.barBorder)).padding(horizontal = 16.dp),
+        Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp).fillMaxWidth().height(48.dp)
+            .clip(shape).background(c.bar).border(2.dp, c.barBorder, shape).padding(start = 6.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(38.dp).clip(RoundedCornerShape(50)).background(c.card).border(2.dp, c.cardBorder, RoundedCornerShape(50))
+            Modifier.size(36.dp).focusRing(RoundedCornerShape(50)).clip(RoundedCornerShape(50)).background(c.card).border(2.dp, c.cardBorder, RoundedCornerShape(50))
+                .onFocusChanged { if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null } }
                 .clickable { act.screen = Screen.Settings },
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.Filled.Settings, "Settings", tint = c.textDim) }
         Text(rememberClock(withDate = true), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
-        Text("Ⓐ Play · Ⓧ Controls · Ⓨ Favorite · L1 Library", fontSize = 12.sp, color = c.textDim)
+        Text(act.homeHint ?: "Ⓐ Play · Ⓧ Controls · Ⓨ Favorite · L1 Library", fontSize = 12.sp, color = c.textDim)
     }
+}
+
+/** Blue ring around whatever the D-pad is on, so it's always clear where you are. */
+fun Modifier.focusRing(shape: androidx.compose.ui.graphics.Shape, width: androidx.compose.ui.unit.Dp = 3.dp): Modifier = composed {
+    var focused by remember { mutableStateOf(false) }
+    val c = LocalWii.current
+    this.then(if (focused) Modifier.border(width, c.accent, shape) else Modifier).onFocusChanged { focused = it.hasFocus }
 }
 
 // ============================================================================ library (column + list on Home)
@@ -394,27 +475,47 @@ private fun libraryList(act: MainActivity, favorites: Set<String>, lastPlayed: M
 private fun LibraryColumn(act: MainActivity, favorites: Set<String>) {
     val c = LocalWii.current
     val open = act.libraryOpen
-    val width by androidx.compose.animation.core.animateDpAsState(if (open) 172.dp else 58.dp, label = "library column")
+    val width by androidx.compose.animation.core.animateDpAsState(if (open) 164.dp else 58.dp, label = "library column")
+    val shape = RoundedCornerShape(20.dp)
+    // Rows tell Home that A belongs to them (not "play the hero") while they have the focus.
+    fun Modifier.claimsA(hint: String? = null) = onFocusChanged {
+        if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeHint = hint }
+        else if (act.homeHint == hint) act.homeHint = null
+    }
     Column(
-        Modifier.width(width).fillMaxHeight().background(c.sidebar).border(BorderStroke(2.dp, c.cardBorder)).padding(horizontal = 8.dp, vertical = 10.dp),
+        Modifier.padding(start = 8.dp, top = 8.dp, bottom = 8.dp).width(width).fillMaxHeight()
+            .clip(shape).background(c.sidebar).border(2.dp, c.cardBorder, shape).padding(horizontal = 8.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
         horizontalAlignment = if (open) Alignment.Start else Alignment.CenterHorizontally,
     ) {
         Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             if (open) Text("Library", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, modifier = Modifier.weight(1f).padding(start = 6.dp), maxLines = 1)
             else Spacer(Modifier.weight(1f))
-            Box(
-                Modifier.size(30.dp).clip(RoundedCornerShape(50)).border(2.dp, c.cardBorder, RoundedCornerShape(50)).clickable { act.libraryOpen = !open },
-                contentAlignment = Alignment.Center,
-            ) { Text(if (open) "◀" else "▶", fontSize = 11.sp, color = c.textDim) }
+            // The open/close button: reachable with the D-pad (A toggles) and labelled with its L1 shortcut.
+            val pill = RoundedCornerShape(50)
+            Row(
+                Modifier.height(30.dp).focusRing(pill).clip(pill).border(2.dp, c.cardBorder, pill)
+                    .claimsA(if (open) "Ⓐ Hide column · L1 Library" else "Ⓐ Show column · L1 Library")
+                    .clickable { act.libraryOpen = !open }
+                    .padding(horizontal = if (open) 8.dp else 0.dp).then(if (open) Modifier else Modifier.width(30.dp)),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
+            ) {
+                Text(if (open) "◀" else "▶", fontSize = 11.sp, color = c.textDim)
+                if (open) Text(
+                    "L1", fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, color = c.card,
+                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(c.text).padding(horizontal = 4.dp),
+                )
+            }
             if (!open) Spacer(Modifier.weight(1f))
         }
         LibSection.entries.forEach { s ->
             val selected = act.librarySection == s
-            val shape = RoundedCornerShape(14.dp)
+            val rowShape = RoundedCornerShape(14.dp)
             Row(
-                Modifier.fillMaxWidth().clip(shape).background(if (selected) c.accentSoft else Color.Transparent)
-                    .border(2.dp, if (selected) c.accent else Color.Transparent, shape)
+                Modifier.fillMaxWidth().focusRing(rowShape).clip(rowShape).background(if (selected) c.accentSoft else Color.Transparent)
+                    .border(2.dp, if (selected) c.accent else Color.Transparent, rowShape)
+                    .claimsA()
                     .clickable { act.librarySection = s; act.showAllGames() }
                     .padding(horizontal = if (open) 10.dp else 0.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -789,8 +890,9 @@ private fun AppearanceSettings(act: MainActivity) {
     var covers by remember { mutableStateOf(act.prefs.showCovers) }
     Text("Theme", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        ThemeCard("Light", "Classic Wii look", LightWii, !act.darkTheme) { act.setTheme(false) }
-        ThemeCard("Dark", "Easier on battery", DarkWii, act.darkTheme) { act.setTheme(true) }
+        ThemeCard("Light", "Classic Wii look", listOf(LightWii), act.themeMode == "light") { act.setTheme("light") }
+        ThemeCard("Dark", "Easier on battery", listOf(DarkWii), act.themeMode == "dark") { act.setTheme("dark") }
+        ThemeCard("Auto", "Follows Android", listOf(LightWii, DarkWii), act.themeMode == "auto") { act.setTheme("auto") }
     }
     Row(
         Modifier.clip(RoundedCornerShape(14.dp)).background(c.accentSoft).border(2.dp, c.accent.copy(alpha = 0.5f), RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
@@ -800,27 +902,32 @@ private fun AppearanceSettings(act: MainActivity) {
 }
 
 @Composable
-private fun ThemeCard(title: String, sub: String, preview: WiiColors, selected: Boolean, onClick: () -> Unit) {
+private fun ThemeCard(title: String, sub: String, previews: List<WiiColors>, selected: Boolean, onClick: () -> Unit) {
     val c = LocalWii.current
-    WiiCard(Modifier.width(220.dp), selected = selected, radius = 20.dp, padding = 10.dp, onClick = onClick) {
-        Row(
-            Modifier.fillMaxWidth().height(96.dp).clip(RoundedCornerShape(12.dp)).wiiStripes(preview)
-                .border(2.dp, preview.cardBorder, RoundedCornerShape(12.dp)).padding(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Box(Modifier.width(44.dp).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(Color(0xFF2B3F9E)).border(2.dp, preview.accent, RoundedCornerShape(8.dp)))
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.fillMaxWidth(0.8f).height(9.dp).clip(RoundedCornerShape(5.dp)).background(preview.text))
-                Box(Modifier.fillMaxWidth(0.55f).height(7.dp).clip(RoundedCornerShape(4.dp)).background(preview.textDim))
-                Spacer(Modifier.weight(1f))
-                Box(Modifier.width(56.dp).height(18.dp).clip(RoundedCornerShape(9.dp)).background(preview.accent))
+    WiiCard(Modifier.width(150.dp), selected = selected, radius = 20.dp, padding = 8.dp, onClick = onClick) {
+        // One mini screen per palette; Auto shows light and dark side by side.
+        Row(Modifier.fillMaxWidth().height(80.dp).clip(RoundedCornerShape(12.dp)).border(2.dp, c.cardBorder, RoundedCornerShape(12.dp))) {
+            previews.forEach { preview ->
+                Row(
+                    Modifier.weight(1f).fillMaxHeight().wiiStripes(preview).padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Box(Modifier.width(if (previews.size > 1) 18.dp else 36.dp).fillMaxHeight().clip(RoundedCornerShape(6.dp)).background(Color(0xFF2B3F9E)).border(2.dp, preview.accent, RoundedCornerShape(6.dp)))
+                    Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Box(Modifier.fillMaxWidth(0.85f).height(8.dp).clip(RoundedCornerShape(4.dp)).background(preview.text))
+                        Box(Modifier.fillMaxWidth(0.6f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(preview.textDim))
+                        Spacer(Modifier.weight(1f))
+                        Box(Modifier.fillMaxWidth(0.8f).height(14.dp).clip(RoundedCornerShape(7.dp)).background(preview.accent))
+                    }
+                }
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
             RadioButton(selected = selected, onClick = onClick)
-            Text(title, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
-            Spacer(Modifier.width(6.dp))
-            Text(sub, fontSize = 12.sp, color = c.textDim)
+            Column {
+                Text(title, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+                Text(sub, fontSize = 11.sp, color = c.textDim, maxLines = 1)
+            }
         }
     }
 }

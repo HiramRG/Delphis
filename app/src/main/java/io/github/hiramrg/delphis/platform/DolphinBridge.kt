@@ -236,8 +236,18 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
      */
     suspend fun closeDolphin(displayId: Int?, message: String = "Closing Dolphin…"): CloseResult {
         val pkg = installedPackage() ?: return CloseResult.NO_GAME
+        // Cover the top screen while Dolphin's menus are pressed (the caller hides it when it's done).
+        val playing = GameWatch.session?.info
+        if (DolphinExitService.gameShowing(pkg)) {
+            val saving = prefs.autoSaveResume && playing?.gameId != null
+            DolphinExitService.showLoading(
+                if (saving) LoadingOverlay.Phase.SAVING else LoadingOverlay.Phase.CLOSING,
+                playing?.title, playing?.gameId, if (saving) "Autosaving and closing the game…" else "Closing the game…", displayId,
+            )
+            kotlinx.coroutines.delay(250) // let it draw before Dolphin's menu opens
+        }
         // Autosave first, while the game is still running.
-        GameWatch.session?.info?.gameId?.let { id -> if (prefs.autoSaveResume) autoSave(pkg, id) }
+        playing?.gameId?.let { id -> if (prefs.autoSaveResume) autoSave(pkg, id) }
         when (DolphinExitService.exit(pkg)) {
             DolphinExitService.Result.EXITED -> return CloseResult.EXITED
             DolphinExitService.Result.NO_GAME -> return CloseResult.NO_GAME
@@ -266,11 +276,21 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
     }
 
     /** Starts the game in a fresh Dolphin, so the newly written controls are always loaded. */
-    suspend fun launchFresh(gameUri: Uri, displayId: Int?, resumeGameId: String? = null): Boolean {
-        closeDolphin(displayId, "Starting game…")
-        if (!launch(gameUri, displayId)) return false
-        if (resumeGameId != null) autoResume(resumeGameId)
-        return true
+    suspend fun launchFresh(gameUri: Uri, displayId: Int?, resumeGameId: String? = null, title: String? = null, gameId: String? = null): Boolean {
+        try {
+            closeDolphin(displayId, "Starting game…")
+            DolphinExitService.showLoading(
+                LoadingOverlay.Phase.STARTING, title, gameId,
+                if (resumeGameId != null) "Picking up where you left off…" else "Getting the game ready…", displayId,
+            )
+            if (!launch(gameUri, displayId)) return false
+            val pkg = installedPackage()
+            if (resumeGameId != null) autoResume(resumeGameId)
+            else if (pkg != null && DolphinExitService.awaitGameScreen(pkg, 20_000)) kotlinx.coroutines.delay(800)
+            return true
+        } finally {
+            DolphinExitService.hideLoading(400)
+        }
     }
 
     // ------------------------------------------------------------------ autosave / resume
