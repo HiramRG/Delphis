@@ -115,11 +115,14 @@ private val NUNCHUK_SHAKE = arrayOf("Nunchuk/Shake/X", "Nunchuk/Shake/Y", "Nunch
  */
 private fun PresetBuilder.hideIdlePointer() = option("IR/Auto-Hide", "True")
 
-/** Shared bits every Wii Remote preset gets: +, -, Home. */
+/**
+ * Shared bits every Wii Remote preset gets: + and −. HOME is left unmapped on purpose: in Dolphin its
+ * menu only offers Reset and "Wii Menu" (which stops the game when no system menu is installed), so a
+ * stray press of a stick could cost progress. It's still available in Edit for anyone who wants it.
+ */
 private fun PresetBuilder.wiiSystemButtons() {
     button(ThorControl.START, "+ (Pause)", "Buttons/+")
     button(ThorControl.SELECT, "− (Minus)", "Buttons/-")
-    button(ThorControl.L3, "HOME menu", "Buttons/Home")
 }
 
 object PresetLibrary {
@@ -142,7 +145,6 @@ object PresetLibrary {
         // pausing work no matter which one the current screen listens to.
         button(ThorControl.START, "Pause (+)", "Buttons/+", "Buttons/-")
         button(ThorControl.SELECT, "Pause (−)", "Buttons/-")
-        button(ThorControl.L3, "HOME menu", "Buttons/Home")
         option("Extension", "Nunchuk")
         option("IR/Relative Input", "True")
         tip("The pointer stays where you leave it (relative mode). Click R3 to snap it back to the center.")
@@ -340,7 +342,6 @@ object PresetLibrary {
         button(ThorControl.R2, "ZR", "Classic/Buttons/ZR")
         button(ThorControl.START, "+", "Classic/Buttons/+")
         button(ThorControl.SELECT, "−", "Classic/Buttons/-")
-        button(ThorControl.L3, "HOME", "Classic/Buttons/Home")
         option("Extension", "Classic")
     }
 

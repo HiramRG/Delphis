@@ -70,16 +70,19 @@ private fun presetVector(kind: PresetPicture, outline: Color, body: Color, accen
         fill(circ(0f, 7f, 1.3f), light)
         fill(circ(0f, 11f, 1.3f), light)
     }
-    fun nunchuk(x: Float, y: Float, rotate: Float) = b.group(rotate = rotate, translationX = x, translationY = y) {
-        shape("M-6 -12 C-6 -18 6 -18 6 -12 L5 10 C4.5 16 -4.5 16 -5 10 Z")
-        fill(circ(0f, -10f, 3.4f), outline)
+    // Rounded Nunchuk seen from the front: wide top with the stick, tapering grip, C/Z on the top edge.
+    fun nunchuk(x: Float, y: Float, rotate: Float = 0f) = b.group(rotate = rotate, translationX = x, translationY = y) {
+        shape("M0 -16 C9 -16 11 -8 10 -2 C9 6 6 16 0 16 C-6 16 -9 6 -10 -2 C-11 -8 -9 -16 0 -16 Z")
+        line(circ(0f, -7f, 5f), outline, 1.6f)
+        fill(circ(0f, -7f, 2.2f), outline)
+        fill(rr(-4f, -18.6f, 8f, 2.6f, 1.3f), light)
     }
 
     when (kind) {
         PresetPicture.NUNCHUK -> {
-            listOf(25f to 10.5f, 29f to 8.4f, 33.5f to 8.4f, 37.5f to 10.6f).forEach { (x, y) -> fill(circ(x, y, 0.9f), outline) }
-            nunchuk(20f, 26f, -12f)
-            remote(44f, 24f, 10f)
+            // Side by side, no cord.
+            nunchuk(19f, 26f)
+            remote(45f, 24f)
         }
         PresetPicture.SIDEWAYS -> {
             remote(32f, 24f, -90f, 1.15f)

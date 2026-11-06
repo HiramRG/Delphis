@@ -43,4 +43,12 @@ class AutosaveTest {
         for (id in listOf("RMGE01", "GALE01", "SB4E01", "GA", "", null))
             assertTrue(id.toString(), !AutosaveRules.offByDefault(id))
     }
+
+    @Test
+    fun noPresetMapsTheHomeButton() {
+        for (p in PresetLibrary.ALL) for (m in p.mappings) {
+            val keys = (m.target as? Target.Buttons)?.keys ?: continue
+            assertTrue("${p.id} maps HOME", keys.none { it.endsWith("Buttons/Home") })
+        }
+    }
 }

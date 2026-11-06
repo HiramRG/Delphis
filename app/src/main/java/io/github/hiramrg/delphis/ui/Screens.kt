@@ -670,17 +670,17 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     }
 
     // Physical buttons: A / Start = Play, D-pad or left stick = pick a preset, X = Edit, Y = Remember,
-    // L1 = autosave on/off for this game, R1 = earlier autosaves. B = Back.
+    // L1 = autosave on/off for this game, R1 = remember controls on/off, Y = earlier autosaves. B = Back.
     val onKey by rememberUpdatedState<(KeyEvent) -> Boolean> { e ->
         if (p.editing || e.action != KeyEvent.ACTION_DOWN) false
         else when (e.keyCode) {
             KeyEvent.KEYCODE_BUTTON_L1 -> { if (e.repeatCount == 0) toggleGameAutosave(); canAutosave }
-            KeyEvent.KEYCODE_BUTTON_R1 -> { if (e.repeatCount == 0 && backups.isNotEmpty()) showBackups = true; backups.isNotEmpty() }
+            KeyEvent.KEYCODE_BUTTON_R1 -> { if (e.repeatCount == 0) p.rememberChoice = !p.rememberChoice; true }
             KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> { if (e.repeatCount == 0) p.play(); true }
             KeyEvent.KEYCODE_DPAD_DOWN -> { p.move(1); true }
             KeyEvent.KEYCODE_DPAD_UP -> { p.move(-1); true }
             KeyEvent.KEYCODE_BUTTON_X -> { if (e.repeatCount == 0 && p.selected != null) p.editing = true; true }
-            KeyEvent.KEYCODE_BUTTON_Y -> { if (e.repeatCount == 0) p.rememberChoice = !p.rememberChoice; true }
+            KeyEvent.KEYCODE_BUTTON_Y -> { if (e.repeatCount == 0 && backups.isNotEmpty()) showBackups = true; true }
             else -> false
         }
     }
@@ -699,7 +699,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             Text(platformLabel(game.info.platform) + " · " + playSummary(act, game), fontSize = 11.sp, color = c.textDim, maxLines = 2)
             if (rememberHasAutosave(act, game)) Text("▶ Continues from your autosave", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.accentText)
             if (backups.isNotEmpty()) Text(
-                "↺ Earlier autosaves (${backups.size}) · R1", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.textDim,
+                "↺ Earlier autosaves (${backups.size}) · Ⓨ", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.textDim,
                 modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { showBackups = true }.padding(vertical = 2.dp),
             )
             if (canAutosave && !gameAutosave && io.github.hiramrg.delphis.core.AutosaveRules.offByDefault(gameId)) Text(
@@ -711,26 +711,30 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val sel = p.selected
             WiiCard(Modifier.fillMaxWidth().weight(1f), radius = 20.dp, padding = 12.dp) {
+                if (companion && sel != null) {
+                    // Picture + name, then a map of what each of the Thor's controls does.
+                    ControlsMapCard(sel, sel.id == p.suggestedId, Modifier.weight(1f).fillMaxWidth())
+                } else {
                 Text("CONTROLS", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
                 Text(if (sel != null) presetTitle(sel.name, sel.id == p.suggestedId) else androidx.compose.ui.text.AnnotatedString(p.suggestion.question), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(6.dp))
                 if (companion) {
-                    if (sel != null) ControlsOverview(sel, Modifier.weight(1f).fillMaxWidth())
-                    else Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text("Pick a control style on the bottom screen (or with the D-pad).", color = c.textDim, textAlign = TextAlign.Center)
                     }
                 } else {
                     PresetChooser(p.suggestion.question, p.choices, p.alternatives, sel, p.suggestedId, Modifier.weight(1f)) { p.selected = it }
                 }
+                }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                WiiChip(if (p.rememberChoice) "✓ Remember" else "Remember", p.rememberChoice, { p.rememberChoice = !p.rememberChoice })
                 if (canAutosave) WiiChip(if (gameAutosave) "✓ Autosave · L1" else "Autosave off · L1", gameAutosave, { toggleGameAutosave() })
+                WiiChip(if (p.rememberChoice) "✓ Remember controls · R1" else "Remember controls · R1", p.rememberChoice, { p.rememberChoice = !p.rememberChoice })
                 Spacer(Modifier.weight(1f))
                 WiiButton("Ⓧ Edit", onClick = { p.editing = true }, enabled = sel != null)
                 WiiButton(if (sel == null) "Choose a style" else "Ⓐ Play", onClick = { p.play() }, primary = true, enabled = sel != null, fontSize = 17.sp)
             }
-            HintLine("Ⓐ Play · ✚ choose · Ⓧ Edit · Ⓨ Remember · Ⓑ Back" + (if (canAutosave) " · L1 Autosave" else "") + (if (backups.isNotEmpty()) " · R1 Earlier autosaves" else "") + if (companion) " · or tap a style on the bottom screen" else "")
+            HintLine("Ⓐ Play · ✚ choose · Ⓧ Edit" + (if (canAutosave) " · L1 Autosave" else "") + " · R1 Remember" + (if (backups.isNotEmpty()) " · Ⓨ Earlier autosaves" else "") + " · Ⓑ Back")
         }
     }
 }
@@ -905,7 +909,9 @@ fun SettingsScreen(act: MainActivity) {
     val c = LocalWii.current
     Row(Modifier.fillMaxSize()) {
         Column(
-            Modifier.width(190.dp).fillMaxHeight().background(c.sidebar).border(BorderStroke(2.dp, c.cardBorder))
+            // Same rounded card as Home's Library column, so the app looks consistent.
+            Modifier.padding(start = 8.dp, top = 8.dp, bottom = 8.dp).width(190.dp).fillMaxHeight()
+                .clip(RoundedCornerShape(20.dp)).background(c.sidebar).border(2.dp, c.cardBorder, RoundedCornerShape(20.dp))
                 .verticalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
