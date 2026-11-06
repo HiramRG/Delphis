@@ -1,5 +1,8 @@
 package io.github.hiramrg.delphis.ui
 
+import androidx.compose.material3.Icon
+
+import kotlin.math.roundToInt
 import android.app.ActivityOptions
 import android.content.Intent
 import android.graphics.PixelFormat
@@ -22,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -581,6 +585,15 @@ private fun StatusBanner(modifier: Modifier = Modifier) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var level by remember { mutableIntStateOf(-1) }
     var charging by remember { mutableStateOf(false) }
+    var batteryTemp by remember { mutableStateOf<Float?>(null) }
+    var cpuTemp by remember { mutableStateOf<Float?>(null) }
+    // CPU temperature from the thermal zones, read once a minute (cheap; keeps the Thor cool).
+    LaunchedEffect(Unit) {
+        while (true) {
+            cpuTemp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { readCpuTemp() }
+            kotlinx.coroutines.delay(60_000)
+        }
+    }
     DisposableEffect(Unit) {
         val receiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(context: android.content.Context, i: Intent) {
@@ -589,6 +602,8 @@ private fun StatusBanner(modifier: Modifier = Modifier) {
                 if (l >= 0 && scale > 0) level = l * 100 / scale
                 val st = i.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
                 charging = st == android.os.BatteryManager.BATTERY_STATUS_CHARGING || st == android.os.BatteryManager.BATTERY_STATUS_FULL
+                val t = i.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
+                if (t != Int.MIN_VALUE) batteryTemp = t / 10f
             }
         }
         val sticky = ctx.registerReceiver(receiver, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
@@ -601,12 +616,36 @@ private fun StatusBanner(modifier: Modifier = Modifier) {
         Text("Delphis", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, modifier = Modifier.align(Alignment.CenterStart))
         Text(rememberClock(), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = c.text, modifier = Modifier.align(Alignment.Center))
         if (level >= 0) Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
+            // Temperature: the CPU when Android lets us read it, otherwise the battery. Orange when
+            // Android itself reports the Thor is getting hot (or past a sensible fallback limit).
+            val cpu = cpuTemp
+            val temp = cpu ?: batteryTemp
+            if (temp != null) {
+                val status = remember(temp) { thermalStatus(ctx) }
+                val hot = if (status >= 0) status >= android.os.PowerManager.THERMAL_STATUS_MODERATE
+                else if (cpu != null) temp >= 80f else temp >= 45f
+                val tc = if (hot) c.orange else c.text
+                Icon(Icons.Filled.Thermostat, contentDescription = "Temperature", tint = tc, modifier = Modifier.size(13.dp))
+                Text("${temp.roundToInt()}°", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = tc)
+                Spacer(Modifier.width(9.dp))
+            }
             BatteryIcon(level, charging)
             Spacer(Modifier.width(5.dp))
             Text("$level%", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.text)
         }
     }
 }
+
+/** Reads every /sys/class/thermal zone once and returns the hottest CPU one, or null if none is readable. */
+private fun readCpuTemp(): Float? = runCatching {
+    val zones = java.io.File("/sys/class/thermal").listFiles { f -> f.name.startsWith("thermal_zone") }.orEmpty()
+        .mapNotNull { z -> runCatching { java.io.File(z, "type").readText() to java.io.File(z, "temp").readText() }.getOrNull() }
+    io.github.hiramrg.delphis.core.Thermal.cpuTemp(zones)
+}.getOrNull()
+
+/** Android's own thermal status (PowerManager.THERMAL_STATUS_*), or -1 if unavailable. */
+private fun thermalStatus(ctx: android.content.Context): Int =
+    runCatching { (ctx.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager).currentThermalStatus }.getOrDefault(-1)
 
 @Composable
 private fun BatteryIcon(level: Int, charging: Boolean) {
