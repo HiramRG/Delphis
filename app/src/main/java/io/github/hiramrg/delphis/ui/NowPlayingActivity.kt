@@ -231,7 +231,7 @@ class NowPlayingActivity : ComponentActivity() {
         window.attributes = window.attributes.apply { screenBrightness = level }
     }
 
-    private fun autosaveOn() = prefs.autoSaveResume && DolphinExitService.isEnabled(this)
+    private fun autosaveOn() = prefs.autoSaveFor(session?.info?.gameId) && DolphinExitService.isEnabled(this)
 
     private fun resolve(id: String): Preset = store.byId(id) ?: PresetLibrary.GAMECUBE
 
@@ -243,7 +243,7 @@ class NowPlayingActivity : ComponentActivity() {
             if (remember) prefs.setPresetFor(s.key, preset.id)
             val roles = DeviceInfo.screenRoles(this@NowPlayingActivity, prefs.swapScreens)
             // With autosave on, the game was just saved while closing, so it picks up right there.
-            bridge.launchFresh(s.uri, roles.topDisplayId, s.info.gameId?.takeIf { prefs.autoSaveResume }, s.info.title, s.info.gameId)
+            bridge.launchFresh(s.uri, roles.topDisplayId, s.info.gameId?.takeIf { prefs.autoSaveFor(it) }, s.info.title, s.info.gameId)
             session = s.copy(presetId = preset.id, applied = applied)
             watch(session)
             startedAt = SystemClock.elapsedRealtime()

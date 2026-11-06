@@ -107,6 +107,24 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("auto_save_resume", true)
         set(v) = sp.edit().putBoolean("auto_save_resume", v).apply()
 
+    /** Per-game choice from the game's page, or the default (off for games that follow the real clock). */
+    fun autoSaveChoiceFor(gameId: String?): Boolean {
+        if (gameId == null) return false
+        if (gameId in (sp.getStringSet("autosave_games_on", emptySet()) ?: emptySet())) return true
+        if (gameId in (sp.getStringSet("autosave_games_off", emptySet()) ?: emptySet())) return false
+        return !io.github.hiramrg.delphis.core.AutosaveRules.offByDefault(gameId)
+    }
+
+    fun setAutoSaveFor(gameId: String, on: Boolean) {
+        val onSet = (sp.getStringSet("autosave_games_on", emptySet()) ?: emptySet()).toMutableSet()
+        val offSet = (sp.getStringSet("autosave_games_off", emptySet()) ?: emptySet()).toMutableSet()
+        if (on) { onSet.add(gameId); offSet.remove(gameId) } else { offSet.add(gameId); onSet.remove(gameId) }
+        sp.edit().putStringSet("autosave_games_on", onSet).putStringSet("autosave_games_off", offSet).apply()
+    }
+
+    /** Whether this game is autosaved and resumed: the global setting and the game's own choice. */
+    fun autoSaveFor(gameId: String?): Boolean = autoSaveResume && autoSaveChoiceFor(gameId)
+
     /** Set when Dolphin's menu had no Quick Save button (its "Enable Savestates" setting is off). */
     var saveStatesOff: Boolean
         get() = sp.getBoolean("save_states_off", false)

@@ -36,6 +36,7 @@ Pick a game and Delphis sets up the controls that suit it (pointer, sideways Wii
 
 ### Autosave and resume
 * When you close a game from Delphis, it saves a Dolphin save state first, and the next time you start that game from Delphis, it continues from there. You can turn this off in *Settings → Closing games*.
+* **Autosave per game.** Each game's page has an Autosave switch (L1). Animal Crossing starts with it off: a save state also stores the game's clock, so resuming would put the in-game time back to when you left. Booting normally lets it read the real time; save in the game before closing it.
 * **Earlier autosaves are kept.** Before each autosave, Delphis keeps a copy of the one before it (the last three per game). If a save ever won't load, press R1 on the game's page to go back to an earlier one; the space they use and a delete button are in *Settings → Closing games*.
 
 ### A Wii-style home

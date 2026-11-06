@@ -35,4 +35,12 @@ class AutosaveTest {
         assertEquals(listOf("100.s09"), AutosaveBackups.toDelete(names))
         assertTrue(AutosaveBackups.toDelete(listOf("1.s09", "2.s09")).isEmpty())
     }
+
+    @Test
+    fun realClockGamesStartWithAutosaveOff() {
+        for (id in listOf("GAFE01", "GAFP01", "GAFJ01", "GAEJ01", "RUUE01", "RUUP01", "ruuk01"))
+            assertTrue(id, AutosaveRules.offByDefault(id))
+        for (id in listOf("RMGE01", "GALE01", "SB4E01", "GA", "", null))
+            assertTrue(id.toString(), !AutosaveRules.offByDefault(id))
+    }
 }

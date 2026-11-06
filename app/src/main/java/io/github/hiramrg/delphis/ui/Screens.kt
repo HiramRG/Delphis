@@ -117,7 +117,7 @@ private fun formatAgo(t: Long?): String {
 fun rememberHasAutosave(act: MainActivity, g: GameEntry): Boolean {
     val v = act.statsVersion
     val has by produceState(false, g.key, v) {
-        value = act.prefs.autoSaveResume && kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.hasAutosave(g.info.gameId) }
+        value = act.prefs.autoSaveFor(g.info.gameId) && kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.hasAutosave(g.info.gameId) }
     }
     return has
 }
@@ -634,11 +634,22 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         return
     }
 
+    // This game's own "Autosave & resume" choice (off by default for games that follow the real clock).
+    val gameId = game.info.gameId
+    val canAutosave = act.prefs.autoSaveResume && gameId != null
+    var gameAutosave by remember(game.key) { mutableStateOf(act.prefs.autoSaveChoiceFor(gameId)) }
+    fun toggleGameAutosave() {
+        if (!canAutosave) return
+        gameAutosave = !gameAutosave
+        act.prefs.setAutoSaveFor(gameId!!, gameAutosave)
+        act.statsVersion++
+    }
+
     // Earlier autosaves (kept before each autosave overwrites Dolphin's Quick Save slot).
     var backupsVersion by remember { mutableIntStateOf(0) }
     var showBackups by remember { mutableStateOf(false) }
     val backups by produceState(emptyList<io.github.hiramrg.delphis.platform.DolphinBridge.AutosaveBackup>(), game.key, act.statsVersion, backupsVersion) {
-        value = if (!act.prefs.autoSaveResume) emptyList()
+        value = if (!act.prefs.autoSaveFor(game.info.gameId)) emptyList()
         else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.autosaveBackups(game.info.gameId) }
     }
     if (showBackups && backups.isNotEmpty()) {
@@ -659,10 +670,11 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     }
 
     // Physical buttons: A / Start = Play, D-pad or left stick = pick a preset, X = Edit, Y = Remember,
-    // R1 = earlier autosaves. B = Back.
+    // L1 = autosave on/off for this game, R1 = earlier autosaves. B = Back.
     val onKey by rememberUpdatedState<(KeyEvent) -> Boolean> { e ->
         if (p.editing || e.action != KeyEvent.ACTION_DOWN) false
         else when (e.keyCode) {
+            KeyEvent.KEYCODE_BUTTON_L1 -> { if (e.repeatCount == 0) toggleGameAutosave(); canAutosave }
             KeyEvent.KEYCODE_BUTTON_R1 -> { if (e.repeatCount == 0 && backups.isNotEmpty()) showBackups = true; backups.isNotEmpty() }
             KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> { if (e.repeatCount == 0) p.play(); true }
             KeyEvent.KEYCODE_DPAD_DOWN -> { p.move(1); true }
@@ -679,7 +691,8 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         Column(Modifier.fillMaxHeight().widthIn(max = 220.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("◀ Back", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { act.screen = Screen.Home }.padding(4.dp))
-            Box(Modifier.weight(1f, fill = false).aspectRatio(0.72f).clip(RoundedCornerShape(14.dp)).border(3.dp, c.accent, RoundedCornerShape(14.dp)).padding(3.dp)) {
+            // No accent frame: the only blue ring is the one that follows the D-pad focus.
+            Box(Modifier.weight(1f, fill = false).aspectRatio(0.72f).clip(RoundedCornerShape(14.dp))) {
                 Cover(act, game, act.prefs.showCovers, Modifier.fillMaxSize(), titleSize = 14)
             }
             Text(game.info.title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -688,6 +701,10 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             if (backups.isNotEmpty()) Text(
                 "↺ Earlier autosaves (${backups.size}) · R1", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.textDim,
                 modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { showBackups = true }.padding(vertical = 2.dp),
+            )
+            if (canAutosave && !gameAutosave && io.github.hiramrg.delphis.core.AutosaveRules.offByDefault(gameId)) Text(
+                "🕒 Autosave is off so the game's clock always matches the real time. Save in the game before closing it.",
+                fontSize = 11.sp, color = c.textDim, maxLines = 3, overflow = TextOverflow.Ellipsis,
             )
         }
         // Right: controls preview (picker on the bottom screen) or the picker itself (single screen).
@@ -708,11 +725,12 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 WiiChip(if (p.rememberChoice) "✓ Remember" else "Remember", p.rememberChoice, { p.rememberChoice = !p.rememberChoice })
+                if (canAutosave) WiiChip(if (gameAutosave) "✓ Autosave · L1" else "Autosave off · L1", gameAutosave, { toggleGameAutosave() })
                 Spacer(Modifier.weight(1f))
                 WiiButton("Ⓧ Edit", onClick = { p.editing = true }, enabled = sel != null)
                 WiiButton(if (sel == null) "Choose a style" else "Ⓐ Play", onClick = { p.play() }, primary = true, enabled = sel != null, fontSize = 17.sp)
             }
-            HintLine("Ⓐ Play · ✚ choose · Ⓧ Edit · Ⓨ Remember · Ⓑ Back" + (if (backups.isNotEmpty()) " · R1 Earlier autosaves" else "") + if (companion) " · or tap a style on the bottom screen" else "")
+            HintLine("Ⓐ Play · ✚ choose · Ⓧ Edit · Ⓨ Remember · Ⓑ Back" + (if (canAutosave) " · L1 Autosave" else "") + (if (backups.isNotEmpty()) " · R1 Earlier autosaves" else "") + if (companion) " · or tap a style on the bottom screen" else "")
         }
     }
 }

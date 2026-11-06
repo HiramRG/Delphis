@@ -387,7 +387,7 @@ class MainActivity : ComponentActivity() {
                 runCatching { startActivity(intent, opts) }
             }
             val resumeId = entry.info.gameId?.takeIf {
-                prefs.autoSaveResume && withContext(Dispatchers.IO) { bridge.hasAutosave(it) }
+                prefs.autoSaveFor(it) && withContext(Dispatchers.IO) { bridge.hasAutosave(it) }
             }
             if (!bridge.launchFresh(entry.uri, roles.topDisplayId, resumeId, entry.info.title, entry.info.gameId)) {
                 Toast.makeText(applicationContext, "Dolphin isn't installed.", Toast.LENGTH_LONG).show()

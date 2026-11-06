@@ -240,7 +240,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         // Cover the top screen while Dolphin's menus are pressed (the caller hides it when it's done).
         val playing = GameWatch.session?.info
         if (DolphinExitService.gameShowing(pkg)) {
-            val saving = prefs.autoSaveResume && playing?.gameId != null
+            val saving = playing?.gameId != null && prefs.autoSaveFor(playing.gameId)
             DolphinExitService.showLoading(
                 if (saving) LoadingOverlay.Phase.SAVING else LoadingOverlay.Phase.CLOSING,
                 playing?.title, playing?.gameId, if (saving) "Autosaving and closing the game…" else "Closing the game…", displayId,
@@ -248,7 +248,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             kotlinx.coroutines.delay(250) // let it draw before Dolphin's menu opens
         }
         // Autosave first, while the game is still running.
-        playing?.gameId?.let { id -> if (prefs.autoSaveResume) autoSave(pkg, id) }
+        playing?.gameId?.let { id -> if (prefs.autoSaveFor(id)) autoSave(pkg, id) }
         when (DolphinExitService.exit(pkg)) {
             DolphinExitService.Result.EXITED -> return CloseResult.EXITED
             DolphinExitService.Result.NO_GAME -> return CloseResult.NO_GAME
