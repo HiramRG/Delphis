@@ -212,7 +212,9 @@ fun HomeScreen(act: MainActivity) {
                         Modifier.fillMaxWidth().height(150.dp)
                             .onFocusChanged {
                                 if (it.hasFocus) {
-                                    act.homeFocusedTile = false; act.focusedGame = null
+                                    // The hero's own buttons say whether A is theirs (see HeroCard).
+                                    if (hero == null) act.homeFocusedTile = false
+                                    act.focusedGame = null
                                     // Moving up into the card only brings the focused button into view;
                                     // scroll all the way back so the whole Continue playing card shows.
                                     heroScope.launch { grid.animateScrollToItem(0) }
@@ -377,8 +379,15 @@ private fun HeroCard(act: MainActivity, g: GameEntry) {
                     }
                     Spacer(Modifier.height(6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        WiiButton("Ⓐ Play", onClick = { act.quickPlay(g) }, primary = true, fontSize = 16.sp)
-                        WiiButton("Ⓧ Controls", onClick = { act.openGame(g) }, fontSize = 15.sp)
+                        // Both buttons neutral, so the blue D-pad ring is the only highlight and is easy to see.
+                        val pill = RoundedCornerShape(50)
+                        WiiButton("Ⓐ Play", onClick = { act.quickPlay(g) }, Modifier.onFocusChanged { if (it.isFocused) act.homeFocusedTile = false }.focusRing(pill), fontSize = 16.sp)
+                        WiiButton(
+                            "Ⓧ Controls", onClick = { act.openGame(g) },
+                            // While Controls has the focus, A presses it instead of Home's "play the hero" shortcut.
+                            Modifier.onFocusChanged { if (it.isFocused) act.homeFocusedTile = true }.focusRing(pill),
+                            fontSize = 15.sp,
+                        )
                     }
                 }
             }
