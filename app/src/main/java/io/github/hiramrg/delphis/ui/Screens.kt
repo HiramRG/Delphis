@@ -350,7 +350,8 @@ private fun HeroCard(act: MainActivity, g: GameEntry) {
             // On the Thor's top screen the card is short: one-line title, fewer detail lines.
             val tight = maxHeight < 190.dp
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.fillMaxHeight().aspectRatio(0.72f).clip(RoundedCornerShape(14.dp)).border(3.dp, c.accent, RoundedCornerShape(14.dp)).padding(3.dp)) {
+                // No accent frame here: the only blue ring on Home is the one that follows the D-pad focus.
+                Box(Modifier.fillMaxHeight().aspectRatio(0.72f).clip(RoundedCornerShape(14.dp))) {
                     Cover(act, g, act.prefs.showCovers, Modifier.fillMaxSize(), titleSize = 14)
                 }
                 Spacer(Modifier.width(16.dp))
