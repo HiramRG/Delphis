@@ -40,6 +40,8 @@ Pick a game and Delphis sets up the controls that suit it (pointer, sideways Wii
 ### A Wii-style home
 * **One scrolling home:** a **Continue playing** card for your last game, a recently played row, then your whole library, with a retractable column for All games, Favorites, Wii and GameCube, plus search and sorting by Recent / A–Z / Most played.
 * **Proper game names** from Delphis' game database and GameTDB, and an illustration for each control style (Wii Remote + Nunchuk, sideways, Wii Wheel, Classic, GameCube, gyro).
+* **Menus work with the D-pad:** when nothing is moving the Wii pointer, Delphis hides it so it can't sit in the middle of the screen and take over menu selection.
+* **What's new card:** after an update, Delphis shows the changes once.
 * **Play time** and **last played** for every game, and HD cover art from GameTDB.
 * **Light (classic Wii) or Dark theme.** The in-game bottom screen is always dark.
 * **Menu music:** an original, Wii-style loop that plays only in the menus, or your own audio file, with its own volume slider.
