@@ -5,15 +5,15 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 4
+    const val RELEASE = 5
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("Autosave per game.", "Each game's page now has an Autosave switch (L1). Turn it off for games you'd rather save yourself."),
-        Item("Animal Crossing keeps real time.", "Animal Crossing starts with autosave off, so its clock always matches the real one. Save in the game before closing it."),
-        Item("Earlier autosaves.", "Delphis keeps the last 3 autosaves per game. If a save won't load, press R1 on the game's page to go back to an earlier one."),
-        Item("Cleaner covers.", "The blue frame around covers is gone; the only blue ring is the one you move with the D-pad."),
+        Item("See what every button does.", "A game's page now shows a map of the Thor with what each button does in that game, next to a picture of the controller it plays like."),
+        Item("Clearer buttons.", "L1 turns Autosave on or off, R1 turns Remember controls on or off (on by default), and Y opens earlier autosaves."),
+        Item("No more accidental HOME menu.", "Clicking the left stick no longer opens the Wii's HOME menu, which could reset or close the game."),
+        Item("Smoother menus.", "Moving up on Home scrolls all the way back to Continue playing, Play and Controls show the blue ring when selected, and Settings has rounded edges.", fix = true),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */
