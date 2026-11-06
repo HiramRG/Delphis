@@ -106,6 +106,14 @@ fun preset(id: String, name: String, controller: EmulatedController, block: Pres
 private val SHAKE = arrayOf("Shake/X", "Shake/Y", "Shake/Z")
 private val NUNCHUK_SHAKE = arrayOf("Nunchuk/Shake/X", "Nunchuk/Shake/Y", "Nunchuk/Shake/Z")
 
+/**
+ * Some games (New Super Mario Bros. Wii's pause menu, for one) let the pointer override the D-pad.
+ * With nothing driving the pointer Dolphin parks it in the middle of the screen, right on top of the
+ * first menu item, so the D-pad can never move the selection away. Auto-Hide takes the idle pointer
+ * off-screen, which is what a real remote held sideways does.
+ */
+private fun PresetBuilder.hideIdlePointer() = option("IR/Auto-Hide", "True")
+
 /** Shared bits every Wii Remote preset gets: +, -, Home. */
 private fun PresetBuilder.wiiSystemButtons() {
     button(ThorControl.START, "+ (Pause)", "Buttons/+")
@@ -156,6 +164,7 @@ object PresetLibrary {
         wiiSystemButtons()
         option("Extension", "None")
         option("Options/Sideways Wiimote", "True")
+        hideIdlePointer()
         tip("Dolphin rotates the D-pad for you in sideways mode, so up is up on screen.")
         tip("Hold Y/X (1) while moving to run; press it alone to throw fireballs.")
     }
@@ -232,6 +241,7 @@ object PresetLibrary {
         wiiSystemButtons()
         option("Extension", "None")
         option("Options/Sideways Wiimote", "True")
+        hideIdlePointer()
         tip("Hold Down + R1 to blow, run + R1 to roll.")
     }
 
@@ -248,6 +258,7 @@ object PresetLibrary {
         wiiSystemButtons()
         option("Extension", "None")
         option("Options/Sideways Wiimote", "True")
+        hideIdlePointer()
     }
 
     val PAPER_MARIO_SIDEWAYS = preset("spm-sideways", "Sideways + pointer", EmulatedController.WIIMOTE_SIDEWAYS) {
@@ -307,6 +318,7 @@ object PresetLibrary {
         wiiSystemButtons()
         option("Extension", "None")
         option("Options/Sideways Wiimote", "True")
+        hideIdlePointer()
     }
 
     val CLASSIC_CONTROLLER = preset("classic", "Classic Controller", EmulatedController.CLASSIC) {
