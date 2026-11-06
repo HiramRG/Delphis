@@ -174,6 +174,7 @@ fun HomeScreen(act: MainActivity) {
     val hero = recent.firstOrNull()
     val shown = libraryList(act, favorites, lastPlayed, playTime)
     val grid = act.homeGrid
+    val heroScope = androidx.compose.runtime.rememberCoroutineScope()
     // Rows above the game list: hero, then (if any) the "Recently played" title and row.
     val gamesHeaderIndex = 1 + if (recent.size > 1) 2 else 0
 
@@ -209,7 +210,14 @@ fun HomeScreen(act: MainActivity) {
                 item(key = "hero", span = { GridItemSpan(maxLineSpan) }) {
                     Box(
                         Modifier.fillMaxWidth().height(150.dp)
-                            .onFocusChanged { if (it.hasFocus) { act.homeFocusedTile = false; act.focusedGame = null } },
+                            .onFocusChanged {
+                                if (it.hasFocus) {
+                                    act.homeFocusedTile = false; act.focusedGame = null
+                                    // Moving up into the card only brings the focused button into view;
+                                    // scroll all the way back so the whole Continue playing card shows.
+                                    heroScope.launch { grid.animateScrollToItem(0) }
+                                }
+                            },
                     ) { if (hero != null) HeroCard(act, hero) else WelcomeCard(act) }
                 }
                 if (recent.size > 1) {
