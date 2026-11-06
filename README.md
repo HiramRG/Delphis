@@ -42,6 +42,8 @@ Pick a game and Delphis sets up the controls that suit it (pointer, sideways Wii
 * **Proper game names** from Delphis' game database and GameTDB, and an illustration for each control style (Wii Remote + Nunchuk, sideways, Wii Wheel, Classic, GameCube, gyro).
 * **Menus work with the D-pad:** when nothing is moving the Wii pointer, Delphis hides it so it can't sit in the middle of the screen and take over menu selection.
 * **What's new card:** after an update, Delphis shows the changes once.
+* **Loading screen:** while Delphis saves, closes or starts a game (with the close-games helper on), a loading screen covers Dolphin's menus.
+* **Made for buttons:** everything on the top screen is reachable with the D-pad, with a blue outline on what's selected; the search box only opens the keyboard when you press A. Theme: Light, Dark or Auto.
 * **Play time** and **last played** for every game, and HD cover art from GameTDB.
 * **Light (classic Wii) or Dark theme.** The in-game bottom screen is always dark.
 * **Menu music:** an original, Wii-style loop that plays only in the menus, or your own audio file, with its own volume slider.
