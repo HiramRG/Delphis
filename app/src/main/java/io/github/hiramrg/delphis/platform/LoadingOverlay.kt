@@ -53,7 +53,7 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
     private var coverView: ImageView? = null
     private var coverTitle: TextView? = null
     private var dots: List<View> = emptyList()
-    private var colors = Palette.light
+    private var pal = Palette.light
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val safety = Runnable { hide() }
 
@@ -66,7 +66,7 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
         titleView?.text = title.orEmpty()
         titleView?.visibility = if (title.isNullOrBlank()) View.GONE else View.VISIBLE
         lineView?.text = line
-        dots.forEachIndexed { i, d -> (d.background as GradientDrawable).setColor(if (i == phase.step) colors.accent else colors.border) }
+        dots.forEachIndexed { i, d -> (d.background as GradientDrawable).setColor(if (i == phase.step) pal.accent else pal.border) }
         setCover(title, gameId)
         // Never leave the screen covered if something goes wrong.
         handler.removeCallbacks(safety)
@@ -84,7 +84,7 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
     }
 
     private fun attach(displayId: Int?) {
-        colors = if (isDark()) Palette.dark else Palette.light
+        pal = if (isDark()) Palette.dark else Palette.light
         val ctx: Context = if (android.os.Build.VERSION.SDK_INT >= 30 && displayId != null) {
             val display = service.getSystemService(DisplayManager::class.java).getDisplay(displayId)
             if (display != null) service.createWindowContext(display, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, null) else service
@@ -98,7 +98,7 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
 
         // Cover with the blue frame (or a coloured card with the title when there's no cover yet).
         val coverFrame = FrameLayout(ctx).apply {
-            background = GradientDrawable().apply { cornerRadius = dp(18f).toFloat(); setColor(colors.card); setStroke(dp(3f), colors.accent) }
+            background = GradientDrawable().apply { cornerRadius = dp(18f).toFloat(); setColor(pal.card); setStroke(dp(3f), pal.accent) }
             setPadding(dp(6f), dp(6f), dp(6f), dp(6f))
         }
         val inner = FrameLayout(ctx).apply {
@@ -119,22 +119,22 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
         row.addView(coverFrame, LinearLayout.LayoutParams(dp(150f), dp(206f)).apply { marginEnd = dp(26f) })
 
         val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-        phaseView = TextView(ctx).apply { setTextColor(colors.accentText); textSize = 12f; typeface = Typeface.DEFAULT_BOLD; letterSpacing = 0.08f }
-        titleView = TextView(ctx).apply { setTextColor(colors.text); textSize = 26f; typeface = Typeface.DEFAULT_BOLD; maxLines = 2 }
-        lineView = TextView(ctx).apply { setTextColor(colors.dim); textSize = 14f }
+        phaseView = TextView(ctx).apply { setTextColor(pal.accentText); textSize = 12f; typeface = Typeface.DEFAULT_BOLD; letterSpacing = 0.08f }
+        titleView = TextView(ctx).apply { setTextColor(pal.text); textSize = 26f; typeface = Typeface.DEFAULT_BOLD; maxLines = 2 }
+        lineView = TextView(ctx).apply { setTextColor(pal.dim); textSize = 14f }
         col.addView(phaseView)
         col.addView(titleView, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(8f) })
         col.addView(lineView, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(8f) })
         val progress = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        progress.addView(ProgressBar(ctx).apply { isIndeterminate = true; indeterminateTintList = ColorStateList.valueOf(colors.accent) }, LinearLayout.LayoutParams(dp(32f), dp(32f)))
+        progress.addView(ProgressBar(ctx).apply { isIndeterminate = true; indeterminateTintList = ColorStateList.valueOf(pal.accent) }, LinearLayout.LayoutParams(dp(32f), dp(32f)))
         dots = List(3) { i ->
-            View(ctx).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(colors.border) } }
+            View(ctx).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(pal.border) } }
                 .also { progress.addView(it, LinearLayout.LayoutParams(dp(10f), dp(10f)).apply { marginStart = dp(if (i == 0) 14f else 8f) }) }
         }
         col.addView(progress, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(14f) })
         row.addView(col, LinearLayout.LayoutParams(dp(330f), -2))
         frame.addView(row, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
-        frame.addView(TextView(ctx).apply { text = "Delphis"; setTextColor(colors.dim); textSize = 11f },
+        frame.addView(TextView(ctx).apply { text = "Delphis"; setTextColor(pal.dim); textSize = 11f },
             FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(12f) })
 
         val params = WindowManager.LayoutParams(
@@ -173,8 +173,8 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
         val line = (1 * density).toInt().coerceAtLeast(1)
         val bmp = Bitmap.createBitmap(1, h, Bitmap.Config.ARGB_8888)
         Canvas(bmp).apply {
-            drawColor(colors.bg)
-            drawRect(0f, (h - line).toFloat(), 1f, h.toFloat(), Paint().apply { color = colors.stripe })
+            drawColor(pal.bg)
+            drawRect(0f, (h - line).toFloat(), 1f, h.toFloat(), Paint().apply { color = pal.stripe })
         }
         return ShapeDrawable(RectShape()).apply { paint.shader = BitmapShader(bmp, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT) }
     }
