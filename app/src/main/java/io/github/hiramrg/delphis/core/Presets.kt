@@ -2,7 +2,7 @@ package io.github.hiramrg.delphis.core
 
 /** Which emulated controller a preset configures in Dolphin. */
 enum class EmulatedController(val label: String, val profileFolder: String, val gameIniKey: String) {
-    WIIMOTE_NUNCHUK("Wii Remote + Nunchuk", "Wiimote", "WiimoteProfile1"),
+    WIIMOTE_NUNCHUK("Nunchuk + Wii Remote", "Wiimote", "WiimoteProfile1"),
     WIIMOTE_SIDEWAYS("Wii Remote (held sideways)", "Wiimote", "WiimoteProfile1"),
     WIIMOTE_WHEEL("Wii Remote in a Wii Wheel", "Wiimote", "WiimoteProfile1"),
     CLASSIC("Classic Controller", "Wiimote", "WiimoteProfile1"),
@@ -148,7 +148,7 @@ object PresetLibrary {
         option("Extension", "Nunchuk")
         option("IR/Relative Input", "True")
         tip("The pointer stays where you leave it (relative mode). Click R3 to snap it back to the center.")
-        tip("Tilt-ball and surfing levels use the Wii Remote tilt; switch to the \"Wii Remote + Nunchuk\" generic preset for those if needed.")
+        tip("Tilt-ball and surfing levels use the Wii Remote tilt; switch to the \"Nunchuk + Wii Remote\" generic preset for those if needed.")
     }
 
     // ---------------------------------------------------------------- New Super Mario Bros. Wii
@@ -173,7 +173,7 @@ object PresetLibrary {
     }
 
     // ---------------------------------------------------------------- Mario Kart Wii
-    val MKW_NUNCHUK = preset("mkw-nunchuk", "Wii Remote + Nunchuk", EmulatedController.WIIMOTE_NUNCHUK) {
+    val MKW_NUNCHUK = preset("mkw-nunchuk", "Nunchuk + Wii Remote", EmulatedController.WIIMOTE_NUNCHUK) {
         summary = "Steer with the stick, accelerate with A, drift on the shoulder. The most precise way to race."
         directional(ThorControl.LEFT_STICK, "Steer / aim items", "Nunchuk/Stick")
         button(ThorControl.FACE_EAST, "Accelerate (A)", "Buttons/A")

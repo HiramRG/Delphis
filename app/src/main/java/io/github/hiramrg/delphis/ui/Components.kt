@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -128,6 +129,22 @@ fun RoundIconButton(icon: ImageVector, description: String, onClick: () -> Unit)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, description, tint = c.accentText, modifier = Modifier.size(22.dp)) }
+}
+
+/** "← Home" pill: leaves the game and goes back to Delphis' menu. */
+@Composable
+fun HomePill(onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(50)
+    Row(
+        Modifier.height(40.dp).clip(shape).background(c.card).border(2.dp, c.cardBorder, shape)
+            .clickable(onClick = onClick).padding(start = 10.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Home", tint = c.text, modifier = Modifier.size(20.dp))
+        androidx.compose.foundation.layout.Spacer(Modifier.width(6.dp))
+        Text("Home", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
+    }
 }
 
 /** Yellow brightness pill: sun icon + the current 0-100 value. Opens the slider. */

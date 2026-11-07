@@ -5,13 +5,14 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 6
+    const val RELEASE = 7
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("Button map while you play.", "The in-game bottom screen now shows the same map of the Thor's buttons as the game's page."),
-        Item("Temperature at a glance.", "The bar at the top of the in-game bottom screen shows how warm the Thor is, next to the battery. It turns orange when the Thor gets hot."),
+        Item("See which controls are selected.", "The bottom screen now shows the picture of the selected controls when you browse games, marked \"Selected controls\"."),
+        Item("Select and Start on the map.", "The button map now shows Select and Start on the Thor, in the same order as on the device."),
+        Item("A clearer way home.", "In a game, the bottom screen's button now says Home, and the game's name sits in the middle."),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

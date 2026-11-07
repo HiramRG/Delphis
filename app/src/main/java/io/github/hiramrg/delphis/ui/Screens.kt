@@ -732,7 +732,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                     // Picture + name, then a map of what each of the Thor's controls does.
                     ControlsMapCard(sel, sel.id == p.suggestedId, Modifier.weight(1f).fillMaxWidth())
                 } else {
-                Text("CONTROLS", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
+                if (sel != null) SelectedControlsTitle() else Text("CONTROLS", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
                 Text(if (sel != null) presetTitle(sel.name, sel.id == p.suggestedId) else androidx.compose.ui.text.AnnotatedString(p.suggestion.question), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(6.dp))
                 if (companion) {

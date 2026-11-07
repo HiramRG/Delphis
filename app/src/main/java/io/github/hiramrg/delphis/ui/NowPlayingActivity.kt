@@ -343,22 +343,27 @@ class NowPlayingActivity : ComponentActivity() {
         ) {
             StatusBanner(Modifier.alpha(contentAlpha))
             Column(Modifier.fillMaxSize().alpha(contentAlpha).padding(start = 10.dp, end = 10.dp, top = 28.dp, bottom = 6.dp)) {
-                // ---------------- top bar: back | title | brightness
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RoundIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Main menu") {
-                        if (prefs.skipExitWarning) backToMainMenu() else confirmExit = true
+                // ---------------- top bar: Home | title (centred) | brightness
+                Box(Modifier.fillMaxWidth()) {
+                    Box(Modifier.align(Alignment.CenterStart)) {
+                        HomePill { if (prefs.skipExitWarning) backToMainMenu() else confirmExit = true }
                     }
-                    Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
-                        Text(s.info.title, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Column(
+                        Modifier.align(Alignment.Center).padding(horizontal = 104.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(s.info.title, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         Text(
                             (if (!s.applied) "⚠ not applied · " else "") + preset.controller.label,
-                            fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             color = if (s.applied) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.tertiary,
                         )
                     }
-                    BrightnessPill(brightness, open = showBrightness) {
-                        showBrightness = !showBrightness
-                        started = true // show the chosen brightness right away
+                    Box(Modifier.align(Alignment.CenterEnd)) {
+                        BrightnessPill(brightness, open = showBrightness) {
+                            showBrightness = !showBrightness
+                            started = true // show the chosen brightness right away
+                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))

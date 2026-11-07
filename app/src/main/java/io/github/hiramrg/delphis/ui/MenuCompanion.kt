@@ -244,8 +244,23 @@ private fun FocusedGamePanel(act: MainActivity) {
             }
         }
         WiiCard(Modifier.fillMaxWidth(), padding = 12.dp) {
-            Text("CONTROLS", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
-            Text(withOrangeTags(preset?.name ?: "Not chosen yet", c.orange), fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+            if (preset == null) {
+                Text("CONTROLS", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
+                Text("Not chosen yet", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+            } else Row(verticalAlignment = Alignment.CenterVertically) {
+                // Same picture as the game page and the preset lists.
+                Box(
+                    Modifier.size(72.dp, 52.dp).clip(RoundedCornerShape(12.dp)).background(if (c.dark) c.sidebar else c.bg),
+                    contentAlignment = Alignment.Center,
+                ) { PresetIcon(preset, Modifier.size(58.dp, 44.dp)) }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    SelectedControlsTitle()
+                    Text(withOrangeTags(preset.name, c.orange), fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (preset.controller.label != preset.name)
+                        Text(preset.controller.label, fontSize = 11.sp, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
         }
         Spacer(Modifier.weight(1f))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -48,7 +48,7 @@ fun ControlsMapCard(preset: Preset, suggested: Boolean, modifier: Modifier = Mod
                 contentAlignment = Alignment.Center,
             ) { PresetIcon(preset, Modifier.size(64.dp, 48.dp)) }
             Column(Modifier.weight(1f)) {
-                Text("CONTROLS", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
+                SelectedControlsTitle(10.sp)
                 Text(presetTitle(preset.name, suggested), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val sub = if (preset.controller.label != preset.name) preset.controller.label else preset.summary
                 Text(sub, fontSize = 11.sp, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -56,6 +56,19 @@ fun ControlsMapCard(preset: Preset, suggested: Boolean, modifier: Modifier = Mod
         }
         ControlsMap(preset, Modifier.weight(1f).fillMaxWidth())
     }
+}
+
+/** "✓ SELECTED CONTROLS": marks the preset shown as the one that's chosen for the game. */
+@Composable
+fun SelectedControlsTitle(size: androidx.compose.ui.unit.TextUnit = 11.sp) {
+    val c = LocalWii.current
+    Text(
+        androidx.compose.ui.text.buildAnnotatedString {
+            pushStyle(androidx.compose.ui.text.SpanStyle(color = c.green)); append("✓ "); pop()
+            append("SELECTED CONTROLS")
+        },
+        fontSize = size, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp,
+    )
 }
 
 /** "+ (Pause)" → "Pause"; anything else as written. */
@@ -111,8 +124,13 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     val dx0 = 138f; val dx1 = 322f; val dy0 = 52f; val dy1 = 176f
     drawRoundRect(deviceFill, p(dx0, dy0), Size((dx1 - dx0) * s, (dy1 - dy0) * s), CornerRadius(22f * s))
     drawRoundRect(c.cardBorder, p(dx0, dy0), Size((dx1 - dx0) * s, (dy1 - dy0) * s), CornerRadius(22f * s), style = Stroke(2.5f * s))
-    drawRoundRect(screenFill, p(dx0 + 58f, dy0 + 16f), Size(68f * s, 84f * s), CornerRadius(6f * s))
-    drawRoundRect(c.cardBorder, p(dx0 + 58f, dy0 + 16f), Size(68f * s, 84f * s), CornerRadius(6f * s), style = Stroke(1.5f * s))
+    drawRoundRect(screenFill, p(dx0 + 58f, dy0 + 22f), Size(68f * s, 78f * s), CornerRadius(6f * s))
+    drawRoundRect(c.cardBorder, p(dx0 + 58f, dy0 + 22f), Size(68f * s, 78f * s), CornerRadius(6f * s), style = Stroke(1.5f * s))
+    // Select and Start sit above the bottom screen, Select on the left and Start on the right (as on the Thor).
+    listOf(SELECT to 190f, START to 254f).forEach { (k, x) ->
+        drawRoundRect(if (used(k)) ChipBlue else unused, p(x, 57f), Size(16f * s, 5f * s), CornerRadius(2.5f * s))
+        text(if (k == SELECT) "SELECT" else "START", x + 8f, 70f, 5.5f, c.textDim, align = 0)
+    }
 
     // Shoulder tabs, labelled.
     listOf(L2 to (148f to 34f), L1 to (186f to 28f), R1 to (246f to 28f), R2 to (278f to 34f)).forEach { (k, xw) ->
@@ -179,7 +197,7 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     text(rsAction ?: "—", dx1 + 12f, rs.y + 10f, 12f, c.text, maxW = rightW)
 
     // System row: only what the preset uses.
-    val sys = listOf(START, SELECT, L3, R3, GYRO, MOTION).mapNotNull { k -> actions[k]?.let { k to it } }
+    val sys = listOf(SELECT, START, L3, R3, GYRO, MOTION).mapNotNull { k -> actions[k]?.let { k to it } }
     if (sys.isNotEmpty()) {
         val y = VH - 8f
         val parts = sys.map { (k, a) ->

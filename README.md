@@ -21,7 +21,7 @@ Pick a game and Delphis sets up the controls that suit it (pointer, sideways Wii
 ### Controls that fit each game
 * **Game-aware presets.** Delphis reads the game ID from the disc and suggests layouts built for that game:
   * **Super Mario Galaxy 1 & 2:** pointer on the right stick or gyro, spin on buttons, no waggling.
-  * **Mario Kart Wii:** Wii Remote + Nunchuk, Wii Wheel on the stick, or Wii Wheel by tilting the Thor.
+  * **Mario Kart Wii:** Nunchuk + Wii Remote, Wii Wheel on the stick, or Wii Wheel by tilting the Thor.
   * **New Super Mario Bros. Wii:** the Wii Remote held sideways.
   * **Metroid Prime 3 / Trilogy, Twilight Princess, Donkey Kong Country Returns, Kirby's Return to Dream Land, Super Paper Mario, Smash Bros. Brawl**, plus generic presets for everything else (pointer, sideways, Classic Controller, GameCube).
 * **Gyro aiming (Experimental).** Aim the Wii pointer by moving the Thor, with two styles: *Gyro aiming* and *Precision gyro*, which moves finely when you move slowly and far when you move fast, and lets you hold R1 to freeze the pointer and re-position (like lifting a mouse). Invert up/down or left/right in Settings, and try it all on the built-in test screen.
@@ -41,7 +41,7 @@ Pick a game and Delphis sets up the controls that suit it (pointer, sideways Wii
 
 ### A Wii-style home
 * **One scrolling home:** a **Continue playing** card for your last game, a recently played row, then your whole library, with a retractable column for All games, Favorites, Wii and GameCube, plus search and sorting by Recent / A–Z / Most played.
-* **Proper game names** from Delphis' game database and GameTDB, and an illustration for each control style (Wii Remote + Nunchuk, sideways, Wii Wheel, Classic, GameCube, gyro).
+* **Proper game names** from Delphis' game database and GameTDB, and an illustration for each control style (Nunchuk + Wii Remote, sideways, Wii Wheel, Classic, GameCube, gyro).
 * **Menus work with the D-pad:** when nothing is moving the Wii pointer, Delphis hides it so it can't sit in the middle of the screen and take over menu selection.
 * **What's new card:** after an update, Delphis shows the changes once.
 * **Loading screen:** while Delphis saves, closes or starts a game (with the close-games helper on), a loading screen covers Dolphin's menus.
