@@ -376,26 +376,36 @@ class MainActivity : ComponentActivity() {
         prefs.markPlayed(entry.key)
         statsVersion++
         MenuCompanion.close()
-        GameLauncher.run(this) {
-            val applied = applyPreset(this@MainActivity, bridge, prefs, entry.info.gameId, preset)
-            val roles = DeviceInfo.screenRoles(this@MainActivity, prefs.swapScreens)
-            if (roles.bottomDisplayId != null) {
-                val session = GameSession(entry.uri, entry.fileName, entry.info, preset.id, applied)
-                val intent = session.writeTo(Intent(this@MainActivity, NowPlayingActivity::class.java))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                val opts = ActivityOptions.makeBasic().setLaunchDisplayId(roles.bottomDisplayId).toBundle()
-                runCatching { startActivity(intent, opts) }
-            }
-            val resumeId = entry.info.gameId?.takeIf {
-                prefs.autoSaveFor(it) && withContext(Dispatchers.IO) { bridge.hasAutosave(it) }
-            }
-            if (!bridge.launchFresh(entry.uri, roles.topDisplayId, resumeId, entry.info.title, entry.info.gameId)) {
-                Toast.makeText(applicationContext, "Dolphin isn't installed.", Toast.LENGTH_LONG).show()
-            }
-        }
+        start(this, bridge, prefs, entry, preset)
     }
 
     companion object {
+        /**
+         * Applies [preset] to Dolphin, opens the always-on controls view on the bottom display and
+         * starts the game on the top display. Used by the game list and by frontends ([LaunchActivity]);
+         * [returnTo] is the frontend to go back to when the game is closed.
+         */
+        fun start(ctx: android.content.Context, bridge: DolphinBridge, prefs: Prefs, entry: GameEntry, preset: Preset, returnTo: String? = null) {
+            val app = ctx.applicationContext
+            GameLauncher.run(ctx) {
+                val applied = applyPreset(app, bridge, prefs, entry.info.gameId, preset)
+                val roles = DeviceInfo.screenRoles(app, prefs.swapScreens)
+                if (roles.bottomDisplayId != null) {
+                    val session = GameSession(entry.uri, entry.fileName, entry.info, preset.id, applied, returnTo)
+                    val intent = session.writeTo(Intent(app, NowPlayingActivity::class.java))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    val opts = ActivityOptions.makeBasic().setLaunchDisplayId(roles.bottomDisplayId).toBundle()
+                    runCatching { app.startActivity(intent, opts) }
+                }
+                val resumeId = entry.info.gameId?.takeIf {
+                    prefs.autoSaveFor(it) && withContext(Dispatchers.IO) { bridge.hasAutosave(it) }
+                }
+                if (!bridge.launchFresh(entry.uri, roles.topDisplayId, resumeId, entry.info.title, entry.info.gameId)) {
+                    Toast.makeText(app, "Dolphin isn't installed.", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
         /** Writes the preset (per game when the ID is known, otherwise as the default config). */
         suspend fun applyPreset(ctx: android.content.Context, bridge: DolphinBridge, prefs: Prefs, gameId: String?, preset: Preset): Boolean {
             val profile = DeviceInfo.controllerProfile(prefs)

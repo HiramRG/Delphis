@@ -255,14 +255,23 @@ class NowPlayingActivity : ComponentActivity() {
         }
     }
 
-    /** Closes the game and Dolphin, then shows Delphis' game list. */
+    /** Opens [pkg] (a frontend) the way its icon would, so its existing screen comes back. */
+    private fun frontendIntent(pkg: String): Intent? {
+        val i = packageManager.getLaunchIntentForPackage(pkg)
+            ?: Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setPackage(pkg)
+                .takeIf { packageManager.resolveActivity(it, 0) != null }
+        return i?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+    }
+
+    /** Closes the game and Dolphin, then shows Delphis' game list (or the frontend that started the game). */
     private fun backToMainMenu() {
         busy = "Closing the game…"
         GameLauncher.run(this) {
             val roles = DeviceInfo.screenRoles(this@NowPlayingActivity, prefs.swapScreens)
             bridge.closeDolphin(roles.topDisplayId, "Closing the game…")
-            // Show the game list on the top screen, where the game was, and close this one.
-            val menu = Intent(this@NowPlayingActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // Show the game list (or the frontend that started the game) on the top screen, where the game was, and close this one.
+            val menu = session?.returnTo?.let { frontendIntent(it) }
+                ?: Intent(this@NowPlayingActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             val onTop = roles.topDisplayId?.let { ActivityOptions.makeBasic().setLaunchDisplayId(it).toBundle() }
             if (runCatching { startActivity(menu, onTop) }.isFailure) runCatching { startActivity(menu) }
             CoverActivity.dismiss()

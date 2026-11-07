@@ -37,6 +37,20 @@
             </intent-filter>
         </activity>
 
+        <!-- Frontends (RetroHrai!, Cocoon, iiSU, Daijisho, ES-DE…) start games here; no screen of its own. -->
+        <activity
+            android:name=".ui.LaunchActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <!-- Short, stable name for frontends' launch commands: io.github.hiramrg.delphis/.Play -->
+        <activity-alias
+            android:name=".Play"
+            android:exported="true"
+            android:targetActivity=".ui.LaunchActivity" />
+
         <!-- Always-on controls view for the bottom screen; its own task so it can live on another display. -->
         <activity
             android:name=".ui.NowPlayingActivity"

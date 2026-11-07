@@ -926,7 +926,7 @@ fun SetupScreen(act: MainActivity) {
 
 enum class SettingsSection(val label: String) {
     APPEARANCE("Appearance"), SOUND("Sound"), CONTROLS("Controls"), GYRO("Gyro aiming"), CLOSING("Closing games"),
-    BOTTOM("Bottom screen"), LIBRARY("Library & folders"), UPDATES("Updates"), HELP("Diagnostics"),
+    BOTTOM("Bottom screen"), LIBRARY("Library & folders"), FRONTENDS("Frontends"), UPDATES("Updates"), HELP("Diagnostics"),
 }
 
 @Composable
@@ -954,6 +954,7 @@ fun SettingsScreen(act: MainActivity) {
                 SettingsSection.CLOSING -> ClosingSettings(act)
                 SettingsSection.BOTTOM -> BottomScreenSettings(act)
                 SettingsSection.LIBRARY -> LibrarySettings(act)
+                SettingsSection.FRONTENDS -> FrontendSettings(act)
                 SettingsSection.UPDATES -> UpdatePanel(act)
                 SettingsSection.HELP -> {
                     Text("If presets don't respond or something crashes, open Diagnostics and copy the report.", fontSize = 13.sp, color = c.textDim)
@@ -1158,6 +1159,36 @@ private fun LibrarySettings(act: MainActivity) {
         WiiButton("Rescan", onClick = act::rescan)
     }
     Text("Dolphin: ${act.bridge.installedPackage() ?: "not installed"} · ${act.games.size} games", fontSize = 12.sp, color = LocalWii.current.textDim)
+}
+
+/** The launch command for frontends such as RetroHrai!, Cocoon or iiSU (see LaunchActivity). */
+const val FRONTEND_COMMAND = "-n io.github.hiramrg.delphis/.Play -a android.intent.action.VIEW -d {file.uri}"
+
+@Composable
+private fun FrontendSettings(act: MainActivity) {
+    val c = LocalWii.current
+    var copied by remember { mutableStateOf(false) }
+    Text(
+        "Start Wii and GameCube games from a frontend like RetroHrai!, Cocoon or iiSU and still get Delphis' controls and the " +
+            "bottom-screen map. In the frontend, add a custom emulator for Wii and GameCube and paste this launch command:",
+        fontSize = 13.sp, color = c.textDim,
+    )
+    Box(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.sidebar)
+            .border(2.dp, c.cardBorder, RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Text(FRONTEND_COMMAND, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+    }
+    WiiButton(if (copied) "Copied ✓" else "Copy command", onClick = {
+        val cm = act.getSystemService(android.content.ClipboardManager::class.java)
+        cm?.setPrimaryClip(android.content.ClipData.newPlainText("Delphis launch command", FRONTEND_COMMAND))
+        copied = true
+    })
+    Text(
+        "If your frontend uses a different word for the game file, swap {file.uri} for it (for example {file.path}). " +
+            "The game uses the controls you chose for it in Delphis (or the suggested ones), and Home on the bottom screen takes you back to the frontend.",
+        fontSize = 12.sp, color = c.textDim,
+    )
 }
 
 @Composable

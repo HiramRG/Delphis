@@ -12,6 +12,8 @@ data class GameSession(
     val info: GameInfo,
     val presetId: String,
     val applied: Boolean,
+    /** Package of the frontend (RetroHrai, Cocoon…) that started this game; Home goes back there. */
+    val returnTo: String? = null,
 ) {
     val key: String get() = info.gameId ?: fileName
 
@@ -23,6 +25,7 @@ data class GameSession(
         putExtra("platform", info.platform.name)
         putExtra("preset", presetId)
         putExtra("applied", applied)
+        putExtra("return_to", returnTo)
     }
 
     companion object {
@@ -38,6 +41,7 @@ data class GameSession(
                 ),
                 i.getStringExtra("preset") ?: "",
                 i.getBooleanExtra("applied", false),
+                i.getStringExtra("return_to"),
             )
         }
     }

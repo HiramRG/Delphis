@@ -180,16 +180,21 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
      */
     fun launch(gameUri: Uri, displayId: Int?): Boolean {
         val pkg = installedPackage() ?: return false
+        val isPath = gameUri.scheme == "file"
         val intent = Intent(Intent.ACTION_VIEW).apply {
             component = ComponentName(pkg, MAIN_ACTIVITY)
-            setDataAndType(gameUri, "application/octet-stream")
-            clipData = ClipData.newRawUri("game", gameUri)
-            putExtra("AutoStartFile", gameUri.toString())
+            // A plain file path (from a frontend) can't go in the intent's data: Android forbids file:// URIs
+            // between apps. Dolphin reads it from the AutoStartFile extra instead.
+            if (!isPath) {
+                setDataAndType(gameUri, "application/octet-stream")
+                clipData = ClipData.newRawUri("game", gameUri)
+            }
+            putExtra("AutoStartFile", if (isPath) gameUri.path else gameUri.toString())
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
         }
-        runCatching { context.grantUriPermission(pkg, gameUri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        if (!isPath) runCatching { context.grantUriPermission(pkg, gameUri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
         val options = displayId?.let { ActivityOptions.makeBasic().setLaunchDisplayId(it).toBundle() }
         return try {
             context.startActivity(intent, options); true
@@ -208,7 +213,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         val pkg = installedPackage() ?: return
         val intent = Intent(Intent.ACTION_VIEW).apply {
             component = ComponentName(pkg, MAIN_ACTIVITY)
-            setDataAndType(gameUri, "application/octet-stream")
+            if (gameUri.scheme != "file") setDataAndType(gameUri, "application/octet-stream")
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         val options = displayId?.let { ActivityOptions.makeBasic().setLaunchDisplayId(it).toBundle() }

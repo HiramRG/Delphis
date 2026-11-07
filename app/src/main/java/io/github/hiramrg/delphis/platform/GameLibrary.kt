@@ -51,7 +51,7 @@ class GameLibrary(private val context: Context, private val prefs: Prefs) {
     }
 
     /** Reads the disc header with random access (needed for WBFS/CISO/GCZ, where it isn't at offset 0). */
-    private fun identify(uri: Uri, name: String): GameInfo = try {
+    fun identify(uri: Uri, name: String): GameInfo = try {
         context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
             FileInputStream(pfd.fileDescriptor).channel.use { ch ->
                 val source = ByteSource { offset, length ->
