@@ -1,0 +1,4 @@
+e: The daemon has terminated unexpectedly on startup attempt #1 with error code: 0. The daemon process output:
+    1. Kotlin compile daemon is ready
+w: file:///home/runner/work/Delphis/Delphis/app/src/main/java/io/github/hiramrg/delphis/platform/LoadingOverlay.kt:144:96 'static field FLAG_FULLSCREEN: Int' is deprecated. Deprecated in Java.
+
