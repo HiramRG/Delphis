@@ -12,7 +12,7 @@ data class GameSession(
     val info: GameInfo,
     val presetId: String,
     val applied: Boolean,
-    /** Package of the frontend (RetroHrai, Cocoon…) that started this game; Home goes back there. */
+    /** Package of the frontend (e.g. RetroHrai!) that started this game; Home goes back there. */
     val returnTo: String? = null,
 ) {
     val key: String get() = info.gameId ?: fileName

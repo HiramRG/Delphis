@@ -21,7 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Entry point for frontends (RetroHrai!, Cocoon, iiSU, Daijishō, ES-DE, LaunchBox…). They start it
+ * Entry point for frontends that take a custom launch command (like RetroHrai!). They start it
  * the same way they start Dolphin — a game as the intent's data, or as Dolphin's "AutoStartFile"
  * extra — and Delphis plays it with that game's controls and the bottom-screen map, skipping its
  * own menu. Closing the game with Home goes back to the frontend.

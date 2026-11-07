@@ -37,7 +37,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Frontends (RetroHrai!, Cocoon, iiSU, Daijisho, ES-DE…) start games here; no screen of its own. -->
+        <!-- Frontends that take a launch command (like RetroHrai!) start games here; no screen of its own. -->
         <activity
             android:name=".ui.LaunchActivity"
             android:exported="true"

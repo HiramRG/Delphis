@@ -1161,7 +1161,7 @@ private fun LibrarySettings(act: MainActivity) {
     Text("Dolphin: ${act.bridge.installedPackage() ?: "not installed"} · ${act.games.size} games", fontSize = 12.sp, color = LocalWii.current.textDim)
 }
 
-/** The launch command for frontends such as RetroHrai!, Cocoon or iiSU (see LaunchActivity). */
+/** The launch command for frontends such as RetroHrai! (see LaunchActivity). */
 const val FRONTEND_COMMAND = "-n io.github.hiramrg.delphis/.Play -a android.intent.action.VIEW -d {file.uri}"
 
 @Composable
@@ -1169,8 +1169,8 @@ private fun FrontendSettings(act: MainActivity) {
     val c = LocalWii.current
     var copied by remember { mutableStateOf(false) }
     Text(
-        "Start Wii and GameCube games from a frontend like RetroHrai!, Cocoon or iiSU and still get Delphis' controls and the " +
-            "bottom-screen map. In the frontend, add a custom emulator for Wii and GameCube and paste this launch command:",
+        "Start Wii and GameCube games from a frontend that lets you add a custom launch command, like RetroHrai!, and still get " +
+            "Delphis' controls and the bottom-screen map. In the frontend, add a custom emulator for Wii and GameCube and paste this launch command:",
         fontSize = 13.sp, color = c.textDim,
     )
     Box(
