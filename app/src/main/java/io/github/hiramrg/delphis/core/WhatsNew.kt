@@ -5,15 +5,13 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 7
+    const val RELEASE = 8
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("See which controls are selected.", "The bottom screen now shows the picture of the selected controls when you browse games, marked \"Selected controls\"."),
-        Item("Select and Start on the map.", "The button map now shows Select and Start on the Thor, in the same order as on the device."),
-        Item("A clearer way home.", "In a game, the bottom screen's button now says Home, and the game's name sits in the middle."),
-        Item("Back to the top.", "On Home, moving up to Play or Controls now scrolls all the way up so the whole Continue playing card shows.", fix = true),
+        Item("Play from your frontend.", "Start Wii and GameCube games from RetroHrai!, Cocoon, iiSU and other frontends and still get Delphis' controls and the bottom-screen map. Home takes you back to the frontend. Settings → Frontends has the command to paste."),
+        Item("No more cut-off labels.", "Long button descriptions on the controls map now wrap onto a second line instead of being cut off.", fix = true),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */
