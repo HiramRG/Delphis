@@ -110,6 +110,33 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
         val left = when (align) { -1 -> x; 0 -> x - w / 2f; else -> x - w }
         drawText(layout, topLeft = p(left, y - size * 0.95f))
     }
+    /**
+     * Lays out an action label in up to [maxLines] lines no wider than [maxW]. Long labels wrap onto a
+     * second line first; only if they still don't fit does the font shrink (down to [minSize]), and
+     * only after that is anything cut. Labels are never shortened otherwise, so "(A)", "(shake)" etc. stay.
+     */
+    fun fitted(t: String, size: Float, maxW: Float, color: Color, align: Int, maxLines: Int = 2, minSize: Float = 9f): androidx.compose.ui.text.TextLayoutResult {
+        var sz = size
+        while (true) {
+            val l = tm.measure(
+                t,
+                TextStyle(
+                    fontSize = (sz * s).toSp(), fontWeight = FontWeight.Bold, color = color, lineHeight = (sz * 1.15f * s).toSp(),
+                    textAlign = when (align) { -1 -> androidx.compose.ui.text.style.TextAlign.Start; 0 -> androidx.compose.ui.text.style.TextAlign.Center; else -> androidx.compose.ui.text.style.TextAlign.End },
+                ),
+                overflow = TextOverflow.Ellipsis, maxLines = maxLines, constraints = Constraints(maxWidth = (maxW * s).toInt().coerceAtLeast(1)),
+            )
+            if (!l.hasVisualOverflow || sz <= minSize) return l
+            sz -= 0.5f
+        }
+    }
+    /** Draws a [fitted] block whose first line sits where [text] would put a single line; returns its height. */
+    fun block(l: androidx.compose.ui.text.TextLayoutResult, x: Float, y: Float, size: Float, align: Int): Float {
+        val w = l.size.width / s
+        val left = when (align) { -1 -> x; 0 -> x - w / 2f; else -> x - w }
+        drawText(l, topLeft = p(left, y - size * 0.95f))
+        return l.size.height / s
+    }
     fun width(t: String, size: Float) = tm.measure(t, TextStyle(fontSize = (size * s).toSp(), fontWeight = FontWeight.ExtraBold)).size.width / s
     fun chip(label: String, x: Float, yMid: Float, color: Color, h: Float = 16f): Float {
         val w = maxOf(h + 6f, width(label, 9f) + 12f)
@@ -142,11 +169,11 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     val half = VW / 2f - 40f
     listOf(L2 to 14f, L1 to 32f).forEach { (k, y) ->
         chip(k.shortLabel, 0f, y - 4f, if (used(k)) ChipBlue else unused)
-        text(actions[k] ?: "—", 28f, y, 12f, if (used(k)) c.text else c.textDim, maxW = half)
+        block(fitted(actions[k] ?: "—", 12f, half, if (used(k)) c.text else c.textDim, -1, maxLines = 1), 28f, y, 12f, -1)
     }
     listOf(R2 to 14f, R1 to 32f).forEach { (k, y) ->
         chip(k.shortLabel, VW - 22f, y - 4f, if (used(k)) ChipBlue else unused)
-        text(actions[k] ?: "—", VW - 28f, y, 12f, if (used(k)) c.text else c.textDim, align = 1, maxW = half)
+        block(fitted(actions[k] ?: "—", 12f, half, if (used(k)) c.text else c.textDim, 1, maxLines = 1), VW - 28f, y, 12f, 1)
     }
 
     val sideW = dx0 - 14f
@@ -155,7 +182,7 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     drawCircle(unused, 14f * s, p(ls.x, ls.y)); drawCircle(if (used(LEFT_STICK)) ChipBlue else unused, 14f * s, p(ls.x, ls.y), style = Stroke(2.5f * s))
     leader(ls.x - 14f, ls.y, dx0 - 8f, ls.y)
     text("Left stick", dx0 - 12f, ls.y - 4f, 10f, c.textDim, align = 1, bold = false, maxW = sideW)
-    text(actions[LEFT_STICK] ?: "—", dx0 - 12f, ls.y + 10f, 12f, c.text, align = 1, maxW = sideW)
+    block(fitted(actions[LEFT_STICK] ?: "—", 12f, sideW, c.text, 1), dx0 - 12f, ls.y + 10f, 12f, 1)
     // D-pad.
     val dp = Offset(dx0 + 29f, dy0 + 86f)
     val dpc = if (used(DPAD)) ChipBlue else unused
@@ -163,7 +190,7 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     drawRoundRect(dpc, p(dp.x - 17f, dp.y - 6f), Size(34f * s, 12f * s), CornerRadius(3f * s))
     leader(dp.x - 17f, dp.y, dx0 - 8f, dp.y)
     text("D-Pad", dx0 - 12f, dp.y - 4f, 10f, c.textDim, align = 1, bold = false, maxW = sideW)
-    text(actions[DPAD] ?: "—", dx0 - 12f, dp.y + 10f, 12f, c.text, align = 1, maxW = sideW)
+    block(fitted(actions[DPAD] ?: "—", 12f, sideW, c.text, 1), dx0 - 12f, dp.y + 10f, 12f, 1)
 
     // Face buttons, then their actions grouped ("A B  Jump").
     val fc = Offset(dx1 - 29f, dy0 + 32f)
@@ -176,17 +203,23 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     leader(fc.x + 20f, fc.y, dx1 + 8f, fc.y)
     val groups = linkedMapOf<String, MutableList<ThorControl>>()
     listOf(FACE_EAST, FACE_SOUTH, FACE_NORTH, FACE_WEST).forEach { k -> actions[k]?.let { groups.getOrPut(it) { mutableListOf() } += k } }
-    var gy = fc.y - (groups.size - 1) * 8.5f + 4f
     val rightW = VW - dx1 - 14f
-    groups.forEach { (act, keys) ->
+    // Lay every group out first (long ones wrap), then centre the whole block on the face buttons.
+    val laid = groups.map { (act, keys) ->
+        val textX = dx1 + 12f + keys.size * 15f + 4f
+        Triple(keys, textX, fitted(act, 12f, VW - textX - 2f, c.text, -1))
+    }
+    val heights = laid.map { (_, _, l) -> maxOf(17f, l.size.height / s + 3f) }
+    var gy = fc.y + 4f - (heights.sum() - 17f) / 2f
+    laid.forEachIndexed { i, (keys, textX, l) ->
         var x = dx1 + 12f
         keys.forEach { k ->
             drawCircle(controlColor(k), 6.5f * s, p(x + 6f, gy - 4f))
             text(k.shortLabel, x + 6f, gy - 0.8f, 8.5f, White, align = 0)
             x += 15f
         }
-        text(act, x + 4f, gy, 12f, c.text, maxW = rightW - (x + 4f - dx1 - 12f))
-        gy += 17f
+        block(l, textX, gy, 12f, -1)
+        gy += heights[i]
     }
     // Right stick (or the gyro, when the pointer is on the gyro instead).
     val rs = Offset(dx1 - 29f, dy0 + 86f)
@@ -194,22 +227,24 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     drawCircle(unused, 14f * s, p(rs.x, rs.y)); drawCircle(if (rsAction != null) controlColor(RIGHT_STICK) else unused, 14f * s, p(rs.x, rs.y), style = Stroke(2.5f * s))
     leader(rs.x + 14f, rs.y, dx1 + 8f, rs.y)
     text("Right stick", dx1 + 12f, rs.y - 4f, 10f, c.textDim, bold = false, maxW = rightW)
-    text(rsAction ?: "—", dx1 + 12f, rs.y + 10f, 12f, c.text, maxW = rightW)
+    block(fitted(rsAction ?: "—", 12f, rightW, c.text, -1), dx1 + 12f, rs.y + 10f, 12f, -1)
 
     // System row: only what the preset uses.
     val sys = listOf(SELECT, START, L3, R3, GYRO, MOTION).mapNotNull { k -> actions[k]?.let { k to it } }
     if (sys.isNotEmpty()) {
-        val y = VH - 8f
+        val gap = 16f
+        val maxItem = if (sys.size <= 2) 170f else (VW - gap * (sys.size - 1)) / sys.size - 30f
         val parts = sys.map { (k, a) ->
             val name = when (k) { GYRO -> "Gyro"; MOTION -> "Tilt"; else -> k.shortLabel }
-            Triple(name, a, if (k == GYRO || k == R3) controlColor(k) else ChipBlue)
+            Triple(name, fitted(a, 11f, maxItem, c.text, -1), if (k == GYRO || k == R3) controlColor(k) else ChipBlue)
         }
-        val gap = 16f
-        val widths = parts.map { (n, a, _) -> maxOf(22f, width(n, 9f) + 12f) + 5f + minOf(width(a, 11f), 120f) }
+        // A wrapped item needs a second line, so the row moves up to keep it inside the map.
+        val y = if (parts.any { it.second.lineCount > 1 }) VH - 21f else VH - 8f
+        val widths = parts.map { (n, l, _) -> maxOf(22f, width(n, 9f) + 12f) + 5f + l.size.width / s }
         var x = (VW - (widths.sum() + gap * (parts.size - 1))) / 2f
-        parts.forEachIndexed { i, (n, a, col) ->
+        parts.forEachIndexed { i, (n, l, col) ->
             val w = chip(n, x, y - 4f, col)
-            text(a, x + w + 5f, y, 11f, c.text, maxW = 120f)
+            block(l, x + w + 5f, y, 11f, -1)
             x += widths[i] + gap
         }
     }
