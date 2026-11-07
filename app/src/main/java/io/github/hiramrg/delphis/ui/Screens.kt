@@ -52,6 +52,7 @@ import io.github.hiramrg.delphis.platform.DeviceInfo
 import io.github.hiramrg.delphis.platform.DolphinExitService
 import io.github.hiramrg.delphis.platform.GameEntry
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
 import java.text.SimpleDateFormat
@@ -174,7 +175,16 @@ fun HomeScreen(act: MainActivity) {
     val hero = recent.firstOrNull()
     val shown = libraryList(act, favorites, lastPlayed, playTime)
     val grid = act.homeGrid
-    val heroScope = androidx.compose.runtime.rememberCoroutineScope()
+    // When the D-pad moves up into Continue playing, show the whole card. Android's own
+    // "bring the focused button into view" scroll runs right after focus moves and would cancel
+    // an earlier scroll, so wait for it to finish, then scroll all the way to the top.
+    var heroFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(heroFocused) {
+        if (!heroFocused) return@LaunchedEffect
+        delay(80)
+        androidx.compose.runtime.snapshotFlow { grid.isScrollInProgress }.first { !it }
+        if (grid.firstVisibleItemIndex != 0 || grid.firstVisibleItemScrollOffset != 0) grid.animateScrollToItem(0)
+    }
     // Rows above the game list: hero, then (if any) the "Recently played" title and row.
     val gamesHeaderIndex = 1 + if (recent.size > 1) 2 else 0
 
@@ -211,13 +221,11 @@ fun HomeScreen(act: MainActivity) {
                     Box(
                         Modifier.fillMaxWidth().height(150.dp)
                             .onFocusChanged {
+                                heroFocused = it.hasFocus
                                 if (it.hasFocus) {
                                     // The hero's own buttons say whether A is theirs (see HeroCard).
                                     if (hero == null) act.homeFocusedTile = false
                                     act.focusedGame = null
-                                    // Moving up into the card only brings the focused button into view;
-                                    // scroll all the way back so the whole Continue playing card shows.
-                                    heroScope.launch { grid.animateScrollToItem(0) }
                                 }
                             },
                     ) { if (hero != null) HeroCard(act, hero) else WelcomeCard(act) }
