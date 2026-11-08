@@ -153,10 +153,15 @@ class Prefs(context: Context) {
         get() = sp.getString("menu_music_uri", null)?.let(android.net.Uri::parse)
         set(v) = sp.edit().putString("menu_music_uri", v?.toString()).apply()
 
-    /** Seconds after the game launches before the bottom screen dims. */
+    /** Seconds without a touch before the in-game bottom screen dims or goes black (one of BottomScreen.DELAYS). */
     var dimDelaySeconds: Int
-        get() = sp.getInt("dim_delay", 3)
-        set(v) = sp.edit().putInt("dim_delay", v).apply()
+        get() = io.github.hiramrg.delphis.core.BottomScreen.delayOf(sp.getInt("dim_after", io.github.hiramrg.delphis.core.BottomScreen.DEFAULT_DELAY))
+        set(v) = sp.edit().putInt("dim_after", v).apply()
+
+    /** In-game bottom screen while idle: Always on / Dim / Screen off (BottomScreen.Mode ids). */
+    var bottomScreenMode: io.github.hiramrg.delphis.core.BottomScreen.Mode
+        get() = io.github.hiramrg.delphis.core.BottomScreen.modeOf(sp.getString("bottom_screen_mode", null))
+        set(v) = sp.edit().putString("bottom_screen_mode", v.id).apply()
 
     /** Swap which physical display is treated as "top" (game) and "bottom" (companion). */
     var swapScreens: Boolean

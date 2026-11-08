@@ -57,16 +57,21 @@ import io.github.hiramrg.delphis.platform.GameWatch
 import io.github.hiramrg.delphis.platform.PresetStore
 import io.github.hiramrg.delphis.platform.Prefs
 import kotlinx.coroutines.delay
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import io.github.hiramrg.delphis.core.BottomScreen
 
 /**
  * The bottom screen while a game runs:
  *  - top-left back arrow closes the game and Dolphin and returns to Delphis,
- *  - top-right brightness pill opens a 0-100 slider for this screen,
+ *  - top-right brightness pill opens a panel: dimmed brightness, Auto-dim for this session and
+ *    "Turn screen off" (black at minimum brightness until the next touch),
  *  - the controls in the middle: main actions as big tiles, everything else in a small grid,
  *  - "Change preset" and "Edit preset" at the bottom (both restart the game to apply).
  * The window never takes input focus, so gamepad presses keep going to Dolphin on the top screen.
  */
-private const val WAKE_MS = 1500L
 
 class NowPlayingActivity : ComponentActivity() {
     companion object {
@@ -231,6 +236,11 @@ class NowPlayingActivity : ComponentActivity() {
         }
     }
 
+    /** The system brightness as a 0-1 window level (where a fade from "bright" starts). */
+    private fun systemBrightness(): Float =
+        runCatching { android.provider.Settings.System.getInt(contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS) / 255f }
+            .getOrDefault(0.5f).coerceIn(0.05f, 1f)
+
     private fun setWindowBrightness(level: Float) {
         window.attributes = window.attributes.apply { screenBrightness = level }
     }
@@ -288,7 +298,6 @@ class NowPlayingActivity : ComponentActivity() {
         var mode by remember { mutableStateOf(Mode.VIEW) }
         var brightness by remember { mutableIntStateOf(prefs.brightnessPercent) }
         var showBrightness by remember { mutableStateOf(false) }
-        var started by remember(startedAt) { mutableStateOf(false) }
         var confirmExit by remember { mutableStateOf(false) }
         // Set when a change needs the game restarted; shows the confirmation first.
         var restartAction by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -299,18 +308,14 @@ class NowPlayingActivity : ComponentActivity() {
             if (DolphinExitService.isEnabled(this@NowPlayingActivity) || prefs.skipExitHelperPrompt) action()
             else helperPrompt = action
         }
-        var lastBrightnessTouch by remember { mutableLongStateOf(0L) }
 
-        // Full brightness for the first few seconds (so you can read it), then the chosen level.
-        // While changing or editing the preset the screen stays bright.
-        LaunchedEffect(startedAt) {
-            delay(prefs.dimDelaySeconds * 1000L)
-            started = true
-        }
+        // Turned off with "Turn screen off" in the brightness panel; the next touch wakes it.
+        var screenOff by remember { mutableStateOf(false) }
         // Android's back gesture must never just hide this screen and leave the game running
         // without its controls view: it backs out of change/edit, otherwise it's "Main menu".
         BackHandler(enabled = busy == null) {
             when {
+                screenOff -> screenOff = false
                 showBrightness -> showBrightness = false
                 confirmExit || restartAction != null || helperPrompt != null -> { confirmExit = false; restartAction = null; helperPrompt = null }
                 mode != Mode.VIEW -> mode = Mode.VIEW
@@ -319,24 +324,50 @@ class NowPlayingActivity : ComponentActivity() {
             }
         }
 
-        // Touching the dimmed screen wakes it (that first touch only wakes, so it can't press "Main
-        // menu" by accident); it dims again after WAKE_MS without touches. Menus/dialogs keep it bright.
-        var awake by remember { mutableStateOf(false) }
+        // Bright for the chosen delay (Settings → Bottom screen) after the game starts and after every
+        // touch, then dim or black depending on the mode. A touch on a dimmed/black screen only wakes it
+        // (so it can't press "Main menu" by accident). Menus, dialogs and the editor keep it bright.
+        val screenMode = remember { prefs.bottomScreenMode }
+        val delayMs = remember { prefs.dimDelaySeconds * 1000L }
+        var autoDim by remember { mutableStateOf(screenMode != BottomScreen.Mode.ON) }
+        var idle by remember { mutableStateOf(false) }
         var lastTouch by remember { mutableLongStateOf(0L) }
-        LaunchedEffect(lastTouch) {
-            if (!awake) return@LaunchedEffect
-            delay(WAKE_MS)
-            awake = false
-        }
         val overlayOpen = confirmExit || restartAction != null || helperPrompt != null || busy != null
-        // While the brightness slider is open, show the level being picked.
-        val bright = !showBrightness && (!started || mode != Mode.VIEW || awake || overlayOpen)
-        val dimmedNow by rememberUpdatedState(!bright && !showBrightness)
-        LaunchedEffect(bright, brightness) {
-            setWindowBrightness(if (bright) WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE else Prefs.windowBrightness(brightness))
+        val keepBright = mode != Mode.VIEW || overlayOpen || showBrightness
+        LaunchedEffect(startedAt, lastTouch, autoDim, keepBright) {
+            idle = false
+            if (!autoDim || keepBright) return@LaunchedEffect
+            delay(delayMs)
+            idle = true
         }
+        val look = BottomScreen.look(screenMode, autoDim, idle, screenOff, keepBright)
+        val dimmedNow by rememberUpdatedState(look != BottomScreen.Look.BRIGHT)
+
+        // Window brightness: the system level when bright; while the panel is open, the level being
+        // picked. Changes fade over FADE_MS instead of snapping.
+        val target: Float? = when {
+            showBrightness -> Prefs.windowBrightness(brightness)
+            look == BottomScreen.Look.BRIGHT -> null
+            look == BottomScreen.Look.DIM -> Prefs.windowBrightness(brightness)
+            else -> Prefs.windowBrightness(0)
+        }
+        val level = remember { Animatable(-1f) } // -1 = follow the system brightness
+        LaunchedEffect(target) {
+            val to = target ?: systemBrightness()
+            if (showBrightness) {
+                level.snapTo(to); setWindowBrightness(to)
+                return@LaunchedEffect
+            }
+            if (level.value < 0f) level.snapTo(systemBrightness())
+            level.animateTo(to, tween(BottomScreen.FADE_MS)) { setWindowBrightness(value) }
+            if (target == null) {
+                level.snapTo(-1f)
+                setWindowBrightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
+            }
+        }
+        val blackAlpha by animateFloatAsState(if (look == BottomScreen.Look.BLACK) 1f else 0f, tween(BottomScreen.FADE_MS), label = "black")
         // Firmwares that ignore per-display brightness still get darker pixels at the lowest settings.
-        val contentAlpha = if (!bright && brightness <= 5) 0.6f else 1f
+        val contentAlpha = if (look == BottomScreen.Look.DIM && brightness <= 5) 0.6f else 1f
 
         Box(
             Modifier.fillMaxSize().pointerInput(Unit) {
@@ -344,7 +375,7 @@ class NowPlayingActivity : ComponentActivity() {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         if (dimmedNow) event.changes.forEach { it.consume() }
-                        awake = true
+                        screenOff = false
                         lastTouch = SystemClock.uptimeMillis()
                     }
                 }
@@ -371,7 +402,6 @@ class NowPlayingActivity : ComponentActivity() {
                     Box(Modifier.align(Alignment.CenterEnd)) {
                         BrightnessPill(brightness, open = showBrightness) {
                             showBrightness = !showBrightness
-                            started = true // show the chosen brightness right away
                         }
                     }
                 }
@@ -409,16 +439,18 @@ class NowPlayingActivity : ComponentActivity() {
                 }
             }
 
-            // The brightness panel closes by itself 1 s after the last touch (or by tapping outside it).
+            // The brightness panel closes by itself 4 s after the last touch (or by tapping outside it).
             if (showBrightness) {
-                LaunchedEffect(lastBrightnessTouch) {
-                    delay(1000)
+                LaunchedEffect(lastTouch) {
+                    delay(4000)
                     showBrightness = false
                 }
                 BrightnessPanel(
                     value = brightness,
-                    onChange = { brightness = it; prefs.brightnessPercent = it; lastBrightnessTouch = SystemClock.uptimeMillis() },
-                    onDone = { lastBrightnessTouch = SystemClock.uptimeMillis() },
+                    onChange = { brightness = it; prefs.brightnessPercent = it },
+                    autoDim = autoDim,
+                    onAutoDim = { autoDim = it },
+                    onScreenOff = { showBrightness = false; screenOff = true },
                     onDismiss = { showBrightness = false },
                 )
             }
@@ -458,6 +490,19 @@ class NowPlayingActivity : ComponentActivity() {
                 )
             }
 
+            // Screen off (button or the "Screen off" mode): black, with a hint that fades out after 2 s.
+            if (blackAlpha > 0f) {
+                var hint by remember { mutableStateOf(true) }
+                LaunchedEffect(Unit) { delay(2000); hint = false }
+                val hintAlpha by animateFloatAsState(if (hint) 1f else 0f, tween(600), label = "hint")
+                Box(Modifier.fillMaxSize().alpha(blackAlpha).background(Color.Black), contentAlignment = Alignment.Center) {
+                    Column(Modifier.alpha(hintAlpha), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Filled.PowerSettingsNew, null, tint = Color(0xFF5A626C), modifier = Modifier.size(30.dp))
+                        Text("Screen off · tap to wake", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF5A626C), modifier = Modifier.padding(top = 6.dp))
+                    }
+                }
+            }
+
             busy?.let { msg ->
                 Box(Modifier.fillMaxSize().background(Color(0xCC000000)), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -470,28 +515,43 @@ class NowPlayingActivity : ComponentActivity() {
 
     }
 
-    /** The 0-100 slider under the brightness pill. Tapping outside closes it. */
+    /** The panel under the brightness pill: dimmed brightness, Auto-dim for this session, Turn screen off. */
     @Composable
-    private fun BrightnessPanel(value: Int, onChange: (Int) -> Unit, onDone: () -> Unit, onDismiss: () -> Unit) {
+    private fun BrightnessPanel(
+        value: Int, onChange: (Int) -> Unit, autoDim: Boolean, onAutoDim: (Boolean) -> Unit,
+        onScreenOff: () -> Unit, onDismiss: () -> Unit,
+    ) {
+        val c = LocalWii.current
         Box(Modifier.fillMaxSize().clickable(onClick = onDismiss)) {
             Column(
-                Modifier.align(Alignment.TopEnd).padding(top = 74.dp, end = 10.dp).width(250.dp)
-                    .clip(RoundedCornerShape(16.dp)).background(LocalWii.current.card)
-                    .border(2.dp, LocalWii.current.cardBorder, RoundedCornerShape(16.dp))
+                Modifier.align(Alignment.TopEnd).padding(top = 74.dp, end = 10.dp).width(262.dp)
+                    .clip(RoundedCornerShape(16.dp)).background(c.card)
+                    .border(2.dp, c.cardBorder, RoundedCornerShape(16.dp))
                     .clickable(enabled = false) {}.padding(horizontal = 16.dp, vertical = 12.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Brightness", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text("Brightness when dimmed", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     Text("$value", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Glow.Yellow)
                 }
                 Slider(
-                    value = value.toFloat(), onValueChange = { onChange(it.toInt()) }, onValueChangeFinished = onDone, valueRange = 0f..100f,
-                    colors = SliderDefaults.colors(thumbColor = Glow.Yellow, activeTrackColor = Glow.Yellow, inactiveTrackColor = LocalWii.current.cardBorder),
+                    value = value.toFloat(), onValueChange = { onChange(it.toInt()) }, valueRange = 0f..100f,
+                    colors = SliderDefaults.colors(thumbColor = Glow.Yellow, activeTrackColor = Glow.Yellow, inactiveTrackColor = c.cardBorder),
                 )
                 Row {
                     Text("0", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                     Text("100", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                Box(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(1.dp).background(c.cardBorder))
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onAutoDim(!autoDim) }) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Auto-dim", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("Just for this game session", fontSize = 11.sp, color = c.textDim)
+                    }
+                    Switch(checked = autoDim, onCheckedChange = onAutoDim)
+                }
+                Spacer(Modifier.height(8.dp))
+                SecondaryGlowButton("Turn screen off", Icons.Filled.PowerSettingsNew, onClick = onScreenOff, modifier = Modifier.fillMaxWidth(), fontSize = 14.sp)
+                Text("Tap anywhere to turn it back on", fontSize = 10.sp, color = c.textDim, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
             }
         }
     }

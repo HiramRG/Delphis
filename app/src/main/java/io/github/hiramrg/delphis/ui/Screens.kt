@@ -1,5 +1,6 @@
 package io.github.hiramrg.delphis.ui
 
+import io.github.hiramrg.delphis.core.BottomScreen
 import android.view.KeyEvent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -31,6 +32,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.onFocusChanged
@@ -1141,14 +1143,74 @@ private fun ClosingSettings(act: MainActivity) {
 @Composable
 private fun BottomScreenSettings(act: MainActivity) {
     val prefs = act.prefs
+    val c = LocalWii.current
+    var screenMode by remember { mutableStateOf(prefs.bottomScreenMode) }
+    var delaySec by remember { mutableIntStateOf(prefs.dimDelaySeconds) }
     var brightness by remember { mutableFloatStateOf(prefs.brightnessPercent.toFloat()) }
-    var delaySec by remember { mutableFloatStateOf(prefs.dimDelaySeconds.toFloat()) }
     var swap by remember { mutableStateOf(prefs.swapScreens) }
-    Text("Brightness while playing: ${brightness.toInt()} (also changeable in game)", fontSize = 14.sp)
-    Slider(value = brightness, onValueChange = { brightness = it }, onValueChangeFinished = { prefs.brightnessPercent = brightness.toInt() }, valueRange = 0f..100f)
-    Text("Dim after: ${delaySec.toInt()} s", fontSize = 14.sp)
-    Slider(value = delaySec, onValueChange = { delaySec = it; prefs.dimDelaySeconds = it.toInt() }, valueRange = 0f..15f, steps = 14)
+    val pick: (BottomScreen.Mode) -> Unit = { screenMode = it; prefs.bottomScreenMode = it }
+    Text("While you play", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        ScreenModeCard("Always on", "Never dims", BottomScreen.Mode.ON, screenMode, pick, Modifier.weight(1f))
+        ScreenModeCard("Dim", "Lowers brightness", BottomScreen.Mode.DIM, screenMode, pick, Modifier.weight(1f))
+        ScreenModeCard("Screen off", "Goes black", BottomScreen.Mode.OFF, screenMode, pick, Modifier.weight(1f))
+    }
+    if (screenMode != BottomScreen.Mode.ON) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(if (screenMode == BottomScreen.Mode.OFF) "Off after" else "Dim after", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(96.dp))
+            BottomScreen.DELAYS.forEach { sec ->
+                WiiChip(BottomScreen.delayLabel(sec), selected = delaySec == sec, onClick = { delaySec = sec; prefs.dimDelaySeconds = sec })
+            }
+        }
+    }
+    if (screenMode == BottomScreen.Mode.DIM) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Dimmed level", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(104.dp))
+            Slider(
+                value = brightness, onValueChange = { brightness = it }, onValueChangeFinished = { prefs.brightnessPercent = brightness.toInt() },
+                valueRange = 0f..100f, modifier = Modifier.weight(1f),
+            )
+            Text("${brightness.toInt()}", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.End, modifier = Modifier.width(34.dp))
+        }
+    }
+    Text(
+        "Touching the screen lights it up again for the full time; the first touch only wakes it. In game, tap the brightness pill " +
+            "to turn Auto-dim off just for that game, or to turn the bottom screen off.",
+        fontSize = 12.sp, color = c.textDim,
+    )
     SwitchRow("Swap top and bottom screens", "Use if games open on the small screen.", swap) { swap = it; prefs.swapScreens = it }
+}
+
+/** One of the three "While you play" choices, with a tiny picture of the in-game screen in that state. */
+@Composable
+private fun ScreenModeCard(
+    title: String, sub: String, value: BottomScreen.Mode, current: BottomScreen.Mode,
+    onPick: (BottomScreen.Mode) -> Unit, modifier: Modifier = Modifier,
+) {
+    val c = LocalWii.current
+    val selected = value == current
+    WiiCard(modifier, selected = selected, radius = 16.dp, padding = 6.dp, onClick = { onPick(value) }) {
+        val bg = if (value == BottomScreen.Mode.OFF) Color.Black else DarkWii.bg
+        val a = when (value) { BottomScreen.Mode.ON -> 1f; BottomScreen.Mode.DIM -> 0.35f; BottomScreen.Mode.OFF -> 0f }
+        Column(
+            Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(10.dp)).background(bg)
+                .border(2.dp, c.cardBorder, RoundedCornerShape(10.dp)).padding(horizontal = 8.dp, vertical = 6.dp).alpha(a),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Box(Modifier.fillMaxWidth(0.6f).height(6.dp).align(Alignment.CenterHorizontally).clip(RoundedCornerShape(3.dp)).background(DarkWii.text))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box(Modifier.weight(1f).height(16.dp).clip(RoundedCornerShape(4.dp)).background(DarkWii.card).border(1.dp, DarkWii.cardBorder, RoundedCornerShape(4.dp)))
+                Box(Modifier.size(16.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFE5484D)))
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+            RadioButton(selected = selected, onClick = { onPick(value) })
+            Column {
+                Text(title, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                Text(sub, fontSize = 10.sp, color = c.textDim, maxLines = 1)
+            }
+        }
+    }
 }
 
 @Composable
