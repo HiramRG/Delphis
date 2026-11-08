@@ -465,8 +465,11 @@ private fun HomeBar(act: MainActivity) {
                 .clickable { act.screen = Screen.Settings },
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.Filled.Settings, "Settings", tint = c.textDim) }
-        Text(rememberClock(withDate = true), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
-        Text(act.homeHint ?: "Ⓐ Play · Ⓧ Controls · Ⓨ Favorite · L1 Library", fontSize = 12.sp, color = c.textDim)
+        Text(rememberClock(withDate = true), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.weight(1f))
+        Text(act.homeHint ?: "Ⓐ Play · Ⓧ Controls · Ⓨ Favorite · L1 Library", fontSize = 12.sp, color = c.textDim, maxLines = 1)
+        // The top screen is full screen, so Android's status icons live here instead.
+        Box(Modifier.padding(start = 10.dp).width(2.dp).height(26.dp).background(c.barBorder))
+        SystemStatusIcons(Modifier.padding(start = 10.dp))
     }
 }
 

@@ -144,6 +144,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        goFullScreen()
         prefs = Prefs(this)
         bridge = DolphinBridge(this, prefs)
         library = GameLibrary(this, prefs)
@@ -328,8 +329,31 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Full screen on the top display: Android's status bar and gesture line are hidden (Home's bar
+     * shows the time, battery, Wi-Fi etc. instead). A swipe from the edge shows them for a moment,
+     * over the app rather than pushing it around.
+     */
+    private fun goFullScreen() {
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (android.os.Build.VERSION.SDK_INT >= 28) window.attributes = window.attributes.apply {
+            layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+        androidx.core.view.WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Dialogs, the keyboard or the system pickers can bring the bars back; hide them again.
+        if (hasFocus) goFullScreen()
+    }
+
     override fun onResume() {
         super.onResume()
+        goFullScreen()
         setupVersion++ // re-read things that can change in system settings (e.g. the close-games helper)
         // The game list showing up while a game is running (and Delphis didn't close it) means
         // Dolphin's game screen went away, most likely because Dolphin crashed.
