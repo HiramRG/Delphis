@@ -155,9 +155,13 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
         coverTitle?.text = title.orEmpty()
         val file = gameId?.let { File(service.filesDir, "covers-hq/$it.png") }?.takeIf { it.exists() }
         val bmp = file?.let { f ->
-            runCatching { BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = 2 }) }.getOrNull()
+            // Full resolution (the HQ covers are about 350×500, about what the 150×206 dp frame needs
+            // on the Thor), so the cover is as sharp as in the library.
+            runCatching { BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }) }.getOrNull()
         }
-        coverView?.setImageBitmap(bmp)
+        coverView?.setImageDrawable(bmp?.let {
+            android.graphics.drawable.BitmapDrawable(service.resources, it).apply { setFilterBitmap(true); setDither(true) }
+        })
         coverView?.visibility = if (bmp != null) View.VISIBLE else View.GONE
     }
 
