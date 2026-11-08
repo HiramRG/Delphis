@@ -11,6 +11,7 @@ object WhatsNew {
 
     val items = listOf(
         Item("Full-screen menus.", "The top screen now uses the whole display: Android's status bar is hidden, and Home's bar shows the battery, Wi-Fi, Bluetooth audio and Do Not Disturb next to the clock. Swipe down from the top edge to see Android's bar for a moment."),
+        Item("Clearer controls map.", "The Thor in the controls map now has its real shape, the map is balanced on the screen, shoulder buttons are labelled above their tabs and Select / Start on the screen next to their buttons. On the game page and in game."),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */
