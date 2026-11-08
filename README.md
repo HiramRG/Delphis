@@ -32,7 +32,7 @@ Pick a game and Delphis sets up the controls that suit it (pointer, sideways Wii
 * **Top screen:** Delphis' menus, then the game in Dolphin.
 * **Bottom screen in the menus:** quick tiles, a touch picker for control styles, and details for the game you're on.
 * **Bottom screen while playing:** big tiles for the main buttons (colour-coded A, B, X, Y), the rest in a short list, plus *Change controls*, *Edit preset* and *Main menu*. A thin bar shows the time and battery.
-* **It dims itself** after a few seconds to save battery. Touch it to light it up; it dims again 1.5 s after you stop. It never takes the controller away from Dolphin.
+* **It dims itself** 10 seconds after your last touch to save battery (or stays on, or goes black: Settings → Bottom screen). Touch it to light it up. The brightness pill turns Auto-dim off for one game or turns the screen off. It never takes the controller away from Dolphin.
 
 ### Autosave and resume
 * When you close a game from Delphis, it saves a Dolphin save state first, and the next time you start that game from Delphis, it continues from there. You can turn this off in *Settings → Closing games*.
