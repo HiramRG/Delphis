@@ -327,6 +327,29 @@ class NowPlayingActivity : ComponentActivity() {
         LaunchedEffect(startedAt) { DolphinExitService.trackpadReset() }
         val fade by animateFloatAsState(if (padActive) 0.25f else 1f, tween(200), label = "padFade")
 
+        // RetroAchievements: unlock badges (top screen over the game, bottom screen here, or both) and the 🏆 list.
+        val achievements = rememberAchievements(prefs, s.key, s.info)
+        var showAchievements by remember { mutableStateOf(false) }
+        var bottomPopup by remember { mutableStateOf<io.github.hiramrg.delphis.platform.Achievements.Popup?>(null) }
+        LaunchedEffect(startedAt) {
+            val ctx = this@NowPlayingActivity
+            io.github.hiramrg.delphis.platform.Achievements.watch(ctx, prefs, s.key, s.info) { popup ->
+                val where = prefs.raWhere
+                var shownOnTop = false
+                if (where != "bottom") {
+                    val badge = io.github.hiramrg.delphis.platform.Achievements.badge(ctx, popup.unlock.badgeUrl())
+                    shownOnTop = DolphinExitService.showAchievement(popup, badge, topDisplay)
+                }
+                // Bottom screen when chosen, or when the top-screen helper isn't on.
+                if (where != "top" || !shownOnTop) {
+                    bottomPopup = popup
+                    delay(5_000)
+                    bottomPopup = null
+                    delay(400)
+                }
+            }
+        }
+
         // Turned off with "Turn screen off" in the brightness panel; the next touch wakes it.
         var screenOff by remember { mutableStateOf(false) }
         // Android's back gesture must never just hide this screen and leave the game running
@@ -362,7 +385,7 @@ class NowPlayingActivity : ComponentActivity() {
         val dimmedNow by rememberUpdatedState(look != BottomScreen.Look.BRIGHT)
         // Touches on the trackpad aim; they never wake, dim or get swallowed.
         val padHit by rememberUpdatedState<(androidx.compose.ui.geometry.Offset) -> Boolean> { p ->
-            mode == Mode.VIEW && padView && padBounds?.contains(p) == true
+            mode == Mode.VIEW && padView && !showAchievements && padBounds?.contains(p) == true
         }
 
         // Window brightness: the system level when bright; while the panel is open, the level being
@@ -412,7 +435,7 @@ class NowPlayingActivity : ComponentActivity() {
                         HomePill { if (prefs.skipExitWarning) backToMainMenu() else confirmExit = true }
                     }
                     Column(
-                        Modifier.align(Alignment.Center).padding(horizontal = 104.dp),
+                        Modifier.align(Alignment.Center).padding(horizontal = if (achievements != null) 150.dp else 104.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(s.info.title, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
@@ -422,7 +445,10 @@ class NowPlayingActivity : ComponentActivity() {
                             color = if (s.applied) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.tertiary,
                         )
                     }
-                    Box(Modifier.align(Alignment.CenterEnd)) {
+                    Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (achievements != null && mode == Mode.VIEW) AchievementsChip(
+                            achievements, onClick = { showAchievements = !showAchievements }, compact = true, active = showAchievements,
+                        )
                         BrightnessPill(brightness, open = showBrightness) {
                             showBrightness = !showBrightness
                         }
@@ -447,7 +473,14 @@ class NowPlayingActivity : ComponentActivity() {
                 // ---------------- middle
                 when (mode) {
                     // Same Thor button map as the game page.
-                    Mode.VIEW -> if (!preset.isTrackpad) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
+                    Mode.VIEW -> if (showAchievements && achievements != null) {
+                        val shape = RoundedCornerShape(16.dp)
+                        AchievementList(
+                            achievements,
+                            Modifier.weight(1f).fillMaxWidth().clip(shape).background(Color(0xFF1F242A)).border(2.dp, Color(0xFF6B5A2E), shape).padding(8.dp),
+                            onClose = { showAchievements = false },
+                        )
+                    } else if (!preset.isTrackpad) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
                         ControlsMap(preset, Modifier.fillMaxSize())
                     } else Column(Modifier.weight(1f).fillMaxWidth()) {
                         SegmentedPill(
@@ -513,6 +546,8 @@ class NowPlayingActivity : ComponentActivity() {
                     }
                 }
             }
+
+            UnlockToast(bottomPopup, Modifier.align(Alignment.TopCenter).padding(start = 10.dp, end = 10.dp, top = 30.dp))
 
             // The brightness panel closes by itself 4 s after the last touch (or by tapping outside it).
             if (showBrightness) {

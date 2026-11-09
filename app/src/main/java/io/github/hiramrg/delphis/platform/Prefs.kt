@@ -209,6 +209,27 @@ class Prefs(context: Context) {
     fun trackpadSpeed(gameKey: String) = io.github.hiramrg.delphis.core.Trackpad.Speed.of(sp.getString("trackpad_speed_$gameKey", null))
     fun setTrackpadSpeed(gameKey: String, speed: io.github.hiramrg.delphis.core.Trackpad.Speed) = sp.edit().putString("trackpad_speed_$gameKey", speed.id).apply()
 
+    // ---- RetroAchievements (Settings → Achievements)
+    var raUser: String?
+        get() = sp.getString("ra_user", null)
+        set(v) = sp.edit().putString("ra_user", v).apply()
+    var raKey: String?
+        get() = sp.getString("ra_key", null)
+        set(v) = sp.edit().putString("ra_key", v).apply()
+    var raPopups: Boolean
+        get() = sp.getBoolean("ra_popups", true)
+        set(v) = sp.edit().putBoolean("ra_popups", v).apply()
+    /** Where unlock badges show: "top", "bottom" or "both". */
+    var raWhere: String
+        get() = sp.getString("ra_where", "top") ?: "top"
+        set(v) = sp.edit().putString("ra_where", v).apply()
+    var raList: Boolean
+        get() = sp.getBoolean("ra_list", true)
+        set(v) = sp.edit().putBoolean("ra_list", v).apply()
+    /** RA game id learned for a game (0 = looked up, no achievement set). */
+    fun raGameId(gameKey: String): Int? = if (sp.contains("ra_game_$gameKey")) sp.getInt("ra_game_$gameKey", 0) else null
+    fun setRaGameId(gameKey: String, id: Int) = sp.edit().putInt("ra_game_$gameKey", id).apply()
+
     fun presetFor(gameKey: String): String? = sp.getString("preset_$gameKey", null)
     fun setPresetFor(gameKey: String, presetId: String?) = sp.edit().putString("preset_$gameKey", presetId).apply()
 

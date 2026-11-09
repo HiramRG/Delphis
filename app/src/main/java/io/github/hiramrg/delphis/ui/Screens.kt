@@ -714,6 +714,11 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         )
     }
 
+    // RetroAchievements: 🏆 chip under the cover, list in a dialog (tap or R3).
+    val achievements = rememberAchievements(act.prefs, game.key, game.info)
+    var showAchievements by remember { mutableStateOf(false) }
+    if (showAchievements && achievements != null) AchievementsDialog(achievements) { showAchievements = false }
+
     // Physical buttons: A / Start = Play, D-pad or left stick = pick a preset, X = Edit, Y = Remember,
     // L1 = autosave on/off for this game, R1 = remember controls on/off, Y = earlier autosaves. B = Back.
     val onKey by rememberUpdatedState<(KeyEvent) -> Boolean> { e ->
@@ -727,6 +732,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             KeyEvent.KEYCODE_BUTTON_X -> { if (e.repeatCount == 0 && p.selected != null) p.editing = true; true }
             KeyEvent.KEYCODE_BUTTON_Y -> { if (e.repeatCount == 0 && backups.isNotEmpty()) showBackups = true; true }
             KeyEvent.KEYCODE_BUTTON_SELECT -> { if (e.repeatCount == 0 && multiplayer) showPlayers = true; multiplayer }
+            KeyEvent.KEYCODE_BUTTON_THUMBR -> { if (e.repeatCount == 0 && achievements != null) showAchievements = true; achievements != null }
             else -> false
         }
     }
@@ -743,6 +749,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             }
             Text(game.info.title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(platformLabel(game.info.platform) + " · " + playSummary(act, game), fontSize = 11.sp, color = c.textDim, maxLines = 2)
+            achievements?.let { AchievementsChip(it, onClick = { showAchievements = true }) }
             if (rememberHasAutosave(act, game)) Text("▶ Continues from your autosave", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.accentText)
             if (backups.isNotEmpty()) Text(
                 "↺ Earlier autosaves (${backups.size}) · Ⓨ", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.textDim,
@@ -788,7 +795,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                 WiiButton("Ⓧ Edit", onClick = { p.editing = true }, enabled = sel != null)
                 WiiButton(if (sel == null) "Choose a style" else "Ⓐ Play", onClick = { p.play() }, primary = true, enabled = sel != null, fontSize = 17.sp)
             }
-            HintLine("Ⓐ Play · ✚ choose · Ⓧ Edit" + (if (canAutosave) " · L1 Autosave" else "") + " · R1 Remember" + (if (backups.isNotEmpty()) " · Ⓨ Earlier autosaves" else "") + (if (multiplayer) " · ⊖ Players" else "") + " · Ⓑ Back")
+            HintLine("Ⓐ Play · ✚ choose · Ⓧ Edit" + (if (canAutosave) " · L1 Autosave" else "") + " · R1 Remember" + (if (backups.isNotEmpty()) " · Ⓨ Earlier autosaves" else "") + (if (multiplayer) " · ⊖ Players" else "") + (if (achievements != null) " · R3 Achievements" else "") + " · Ⓑ Back")
         }
     }
 }
@@ -955,7 +962,7 @@ fun SetupScreen(act: MainActivity) {
 
 enum class SettingsSection(val label: String) {
     APPEARANCE("Appearance"), SOUND("Sound"), CONTROLS("Controls"), GYRO("Gyro aiming"), CLOSING("Closing games"),
-    BOTTOM("Bottom screen"), LIBRARY("Library & folders"), FRONTENDS("Frontends"), UPDATES("Updates"), HELP("Diagnostics"),
+    BOTTOM("Bottom screen"), ACHIEVEMENTS("Achievements"), LIBRARY("Library & folders"), FRONTENDS("Frontends"), UPDATES("Updates"), HELP("Diagnostics"),
 }
 
 @Composable
@@ -982,6 +989,7 @@ fun SettingsScreen(act: MainActivity) {
                 SettingsSection.GYRO -> GyroSettings(act)
                 SettingsSection.CLOSING -> ClosingSettings(act)
                 SettingsSection.BOTTOM -> BottomScreenSettings(act)
+                SettingsSection.ACHIEVEMENTS -> AchievementsSettings(act) { t, sub, on, change -> SwitchRow(t, sub, on, change) }
                 SettingsSection.LIBRARY -> LibrarySettings(act)
                 SettingsSection.FRONTENDS -> FrontendSettings(act)
                 SettingsSection.UPDATES -> UpdatePanel(act)

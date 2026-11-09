@@ -59,6 +59,13 @@ class DolphinExitService : AccessibilityService() {
             return true
         }
 
+        /** The unlock badge over the game on the top screen. False without the service. */
+        fun showAchievement(popup: Achievements.Popup, badge: android.graphics.Bitmap?, displayId: Int?): Boolean {
+            val s = instance ?: return false
+            s.handler.post { s.achievementToast.show(popup, badge, displayId) }
+            return true
+        }
+
         fun hideLoading(delayMs: Long = 0) { instance?.let { s -> s.handler.post { s.loading.hide(delayMs) } } }
 
         // ---- bottom-screen trackpad: served to Dolphin as a DSU pad (see DsuServer); kept here for the callers
@@ -97,6 +104,7 @@ class DolphinExitService : AccessibilityService() {
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val loading by lazy { LoadingOverlay(this) }
+    private val achievementToast by lazy { AchievementToast(this) }
     private val checkGame = Runnable {
         if (GameWatch.session == null || GameLauncher.busy) return@Runnable
         val stillShowing = DolphinBridge.KNOWN_PACKAGES.any { find(it, "frame_emulation_fragment") != null }
