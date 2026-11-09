@@ -192,6 +192,11 @@ class Prefs(context: Context) {
         get() = sp.getString("last_applied", null)
         set(v) = sp.edit().putString("last_applied", v).apply()
 
+    /** Dolphin has been set up to read Delphis' trackpad server, so the server starts with the app. */
+    var trackpadServerSetUp: Boolean
+        get() = sp.getBoolean("trackpad_dsu", false)
+        set(v) = sp.edit().putBoolean("trackpad_dsu", v).apply()
+
     /** One-time check per controller (by descriptor): true = reports buttons by letter, false = by position, null = not checked. */
     fun padByLabel(key: String): Boolean? = if (sp.contains("pad_by_label_$key")) sp.getBoolean("pad_by_label_$key", false) else null
     fun setPadByLabel(key: String, byLabel: Boolean) = sp.edit().putBoolean("pad_by_label_$key", byLabel).apply()

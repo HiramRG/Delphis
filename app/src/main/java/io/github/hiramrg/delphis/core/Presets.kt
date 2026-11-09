@@ -478,15 +478,14 @@ object PresetLibrary {
      */
     private fun withTrackpad(base: Preset, id: String, summary: String) = base.copy(
         id = id, name = "Trackpad Aiming (Experimental)", summary = summary,
-        // Nothing else may drive the pointer: Dolphin drops its touch override as soon as the mapped
-        // IR value changes at all (InputOverrider: normal_state != controller_state), so a right stick on
-        // the pointer, drifting even slightly in relative mode, kept snapping the pointer back.
+        // The pointer only follows the trackpad (DolphinConfigWriter puts Delphis' DSU touchpad on IR);
+        // the right stick and R3 are left free.
         mappings = base.mappings.filter { it.control != ThorControl.RIGHT_STICK && it.control != ThorControl.R3 },
         options = base.options + mapOf(TRACKPAD_OPTION to "True", "IR/Relative Input" to "False"),
         tips = listOf(
             "Slide a finger on the bottom screen to aim; the pointer moves from where it is, like a laptop trackpad.",
             "Double-tap the pad (or press Recenter) to put the pointer back in the middle.",
-            "First time only: force-stop Dolphin (Android Settings → Apps → Dolphin → Force stop) so it picks up the trackpad setting.",
+            "First time only: force-stop Dolphin (Android Settings → Apps → Dolphin → Force stop) so it connects to Delphis' trackpad.",
         ),
     )
 

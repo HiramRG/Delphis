@@ -41,6 +41,14 @@ object DolphinConfigWriter {
 
         val lines = linkedMapOf<String, String>()
         for ((key, exprs) in bindings) lines[key] = exprs.joinToString(" | ")
+        // Trackpad presets: the pointer follows the bottom-screen trackpad, which Delphis serves to Dolphin
+        // as a DSU pad's touchpad (platform/DsuServer). Absolute: Dolphin already adds up the touch movement.
+        if (preset.isTrackpad) {
+            lines["IR/Up"] = "`${Dsu.DEVICE}:Touch Y-`"
+            lines["IR/Down"] = "`${Dsu.DEVICE}:Touch Y+`"
+            lines["IR/Left"] = "`${Dsu.DEVICE}:Touch X-`"
+            lines["IR/Right"] = "`${Dsu.DEVICE}:Touch X+`"
+        }
         // Not a Dolphin input: the gyro expressions read it to pause aiming while it's held.
         val hold = lines.remove(GYRO_HOLD)
         // "Delphis/…" options are Delphis' own (e.g. the trackpad switch), not Dolphin keys.
@@ -201,24 +209,23 @@ object DolphinConfigWriter {
         IniEditor(existing).apply { set("Core", mapOf("EnableSaveStates" to "True")) }.toString()
 
     /**
-     * Dolphin's touch overlay set up as an invisible trackpad target for the Wii pointer: overlay on
-     * (Dolphin only registers its touch pointer then), every Wii Remote / Nunchuk button hidden (so a
-     * relayed touch can never press one), pointer in Follow mode (Delphis tracks the position, see
-     * TrackpadRelay) and never recentred on release. Keys from Dolphin's IntSetting / BooleanSetting.
+     * Dolphin.ini for trackpad presets: Dolphin's own touch pointer off (`[Android] IRMode = 0`), so a
+     * finger on the top screen can't take the pointer over from the trackpad. (Older builds turned it on
+     * and hid the overlay buttons; those settings are left as they are.)
      */
-    fun trackpadOverlay(existing: String): String = IniEditor(existing).apply {
-        // IR mode 1 = Follow: the pointer goes where the (relayed) touch is. Delphis keeps the absolute
-        // position itself, so every relayed touch puts the pointer exactly there. (Drag mode, 2, only adds
-        // movement and loses track whenever a touch is cancelled: Dolphin ignores ACTION_CANCEL.)
-        set("Android", mapOf("ShowInputOverlay" to "True", "IRMode" to "1", "IRAlwaysRecenter" to "False", "OverlayWiiController" to "4"))
-        set("AndroidOverlayButtons", TRACKPAD_HIDDEN_BUTTONS.associateWith { "False" })
+    fun trackpadDolphinIni(existing: String): String = IniEditor(existing).apply {
+        set("Android", mapOf("IRMode" to "0"))
     }.toString()
 
-    val TRACKPAD_HIDDEN_BUTTONS = listOf(
-        "ButtonToggleWiimoteButtonA", "ButtonToggleWiimoteButtonB", "ButtonToggleWiimoteButton1", "ButtonToggleWiimoteButton2",
-        "ButtonToggleWiimoteButtonPlus", "ButtonToggleWiimoteButtonMinus", "ButtonToggleWiimoteButtonHome", "ButtonToggleWiimoteDPad",
-        "ButtonToggleNunchukC", "ButtonToggleNunchukZ", "ButtonToggleNunchukStick",
-    )
+    /** Config/DSUClient.ini with Delphis' trackpad server added to Dolphin's DSU servers (keeping any others). */
+    fun dsuClientIni(existing: String): String = IniEditor(existing).apply {
+        val entry = "${Dsu.SERVER_NAME}:127.0.0.1:${Dsu.PORT};"
+        val current = get("Server", "Entries").orEmpty()
+        val others = current.split(';').filter { it.isNotBlank() && !it.startsWith("${Dsu.SERVER_NAME}:") }.joinToString("") { "$it;" }
+        set("Server", mapOf("Enabled" to "True", "Entries" to others + entry))
+    }.toString()
+
+    const val DSU_CLIENT_INI = "Config/DSUClient.ini"
 
     /** Dolphin's Quick Save/Load slot: NativeLibrary.SaveState(9) → StateSaves/<GAMEID>.s09. */
     fun quickStatePath(gameId: String) = listOf("StateSaves", "$gameId.s09")

@@ -25,6 +25,8 @@ class CompanionApp : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashLog.install(this)
+        // Dolphin asks the trackpad server for its pad every second once it's set up; answer from the start.
+        if (runCatching { Prefs(this).trackpadServerSetUp }.getOrDefault(false)) DsuServer.ensureStarted()
     }
 
     override fun onTrimMemory(level: Int) {

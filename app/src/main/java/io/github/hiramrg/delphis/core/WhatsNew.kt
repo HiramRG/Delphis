@@ -5,12 +5,12 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 15
+    const val RELEASE = 16
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("Trackpad aiming fixed.", "The pointer no longer snaps back to the middle, reaches the edges, and Recenter / double tap put it back in the middle (a ring on the pad shows it). With a trackpad preset the right stick no longer aims; the trackpad does.", fix = true),
+        Item("New trackpad engine.", "The trackpad now talks to Dolphin directly, as a controller, instead of touching Dolphin's screen: smooth, reaches every edge, and can't set off Android's gestures. Force-stop Dolphin once (Android Settings → Apps → Dolphin → Force stop) so it connects to Delphis.", fix = true),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

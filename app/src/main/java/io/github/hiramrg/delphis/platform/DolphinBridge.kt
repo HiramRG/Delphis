@@ -61,19 +61,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
     }
 
     /** Writes the profile and points the game's INI at it. Safe to call before every launch. */
-    /** Trackpad presets: Dolphin's IR yaw / pitch widened to match the area the relayed touches use (see Trackpad.area). */
-    private fun withTrackpadReach(preset: Preset): Preset {
-        if (!preset.isTrackpad) return preset
-        return runCatching {
-            val top = DeviceInfo.screenRoles(context, prefs.swapScreens).topDisplayId
-            val d = context.getSystemService(android.hardware.display.DisplayManager::class.java).getDisplay(top)!!
-            val m = android.util.DisplayMetrics().also { @Suppress("DEPRECATION") d.getRealMetrics(it) }
-            Trackpad.withReach(preset, Trackpad.area(m.widthPixels.toFloat(), m.heightPixels.toFloat(), m.density))
-        }.getOrDefault(preset)
-    }
-
-    fun applyPreset(gameId: String, preset0: Preset, controller: ControllerProfile): ApplyResult {
-        val preset = withTrackpadReach(preset0)
+    fun applyPreset(gameId: String, preset: Preset, controller: ControllerProfile): ApplyResult {
         val tree = prefs.dolphinTreeUri ?: return ApplyResult.Failed("Dolphin's folder hasn't been connected yet.")
         return try {
             ensureBaseConfig(tree, controller)
@@ -144,8 +132,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         }.onFailure { CrashLog.event("players: couldn't set up players 2-4: ${it.message}") }
     }
 
-    fun applyGlobally(preset0: Preset, controller: ControllerProfile): ApplyResult {
-        val preset = withTrackpadReach(preset0)
+    fun applyGlobally(preset: Preset, controller: ControllerProfile): ApplyResult {
         val tree = prefs.dolphinTreeUri ?: return ApplyResult.Failed("Dolphin's folder hasn't been connected yet.")
         return try {
             writeText(tree, DolphinConfigWriter.profilePath(preset), DolphinConfigWriter.renderProfile(preset, controller))
@@ -338,18 +325,27 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
 
     /** Turns on Dolphin's "Enable Savestates" (Config/Dolphin.ini [Core]) so its Quick Save/Load buttons exist. */
     /**
-     * Sets Dolphin's touch overlay up as the trackpad's target (see DolphinConfigWriter.trackpadOverlay).
-     * Dolphin only reads Dolphin.ini when its app starts, so a running Dolphin picks it up after a restart.
+     * Trackpad presets: adds Delphis' trackpad server to Dolphin's DSU servers (Config/DSUClient.ini) and
+     * turns Dolphin's own touch pointer off (Dolphin.ini), then starts the server. Dolphin reads both
+     * files only when its app starts, so a running Dolphin picks them up after a force-stop.
      */
     private fun ensureTrackpadOverlay(tree: Uri) {
+        DsuServer.ensureStarted()
         runCatching {
-            val existing = readText(tree, DolphinConfigWriter.dolphinIniPath) ?: ""
-            val updated = DolphinConfigWriter.trackpadOverlay(existing)
-            if (updated != existing) {
-                writeText(tree, DolphinConfigWriter.dolphinIniPath, updated)
-                CrashLog.event("trackpad: Dolphin overlay set up (Follow mode, buttons hidden)")
-            }
-        }.onFailure { CrashLog.event("trackpad: couldn't set up Dolphin's overlay: ${it.message}") }
+            var changed = false
+            val ini = readText(tree, DolphinConfigWriter.dolphinIniPath) ?: ""
+            DolphinConfigWriter.trackpadDolphinIni(ini).let { if (it != ini) { writeText(tree, DolphinConfigWriter.dolphinIniPath, it); changed = true } }
+            val dsu = readText(tree, DolphinConfigWriter.DSU_CLIENT_INI) ?: ""
+            DolphinConfigWriter.dsuClientIni(dsu).let { if (it != dsu) { writeText(tree, DolphinConfigWriter.DSU_CLIENT_INI, it); changed = true } }
+            prefs.trackpadServerSetUp = true
+            if (changed) CrashLog.event("trackpad: Dolphin set up to read Delphis' trackpad (DSU server 127.0.0.1:${io.github.hiramrg.delphis.core.Dsu.PORT})")
+        }.onFailure { CrashLog.event("trackpad: couldn't set up Dolphin for the trackpad: ${it.message}") }
+    }
+
+    /** Config/DSUClient.ini, for Diagnostics. */
+    fun dsuClientSettings(): String? {
+        val tree = prefs.dolphinTreeUri ?: return null
+        return readText(tree, DolphinConfigWriter.DSU_CLIENT_INI)?.lines()?.filter { it.isNotBlank() }?.joinToString("\n") { "  $it" } ?: "  (no DSUClient.ini)"
     }
 
     /** [Android] and [AndroidOverlayButtons] of Dolphin.ini, for Diagnostics. */
