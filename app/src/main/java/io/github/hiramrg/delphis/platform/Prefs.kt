@@ -192,6 +192,10 @@ class Prefs(context: Context) {
         get() = sp.getString("last_applied", null)
         set(v) = sp.edit().putString("last_applied", v).apply()
 
+    /** One-time check per controller (by descriptor): true = reports buttons by letter, false = by position, null = not checked. */
+    fun padByLabel(key: String): Boolean? = if (sp.contains("pad_by_label_$key")) sp.getBoolean("pad_by_label_$key", false) else null
+    fun setPadByLabel(key: String, byLabel: Boolean) = sp.edit().putBoolean("pad_by_label_$key", byLabel).apply()
+
     /** Multiplayer: who plays a game, in which order (see core/Players). */
     fun playerSetup(gameKey: String) = io.github.hiramrg.delphis.core.PlayerSetup.decode(sp.getString("players_$gameKey", null))
     fun setPlayerSetup(gameKey: String, setup: io.github.hiramrg.delphis.core.PlayerSetup) = sp.edit().putString("players_$gameKey", setup.encode()).apply()

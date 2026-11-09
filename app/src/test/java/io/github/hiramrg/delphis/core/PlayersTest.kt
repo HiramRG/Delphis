@@ -93,4 +93,16 @@ class PlayersTest {
         PresetLibrary.ALL.forEach { assertEquals(it.name, presetTitleCase(it.name), it.name) }
         EmulatedController.entries.forEach { assertEquals(it.label, presetTitleCase(it.label)) }
     }
+
+    @Test
+    fun buttonLetterNotesOnlyForOtherLayouts() {
+        assertEquals(ButtonLabels.NINTENDO, ButtonLabels.forVendor(0x057e))
+        assertEquals(ButtonLabels.PLAYSTATION, ButtonLabels.forVendor(0x054c))
+        assertEquals(ButtonLabels.XBOX, ButtonLabels.forVendor(0x045e))
+        assertEquals(ButtonLabels.XBOX, ButtonLabels.forVendor(0x2dc8))
+        assertEquals(null, ButtonLabels.NINTENDO.note)
+        assertEquals("A and B, X and Y are swapped", ButtonLabels.XBOX.note)
+        assertEquals(ButtonLabels.NINTENDO, thor.labels)
+        assertEquals(ButtonLabels.XBOX, xbox.labels)
+    }
 }

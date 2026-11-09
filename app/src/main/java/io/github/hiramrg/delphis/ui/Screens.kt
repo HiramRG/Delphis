@@ -708,7 +708,10 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     LaunchedEffect(severalPlayers) { p.updateMultiplayer(severalPlayers) }
     var showPlayers by remember { mutableStateOf(false) }
     if (showPlayers && multiplayer) {
-        PlayersDialog(game.info.title, pads, playerSetup, onChange = { playerSetup = it; act.prefs.setPlayerSetup(gameId!!, it) }, onDismiss = { showPlayers = false })
+        PlayersDialog(
+            game.info.title, pads, playerSetup, onChange = { playerSetup = it; act.prefs.setPlayerSetup(gameId!!, it) }, onDismiss = { showPlayers = false },
+            onChecked = { pad, byLabel -> act.prefs.setPadByLabel(pad.key, byLabel) },
+        )
     }
 
     // Physical buttons: A / Start = Play, D-pad or left stick = pick a preset, X = Edit, Y = Remember,
@@ -756,6 +759,10 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             WiiCard(Modifier.fillMaxWidth().weight(1f), radius = 20.dp, padding = 12.dp) {
                 if (multiplayer) {
                     PlayersRow(io.github.hiramrg.delphis.core.Players.assign(pads, playerSetup), onChange = { showPlayers = true }, modifier = Modifier.fillMaxWidth())
+                    if (pads.any { !it.builtIn && it.byLabel == null }) Text(
+                        "New controller: press ⊖ to check its buttons once", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.orange,
+                        modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(6.dp)).clickable { showPlayers = true },
+                    )
                     Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(c.cardBorder))
                 }
                 if (companion && sel != null) {

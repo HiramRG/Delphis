@@ -81,7 +81,10 @@ fun PlayersRow(players: List<Pad>, onChange: (() -> Unit)?, modifier: Modifier =
  * out, B closes. Touch: tap a controller to play / sit out, ▲ ▼ to move it. Saved per game on every change.
  */
 @Composable
-fun PlayersDialog(title: String, pads: List<Pad>, setup: PlayerSetup, onChange: (PlayerSetup) -> Unit, onDismiss: () -> Unit) {
+fun PlayersDialog(
+    title: String, pads: List<Pad>, setup: PlayerSetup, onChange: (PlayerSetup) -> Unit, onDismiss: () -> Unit,
+    onChecked: (Pad, Boolean) -> Unit = { _, _ -> },
+) {
     val c = LocalWii.current
     val focus = remember { FocusRequester() }
     val arranged = Players.arranged(pads, setup)
@@ -100,6 +103,10 @@ fun PlayersDialog(title: String, pads: List<Pad>, setup: PlayerSetup, onChange: 
         index += d
     }
     fun padAt(i: Int) = arranged.getOrNull(i - if (thor != null) 1 else 0)
+    // One-time check: a new controller is asked for one press of its bottom face button.
+    var checked by remember { mutableStateOf(mapOf<String, Boolean>()) }
+    val pending = arranged.firstOrNull { !it.builtIn && it.byLabel == null && it.key !in checked }
+    fun record(p: Pad, byLabel: Boolean) { checked = checked + (p.key to byLabel); onChecked(p, byLabel) }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         val shape = RoundedCornerShape(20.dp)
@@ -108,6 +115,18 @@ fun PlayersDialog(title: String, pads: List<Pad>, setup: PlayerSetup, onChange: 
                 .focusRequester(focus).focusable()
                 .onPreviewKeyEvent { e ->
                     if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    if (pending != null) {
+                        val code = e.key.nativeKeyCode
+                        if (e.nativeKeyEvent.device?.descriptor == pending.key) {
+                            // Bottom button reported as Button A = by position (Android's usual way); as Button B = by letter.
+                            when (code) {
+                                AndroidKey.KEYCODE_BUTTON_A -> record(pending, false)
+                                AndroidKey.KEYCODE_BUTTON_B -> record(pending, true)
+                            }
+                            return@onPreviewKeyEvent true
+                        }
+                        if (code == AndroidKey.KEYCODE_BUTTON_B || code == AndroidKey.KEYCODE_BACK) { record(pending, false); return@onPreviewKeyEvent true }
+                    }
                     val pad = padAt(index)
                     when (e.key.nativeKeyCode) {
                         AndroidKey.KEYCODE_DPAD_DOWN -> { if (holding && pad != null) moveBy(pad, 1) else index = (index + 1).coerceAtMost(rows - 1); true }
@@ -128,6 +147,21 @@ fun PlayersDialog(title: String, pads: List<Pad>, setup: PlayerSetup, onChange: 
                 WiiButton("Ⓑ Done", onDismiss, fontSize = 13.sp)
             }
             val rowShape = RoundedCornerShape(14.dp)
+            pending?.let { p ->
+                Row(
+                    Modifier.fillMaxWidth().clip(rowShape).background(c.accentSoft).border(3.dp, c.accent, rowShape)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    BottomButtonPicture()
+                    Column(Modifier.weight(1f)) {
+                        Text("NEW CONTROLLER", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, letterSpacing = 1.sp)
+                        Text(p.longName, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("Press the bottom face button on this controller, whatever letter it has.", fontSize = 12.sp, color = c.text)
+                        Text("Once per controller · Ⓑ on the Thor skips (uses the usual layout)", fontSize = 10.5.sp, color = c.textDim, modifier = Modifier.padding(top = 3.dp))
+                    }
+                }
+            }
             if (thor != null) {
                 val sel = index == 0
                 Row(
@@ -176,3 +210,43 @@ fun PlayersDialog(title: String, pads: List<Pad>, setup: PlayerSetup, onChange: 
     }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 }
+
+/** Four face buttons with the bottom one lit, for the one-time check. */
+@Composable
+private fun BottomButtonPicture() {
+    val c = LocalWii.current
+    androidx.compose.foundation.Canvas(Modifier.size(64.dp)) {
+        val r = size.minDimension * 0.15f
+        val sp = size.minDimension * 0.28f
+        val cx = size.width / 2f; val cy = size.height / 2f
+        listOf(0f to -1f, 1f to 0f, 0f to 1f, -1f to 0f).forEachIndexed { i, (dx, dy) ->
+            val at = androidx.compose.ui.geometry.Offset(cx + dx * sp, cy + dy * sp)
+            drawCircle(if (i == 2) c.accent else Color(0xFF2C333C), r, at)
+            drawCircle(if (i == 2) Color(0xFF7FD6F5) else Color(0xFF4A535E), r, at, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+        }
+    }
+}
+
+/**
+ * "P2 Xbox Wireless: A and B, X and Y are swapped" — one quiet line per player whose controller has
+ * different letters than the Thor (option 1 of the mockups), shown between the map and the buttons.
+ */
+@Composable
+fun ButtonLetterNotes(players: List<Pad>, modifier: Modifier = Modifier) {
+    val c = LocalWii.current
+    val lines = players.mapIndexedNotNull { i, p -> p.labels.note?.let { Triple(i + 1, p, it) } }
+    if (lines.isEmpty()) return
+    Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        lines.forEach { (n, p, note) ->
+            Text(
+                androidx.compose.ui.text.buildAnnotatedString {
+                    pushStyle(androidx.compose.ui.text.SpanStyle(color = lerpWhite(PlayerColors[(n - 1) % 4]))); append("P$n ${p.shortName}: "); pop()
+                    append(note)
+                },
+                fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+private fun lerpWhite(col: Color) = androidx.compose.ui.graphics.lerp(col, Color.White, 0.3f)

@@ -481,6 +481,10 @@ class NowPlayingActivity : ComponentActivity() {
                 }
 
                 // ---------------- bottom bar
+                // Multiplayer: what's different for Xbox / PlayStation players (the map uses the Thor's letters).
+                if (mode == Mode.VIEW && !(preset.isTrackpad && padView) && io.github.hiramrg.delphis.platform.Pads.multiplayer(startPlayers)) {
+                    ButtonLetterNotes(startPlayers, Modifier.padding(top = 5.dp))
+                }
                 if (mode == Mode.VIEW && preset.isTrackpad && padView) {
                     Row(Modifier.fillMaxWidth().padding(top = 6.dp).alpha(fade), verticalAlignment = Alignment.CenterVertically) {
                         SecondaryGlowButton("◎ Recenter", null, onClick = { DolphinExitService.trackpadRecenter(topDisplay) }, fontSize = 13.sp)

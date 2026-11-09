@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import io.github.hiramrg.delphis.core.ButtonLabels
 import io.github.hiramrg.delphis.core.ControllerProfile
 import io.github.hiramrg.delphis.core.Pad
 import io.github.hiramrg.delphis.core.Players
@@ -35,13 +36,20 @@ object Pads {
             val quals = if (builtIn) DeviceInfo.dolphinQualifiers(listOf(d.name))
             // A controller whose name is unique also gets ids 0-4, in case Dolphin numbers it differently.
             else (exact + if (names[d.name] == 1) (0..4).map { "Android/$it/${d.name}" } else emptyList()).distinct()
-            Pad(key, d.name, quals, builtIn)
+            Pad(key, d.name, quals, builtIn, if (builtIn) ButtonLabels.NINTENDO else ButtonLabels.forVendor(d.vendorId), if (builtIn) true else prefs.padByLabel(key))
         }
     }
 
     /** Controller description for [pad]: the Thor keeps its calibration; others use Android's standard layout (buttons by position). */
-    fun profileFor(pad: Pad?, prefs: Prefs): ControllerProfile =
-        if (pad == null || pad.builtIn) DeviceInfo.controllerProfile(prefs) else ControllerProfile(devices = pad.qualifiers)
+    fun profileFor(pad: Pad?, prefs: Prefs): ControllerProfile = when {
+        pad == null || pad.builtIn -> DeviceInfo.controllerProfile(prefs)
+        // Reports buttons by letter on a Nintendo layout: Button A is on the right, Button B at the bottom.
+        pad.byLabel == true -> ControllerProfile(
+            devices = pad.qualifiers,
+            calibrated = ControllerProfile.NINTENDO_FACE_BUTTONS.map { (k, v) -> ControllerProfile.slotKey(k) to listOf(v) }.toMap(),
+        )
+        else -> ControllerProfile(devices = pad.qualifiers)
+    }
 
     /** True when [players] means gyro / tilt / trackpad presets are off (several players, or the Thor sitting out). */
     fun multiplayer(players: List<Pad>): Boolean = players.size > 1 || players.any { !it.builtIn }

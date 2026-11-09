@@ -1,7 +1,45 @@
 package io.github.hiramrg.delphis.core
 
+/** The letters printed on a controller's face buttons. */
+enum class ButtonLabels {
+    /** Thor, Switch: X top, Y left, A right, B bottom. */
+    NINTENDO,
+    /** Xbox and most other pads: Y top, X left, B right, A bottom. */
+    XBOX,
+    /** PlayStation: △ top, □ left, ○ right, ✕ bottom. */
+    PLAYSTATION;
+
+    /**
+     * What a player on this controller should know, in the Thor's letters (buttons are matched by
+     * position, so the Thor's A is this controller's right button), or null when it's the same.
+     */
+    val note: String?
+        get() = when (this) {
+            NINTENDO -> null
+            XBOX -> "A and B, X and Y are swapped"
+            PLAYSTATION -> "A = ○ · B = ✕ · X = △ · Y = □"
+        }
+
+    companion object {
+        /** From the USB vendor id: Nintendo 0x057e, Sony 0x054c, anything else (Microsoft 0x045e included) Xbox-style. */
+        fun forVendor(vendorId: Int): ButtonLabels = when (vendorId) {
+            0x057e -> NINTENDO
+            0x054c -> PLAYSTATION
+            else -> XBOX
+        }
+    }
+}
+
 /** A connected gamepad as Delphis sees it. [key] is Android's stable input-device descriptor. */
-data class Pad(val key: String, val name: String, val qualifiers: List<String>, val builtIn: Boolean) {
+data class Pad(
+    val key: String, val name: String, val qualifiers: List<String>, val builtIn: Boolean,
+    val labels: ButtonLabels = if (builtIn) ButtonLabels.NINTENDO else ButtonLabels.XBOX,
+    /**
+     * Android reports this controller's face buttons by their printed letter (like the Thor) instead of
+     * by position. Learned from the one-time "press the bottom button" check; null = not checked yet.
+     */
+    val byLabel: Boolean? = null,
+) {
     /** Short label for the pills: "Thor", "Xbox Wireless", "8BitDo Pro 2". */
     val shortName: String
         get() = if (builtIn) "Thor" else name.replace(Regex("(?i)\\s*(controller|gamepad)\\s*"), " ").trim().ifEmpty { name }
