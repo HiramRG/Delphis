@@ -21,9 +21,9 @@ object Trackpad {
     const val LIFT_GRACE_MS = 350L
 
     /** A tap: shorter than this (ms) and moving less than [TAP_SLOP_DP]. Two taps within [DOUBLE_TAP_MS] recenter. */
-    const val TAP_MS = 220L
+    const val TAP_MS = 250L
     const val TAP_SLOP_DP = 10f
-    const val DOUBLE_TAP_MS = 320L
+    const val DOUBLE_TAP_MS = 420L
 
     /** Top-screen pixels per pad dp for a picture [pictureWidthPx] wide. */
     fun gain(pictureWidthPx: Float, speed: Speed): Float = pictureWidthPx / FULL_SWEEP_DP * speed.factor

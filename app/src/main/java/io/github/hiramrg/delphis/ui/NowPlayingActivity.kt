@@ -321,6 +321,8 @@ class NowPlayingActivity : ComponentActivity() {
         var padActive by remember { mutableStateOf(false) }
         var padBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
         var padSpeed by remember(s.key) { mutableStateOf(prefs.trackpadSpeed(s.key)) }
+        var recenterCount by remember { mutableIntStateOf(0) }
+        val recenterPointer = { recenterCount++; DolphinExitService.trackpadRecenter(topDisplay) }
         val topDisplay = remember { DeviceInfo.screenRoles(this@NowPlayingActivity, prefs.swapScreens).topDisplayId }
         LaunchedEffect(startedAt) { DolphinExitService.trackpadReset() }
         val fade by animateFloatAsState(if (padActive) 0.25f else 1f, tween(200), label = "padFade")
@@ -458,7 +460,8 @@ class NowPlayingActivity : ComponentActivity() {
                             onDown = { DolphinExitService.trackpadDown(topDisplay) },
                             onMove = { dx, dy -> DolphinExitService.trackpadMove(dx, dy, padSpeed) },
                             onUp = { DolphinExitService.trackpadUp() },
-                            onDoubleTap = { DolphinExitService.trackpadRecenter(topDisplay) },
+                            onDoubleTap = { recenterPointer() },
+                            recenterCount = recenterCount,
                         ) else WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
                             ControlsMap(preset, Modifier.fillMaxSize())
                         }
@@ -487,7 +490,7 @@ class NowPlayingActivity : ComponentActivity() {
                 }
                 if (mode == Mode.VIEW && preset.isTrackpad && padView) {
                     Row(Modifier.fillMaxWidth().padding(top = 6.dp).alpha(fade), verticalAlignment = Alignment.CenterVertically) {
-                        SecondaryGlowButton("◎ Recenter", null, onClick = { DolphinExitService.trackpadRecenter(topDisplay) }, fontSize = 13.sp)
+                        SecondaryGlowButton("◎ Recenter", null, onClick = { recenterPointer() }, fontSize = 13.sp)
                         Spacer(Modifier.weight(1f))
                         Text("Speed", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 6.dp))
                         SegmentedPill(

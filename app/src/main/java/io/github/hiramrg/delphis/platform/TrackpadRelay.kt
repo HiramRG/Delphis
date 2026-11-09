@@ -68,8 +68,9 @@ class TrackpadRelay(private val service: AccessibilityService, private val handl
         if (displayId != topDisplayId) measure(topDisplayId)
         if (displayId < 0) return
         pos = Trackpad.Pos()
+        CrashLog.event("trackpad: recenter")
         if (stroke == null) start() else pump()
-        if (!fingerDown) { handler.removeCallbacks(endRunnable); handler.postDelayed(endRunnable, Trackpad.LIFT_GRACE_MS) }
+        if (!fingerDown && stroke != null) { handler.removeCallbacks(endRunnable); handler.postDelayed(endRunnable, Trackpad.LIFT_GRACE_MS) }
     }
 
     /** New game: Dolphin's pointer starts in the middle again. */
@@ -103,7 +104,12 @@ class TrackpadRelay(private val service: AccessibilityService, private val handl
         val (x, y) = px(at)
         val path = Path().apply { moveTo(x, y); lineTo(x + 0.1f, y) }
         val s = GestureDescription.StrokeDescription(path, 0, SEGMENT_MS, true)
-        if (dispatch(s)) { lastDownAt = SystemClock.uptimeMillis(); ending = false }
+        if (dispatch(s)) {
+            lastDownAt = SystemClock.uptimeMillis(); ending = false
+            // Started without a finger on the pad (recenter, or a start that had to wait for the double-tap
+            // gap): lift it again after the grace period, or it would stay down.
+            if (!fingerDown) { handler.removeCallbacks(endRunnable); handler.postDelayed(endRunnable, Trackpad.LIFT_GRACE_MS) }
+        }
     }
 
     /** Sends the touch to the latest position (one segment at a time). */

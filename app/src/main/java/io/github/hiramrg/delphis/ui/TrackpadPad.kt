@@ -45,11 +45,17 @@ fun TrackpadPad(
     onMove: (dxDp: Float, dyDp: Float) -> Unit,
     onUp: () -> Unit,
     onDoubleTap: () -> Unit,
+    /** Bumped on every recenter (double tap or the Recenter button): the pad shows a ring in its middle. */
+    recenterCount: Int = 0,
 ) {
     var active by remember { mutableStateOf(false) }
     val trail = remember { mutableStateListOf<Offset>() }
     val glow by animateFloatAsState(if (active) 1f else 0f, tween(180), label = "pad")
     val trailAlpha by animateFloatAsState(if (active) 1f else 0f, tween(if (active) 80 else 450), label = "trail")
+    val ring = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(recenterCount) {
+        if (recenterCount > 0) { ring.snapTo(1f); ring.animateTo(0f, tween(700)) }
+    }
     Box(
         modifier
             .clip(RoundedCornerShape(18.dp))
@@ -96,6 +102,12 @@ fun TrackpadPad(
                 y += step
             }
             if (glow > 0f) drawRect(PadAccent.copy(alpha = 0.10f * glow))
+            // Recentered: a ring shrinking into the middle.
+            if (ring.value > 0f) {
+                val c = Offset(size.width / 2f, size.height / 2f)
+                drawCircle(PadAccent.copy(alpha = 0.8f * ring.value), (14 + 40 * ring.value).dp.toPx(), c, style = Stroke(3.dp.toPx()))
+                drawCircle(Color(0xFF7FD6F5).copy(alpha = ring.value), 5.dp.toPx(), c)
+            }
             // Faint trail behind the finger.
             if (trail.size > 1 && trailAlpha > 0f) {
                 val path = Path().apply { moveTo(trail[0].x, trail[0].y); trail.drop(1).forEach { lineTo(it.x, it.y) } }
