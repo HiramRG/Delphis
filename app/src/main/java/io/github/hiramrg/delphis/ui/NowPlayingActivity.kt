@@ -322,8 +322,8 @@ class NowPlayingActivity : ComponentActivity() {
         var padBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
         var padSpeed by remember(s.key) { mutableStateOf(prefs.trackpadSpeed(s.key)) }
         var recenterCount by remember { mutableIntStateOf(0) }
-        val recenterPointer = { recenterCount++; DolphinExitService.trackpadRecenter(topDisplay) }
         val topDisplay = remember { DeviceInfo.screenRoles(this@NowPlayingActivity, prefs.swapScreens).topDisplayId }
+        val recenterPointer = { recenterCount++; DolphinExitService.trackpadRecenter(topDisplay) }
         LaunchedEffect(startedAt) { DolphinExitService.trackpadReset() }
         val fade by animateFloatAsState(if (padActive) 0.25f else 1f, tween(200), label = "padFade")
 
