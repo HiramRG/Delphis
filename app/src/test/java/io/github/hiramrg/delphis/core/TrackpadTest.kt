@@ -52,10 +52,10 @@ class TrackpadTest {
     }
 
     @Test
-    fun trackpadOverlayHidesEveryButtonAndUsesDragMode() {
+    fun trackpadOverlayHidesEveryButtonAndUsesFollowMode() {
         val ini = DolphinConfigWriter.trackpadOverlay("[Android]\nShowInputOverlay = False\n")
         assertTrue(ini.contains("ShowInputOverlay = True"))
-        assertTrue(ini.contains("IRMode = 2"))
+        assertTrue(ini.contains("IRMode = 1"))
         assertTrue(ini.contains("IRAlwaysRecenter = False"))
         DolphinConfigWriter.TRACKPAD_HIDDEN_BUTTONS.forEach { assertTrue(it, ini.contains("$it = False")) }
     }

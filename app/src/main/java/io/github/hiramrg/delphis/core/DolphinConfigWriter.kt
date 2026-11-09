@@ -203,11 +203,14 @@ object DolphinConfigWriter {
     /**
      * Dolphin's touch overlay set up as an invisible trackpad target for the Wii pointer: overlay on
      * (Dolphin only registers its touch pointer then), every Wii Remote / Nunchuk button hidden (so a
-     * relayed touch can never press one), pointer in Drag mode (moves from where it is) and never
-     * recentred on release. Keys from Dolphin's IntSetting / BooleanSetting.
+     * relayed touch can never press one), pointer in Follow mode (Delphis tracks the position, see
+     * TrackpadRelay) and never recentred on release. Keys from Dolphin's IntSetting / BooleanSetting.
      */
     fun trackpadOverlay(existing: String): String = IniEditor(existing).apply {
-        set("Android", mapOf("ShowInputOverlay" to "True", "IRMode" to "2", "IRAlwaysRecenter" to "False", "OverlayWiiController" to "4"))
+        // IR mode 1 = Follow: the pointer goes where the (relayed) touch is. Delphis keeps the absolute
+        // position itself, so every relayed touch puts the pointer exactly there. (Drag mode, 2, only adds
+        // movement and loses track whenever a touch is cancelled: Dolphin ignores ACTION_CANCEL.)
+        set("Android", mapOf("ShowInputOverlay" to "True", "IRMode" to "1", "IRAlwaysRecenter" to "False", "OverlayWiiController" to "4"))
         set("AndroidOverlayButtons", TRACKPAD_HIDDEN_BUTTONS.associateWith { "False" })
     }.toString()
 

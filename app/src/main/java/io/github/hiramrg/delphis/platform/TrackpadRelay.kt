@@ -12,15 +12,16 @@ import io.github.hiramrg.delphis.core.Trackpad
 /**
  * Relays the bottom-screen trackpad to Dolphin's own touch pointer on the top screen.
  *
- * Dolphin's overlay (set to Drag mode with every button hidden, see DolphinConfigWriter.trackpadOverlay)
- * moves the Wii pointer by however far a touch on the game screen moves. This injects one continuous
- * touch there per pad touch (`dispatchGesture` + `continueStroke`), moving it by the finger's movement
- * scaled to the top screen. Rules that keep Dolphin from misreading it:
+ * Delphis keeps the pointer's position itself (moved by the finger like a laptop trackpad, clamped to
+ * the game picture) and relays one continuous touch at exactly that spot on Dolphin's game screen
+ * (`dispatchGesture` + `continueStroke`). Dolphin's overlay is set to Follow mode, so the Wii pointer
+ * simply goes where that touch is. Because the position is absolute, a relayed touch that Android
+ * cancels (Dolphin ignores ACTION_CANCEL) can't put Delphis and Dolphin out of step: the next touch
+ * puts the pointer back exactly where it should be. (With Drag mode it drifted after a while.)
  * - a new relayed touch starts at least [Trackpad.MIN_DOWN_GAP_MS] after the previous one (two touches
  *   within 300 ms are Dolphin's double tap, which presses a button);
  * - after the finger lifts, the relayed touch stays down [Trackpad.LIFT_GRACE_MS], so a quick re-touch
- *   continues it instead of starting a new one;
- * - the position is clamped to the game picture, so the touch never leaves Dolphin's game screen.
+ *   continues it instead of starting a new one.
  * Runs on the service's main-thread handler.
  */
 class TrackpadRelay(private val service: AccessibilityService, private val handler: Handler) {
@@ -34,6 +35,8 @@ class TrackpadRelay(private val service: AccessibilityService, private val handl
     private var ending = false
     private var fingerDown = false
     private var lastDownAt = 0L
+    private var cancels = 0
+    private var lastCancelLog = 0L
     private var generation = 0 // callbacks from an older (cancelled/replaced) gesture are ignored
     private val endRunnable = Runnable { if (!fingerDown) end() }
     private val startRunnable = Runnable { if (stroke == null && (fingerDown || pos != at)) start() }
@@ -92,8 +95,8 @@ class TrackpadRelay(private val service: AccessibilityService, private val handl
         if (displayId < 0 || Build.VERSION.SDK_INT < 30 || dispatching) return
         val wait = lastDownAt + Trackpad.MIN_DOWN_GAP_MS - SystemClock.uptimeMillis()
         if (wait > 0) { handler.removeCallbacks(startRunnable); handler.postDelayed(startRunnable, wait); return }
-        // Dolphin only moves the pointer by the touch's movement, so the touch starts where the
-        // pointer is and follows it.
+        // Follow mode: the touch goes down where the pointer should be, so Dolphin's pointer jumps there.
+        at = pos
         val (x, y) = px(at)
         val path = Path().apply { moveTo(x, y); lineTo(x + 0.1f, y) }
         val s = GestureDescription.StrokeDescription(path, 0, SEGMENT_MS, true)
@@ -137,6 +140,9 @@ class TrackpadRelay(private val service: AccessibilityService, private val handl
                 }
                 override fun onCancelled(g: GestureDescription?) {
                     if (gen != generation) return
+                    cancels++
+                    val now = SystemClock.uptimeMillis()
+                    if (now - lastCancelLog > 10_000) { CrashLog.event("trackpad: relayed touch interrupted ($cancels so far)"); lastCancelLog = now }
                     // Something else touched the screen (or Dolphin's window changed): start afresh.
                     dispatching = false; stroke = null; ending = false
                     if (fingerDown) handler.postDelayed({ if (fingerDown && stroke == null) start() }, 50)

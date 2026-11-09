@@ -103,6 +103,8 @@ private fun buildReport(act: MainActivity): String = buildString {
     }
     appendLine("gyro aiming: left/right=${prefs.gyroHorizontal.name} speed=${prefs.gyroSensitivity}")
     appendLine("close-games helper: " + (if (io.github.hiramrg.delphis.platform.DolphinExitService.isEnabled(act)) "on" else "off"))
+    appendLine("Dolphin's touch settings (Config/Dolphin.ini, read by Dolphin only when it starts):")
+    appendLine(runCatching { bridge.dolphinTouchSettings() }.getOrNull() ?: "(couldn't read)")
     appendLine("events:")
     appendLine(io.github.hiramrg.delphis.platform.CrashLog.events() ?: "(none)")
     appendLine("last crash / failed launch:")

@@ -338,6 +338,20 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         }.onFailure { CrashLog.event("trackpad: couldn't set up Dolphin's overlay: ${it.message}") }
     }
 
+    /** [Android] and [AndroidOverlayButtons] of Dolphin.ini, for Diagnostics. */
+    fun dolphinTouchSettings(): String? {
+        val tree = prefs.dolphinTreeUri ?: return null
+        val text = readText(tree, DolphinConfigWriter.dolphinIniPath) ?: return "(no Dolphin.ini)"
+        var section = ""
+        return text.lines().mapNotNull { line ->
+            val t = line.trim()
+            if (t.startsWith("[")) { section = t; null }
+            else if (t.isNotEmpty() && section in setOf("[Android]", "[AndroidOverlayButtons]") &&
+                (section == "[Android]" || t.startsWith("ButtonToggleWiimote") || t.startsWith("ButtonToggleNunchuk") || t.startsWith("DoubleTap"))) "  $section $t"
+            else null
+        }.joinToString("\n").ifEmpty { "  (none)" }
+    }
+
     fun ensureSaveStatesEnabled() {
         val tree = prefs.dolphinTreeUri ?: return
         runCatching {
