@@ -43,6 +43,9 @@ object Pads {
     fun profileFor(pad: Pad?, prefs: Prefs): ControllerProfile =
         if (pad == null || pad.builtIn) DeviceInfo.controllerProfile(prefs) else ControllerProfile(devices = pad.qualifiers)
 
+    /** True when [players] means gyro / tilt / trackpad presets are off (several players, or the Thor sitting out). */
+    fun multiplayer(players: List<Pad>): Boolean = players.size > 1 || players.any { !it.builtIn }
+
     /** Who plays [gameKey] right now, P1 first. */
     fun players(prefs: Prefs, gameKey: String?): List<Pad> {
         val pads = detect(prefs)
@@ -52,10 +55,10 @@ object Pads {
     /** P1's preset and controller, then players 2-4's, for [preset] and the controllers connected now. */
     fun slots(prefs: Prefs, gameKey: String?, preset: Preset): List<Pair<Preset, ControllerProfile>> {
         val players = players(prefs, gameKey).ifEmpty { listOf(null) }
-        return players.map { pad ->
-            val p = if (pad == null || pad.builtIn) preset else Players.forExternal(preset)
-            p to profileFor(pad, prefs)
-        }
+        // Gyro, tilt and trackpad only when the Thor plays alone; otherwise everyone gets the plain version.
+        val solo = players.size == 1 && players[0]?.builtIn != false
+        val p = if (solo) preset else Players.multiplayerPreset(preset)
+        return players.map { pad -> p to profileFor(pad, prefs) }
     }
 }
 

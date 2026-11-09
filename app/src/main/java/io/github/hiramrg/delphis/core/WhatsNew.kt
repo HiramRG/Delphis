@@ -10,8 +10,8 @@ object WhatsNew {
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("Multiplayer.", "Connect more controllers and everyone plays: the Thor is player 1 and the others are players 2-4, each with the game's controls (matched by button position). Press ⊖ on the game page to reorder players or let the Thor sit out. Delphis sets this up for that game only."),
-        Item("Trackpad aiming (Experimental).", "For pointer games (Metroid Prime 3, Galaxy, Twilight Princess…): pick \"Trackpad aiming (Experimental)\" and slide a finger on the bottom screen to aim, like a laptop trackpad. First time only: force-stop Dolphin in Android's settings so it picks up the trackpad setting."),
+        Item("Multiplayer.", "Connect more controllers and everyone plays: the Thor is player 1 and the others are players 2-4, each with the game's controls (matched by button position). Gyro, tilt and trackpad presets are left out while several people play, so everyone has the same controls. Press ⊖ on the game page to reorder players or let the Thor sit out. Delphis sets this up for that game only."),
+        Item("Trackpad Aiming (Experimental).", "For pointer games (Metroid Prime 3, Galaxy, Twilight Princess…): pick \"Trackpad Aiming (Experimental)\" and slide a finger on the bottom screen to aim, like a laptop trackpad. First time only: force-stop Dolphin in Android's settings so it picks up the trackpad setting."),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

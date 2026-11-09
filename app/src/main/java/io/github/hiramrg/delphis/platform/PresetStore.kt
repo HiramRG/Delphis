@@ -56,7 +56,7 @@ class PresetStore(context: Context) {
         val tips = o.getJSONArray("tips")
         Preset(
             id = o.getString("id"),
-            name = o.getString("name"),
+            name = io.github.hiramrg.delphis.core.presetTitleCase(o.getString("name")),
             summary = o.getString("summary"),
             controller = EmulatedController.valueOf(o.getString("controller")),
             mappings = (0 until maps.length()).map { i ->

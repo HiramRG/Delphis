@@ -3,7 +3,7 @@ package io.github.hiramrg.delphis.core
 /** Which emulated controller a preset configures in Dolphin. */
 enum class EmulatedController(val label: String, val profileFolder: String, val gameIniKey: String) {
     WIIMOTE_NUNCHUK("Nunchuk + Wii Remote", "Wiimote", "WiimoteProfile1"),
-    WIIMOTE_SIDEWAYS("Wii Remote (held sideways)", "Wiimote", "WiimoteProfile1"),
+    WIIMOTE_SIDEWAYS("Wii Remote (Held Sideways)", "Wiimote", "WiimoteProfile1"),
     WIIMOTE_WHEEL("Wii Remote in a Wii Wheel", "Wiimote", "WiimoteProfile1"),
     CLASSIC("Classic Controller", "Wiimote", "WiimoteProfile1"),
     GAMECUBE("GameCube Controller", "GCPad", "PadProfile1"),
@@ -48,6 +48,21 @@ const val GYRO_HOLD = "Delphis/GyroHold"
 
 /** One row of a preset: "this Thor control does this Wii action". [action] is shown on the diagram. */
 data class Mapping(val control: ThorControl, val target: Target, val action: String)
+
+/**
+ * Preset names are written in title case ("Wii Wheel (Tilt on Stick)"); small joining words stay
+ * lower case unless they start the name. Used for names saved by older versions too.
+ */
+fun presetTitleCase(name: String): String {
+    val small = setOf("a", "an", "and", "as", "at", "by", "for", "in", "of", "on", "or", "the", "to", "with")
+    var first = true
+    return Regex("[A-Za-z][A-Za-z'’]*").replace(name) { m ->
+        val w = m.value
+        val out = if (!first && w.lowercase() in small) w.lowercase() else w.replaceFirstChar { it.uppercaseChar() }
+        first = false
+        out
+    }
+}
 
 /** Delphis-only preset option (not written to Dolphin's profile): the trackpad aims the pointer. */
 const val TRACKPAD_OPTION = "Delphis/Trackpad"
@@ -133,7 +148,7 @@ private fun PresetBuilder.wiiSystemButtons() {
 
 object PresetLibrary {
     // ---------------------------------------------------------------- Mario Galaxy 1 & 2
-    val GALAXY_RIGHT_STICK = preset("galaxy-rstick", "Pointer on right stick", EmulatedController.WIIMOTE_NUNCHUK) {
+    val GALAXY_RIGHT_STICK = preset("galaxy-rstick", "Pointer on Right Stick", EmulatedController.WIIMOTE_NUNCHUK) {
         summary = "Nunchuk on the left stick, the Wii pointer on the right stick, spin on a button. No waggling."
         directional(ThorControl.LEFT_STICK, "Move Mario", "Nunchuk/Stick")
         directional(ThorControl.RIGHT_STICK, "Aim pointer, grab Star Bits", "IR")
@@ -198,7 +213,7 @@ object PresetLibrary {
         tip("Shake for a trick right as you leave a ramp for a speed boost.")
     }
 
-    val MKW_WHEEL_STICK = preset("mkw-wheel-stick", "Wii Wheel (tilt on stick)", EmulatedController.WIIMOTE_WHEEL) {
+    val MKW_WHEEL_STICK = preset("mkw-wheel-stick", "Wii Wheel (Tilt on Stick)", EmulatedController.WIIMOTE_WHEEL) {
         summary = "Classic Wii Wheel controls. The left stick tilts the emulated Wii Remote, so steering feels analog without moving the Thor."
         tilt(ThorControl.LEFT_STICK, "Steer (tilt)", leftRightOnly = true)
         button(ThorControl.FACE_EAST, "Accelerate (2)", "Buttons/2")
@@ -218,7 +233,7 @@ object PresetLibrary {
         tip("Flick the right stick up as you leave a ramp to do a trick.")
     }
 
-    val MKW_WHEEL_GYRO = preset("mkw-wheel-gyro", "Wii Wheel (tilt the Thor)", EmulatedController.WIIMOTE_WHEEL) {
+    val MKW_WHEEL_GYRO = preset("mkw-wheel-gyro", "Wii Wheel (Tilt the Thor)", EmulatedController.WIIMOTE_WHEEL) {
         summary = "Real motion control: tilt the whole Thor left and right like a wheel. Uses the Thor's built-in accelerometer."
         experimental = true
         tilt(ThorControl.MOTION, "Steer (tilt device)", leftRightOnly = true)
@@ -273,7 +288,7 @@ object PresetLibrary {
         hideIdlePointer()
     }
 
-    val PAPER_MARIO_SIDEWAYS = preset("spm-sideways", "Sideways + pointer", EmulatedController.WIIMOTE_SIDEWAYS) {
+    val PAPER_MARIO_SIDEWAYS = preset("spm-sideways", "Sideways + Pointer", EmulatedController.WIIMOTE_SIDEWAYS) {
         summary = "Sideways remote for platforming, with Tippi's pointer on the right stick."
         directional(ThorControl.LEFT_STICK, "Move", "D-Pad")
         directional(ThorControl.DPAD, "Move", "D-Pad")
@@ -292,7 +307,7 @@ object PresetLibrary {
     }
 
     // ---------------------------------------------------------------- Pointer-heavy adventures
-    val POINTER_ADVENTURE = preset("nunchuk-pointer", "Nunchuk + pointer on right stick", EmulatedController.WIIMOTE_NUNCHUK) {
+    val POINTER_ADVENTURE = preset("nunchuk-pointer", "Nunchuk + Pointer on Right Stick", EmulatedController.WIIMOTE_NUNCHUK) {
         summary = "Left stick moves, right stick aims the Wii pointer, R1 shakes the remote, L1 shakes the Nunchuk."
         directional(ThorControl.LEFT_STICK, "Move", "Nunchuk/Stick")
         directional(ThorControl.RIGHT_STICK, "Aim pointer", "IR")
@@ -396,13 +411,13 @@ object PresetLibrary {
     )
 
     val GALAXY_GYRO_ALL = gyroVariants(
-        GALAXY_RIGHT_STICK, "galaxy-gyro", "Gyro aiming",
+        GALAXY_RIGHT_STICK, "galaxy-gyro", "Gyro Aiming",
         "Aim the Star Pointer by turning the Thor (the right stick still works too).",
     )
     val GALAXY_GYRO = GALAXY_GYRO_ALL.first()
 
     val POINTER_GYRO_ALL = gyroVariants(
-        POINTER_ADVENTURE, "nunchuk-gyro", "Nunchuk + gyro aiming",
+        POINTER_ADVENTURE, "nunchuk-gyro", "Nunchuk + Gyro Aiming",
         "Left stick moves; aim the Wii pointer by turning the Thor (the right stick still works too).",
     )
     val POINTER_GYRO = POINTER_GYRO_ALL.first()
@@ -431,7 +446,7 @@ object PresetLibrary {
     private fun precisionVariants(
         base: Preset, idBase: String, summary: String, relabel: Map<ThorControl, Mapping>, extraTips: List<String> = emptyList(),
     ): List<Preset> {
-        return listOf(withPrecisionAim(base, idBase, "Precision gyro (Experimental)", summary, false, false, relabel, extraTips))
+        return listOf(withPrecisionAim(base, idBase, "Precision Gyro (Experimental)", summary, false, false, relabel, extraTips))
     }
 
     val GALAXY_PRECISION_ALL = precisionVariants(
@@ -463,7 +478,7 @@ object PresetLibrary {
      * working until the trackpad is first used.
      */
     private fun withTrackpad(base: Preset, id: String, summary: String) = base.copy(
-        id = id, name = "Trackpad aiming (Experimental)", summary = summary,
+        id = id, name = "Trackpad Aiming (Experimental)", summary = summary,
         options = base.options + (TRACKPAD_OPTION to "True"),
         tips = listOf(
             "Slide a finger on the bottom screen to aim; the pointer moves from where it is, like a laptop trackpad.",

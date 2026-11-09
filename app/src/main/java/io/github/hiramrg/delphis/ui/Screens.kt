@@ -703,6 +703,9 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     val pads = io.github.hiramrg.delphis.platform.rememberPads(act.prefs)
     var playerSetup by remember(gameId) { mutableStateOf(gameId?.let { act.prefs.playerSetup(it) } ?: io.github.hiramrg.delphis.core.PlayerSetup()) }
     val multiplayer = gameId != null && io.github.hiramrg.delphis.core.Players.hasExternal(pads)
+    // Gyro / tilt / trackpad presets only when the Thor plays alone.
+    val severalPlayers = multiplayer && io.github.hiramrg.delphis.platform.Pads.multiplayer(io.github.hiramrg.delphis.core.Players.assign(pads, playerSetup))
+    LaunchedEffect(severalPlayers) { p.updateMultiplayer(severalPlayers) }
     var showPlayers by remember { mutableStateOf(false) }
     if (showPlayers && multiplayer) {
         PlayersDialog(game.info.title, pads, playerSetup, onChange = { playerSetup = it; act.prefs.setPlayerSetup(gameId!!, it) }, onDismiss = { showPlayers = false })
@@ -868,7 +871,7 @@ fun PresetChooser(
         item { Text(question, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 4.dp)) }
         items(groups.main, key = { it.id }) { p -> card(p) }
         if (groups.gyro.isNotEmpty()) {
-            item(key = "gyro-folder") { PresetFolder("Gyro & trackpad aiming (Experimental)", groups.gyro.size, showGyro) { showGyro = !showGyro } }
+            item(key = "gyro-folder") { PresetFolder("Gyro & Trackpad Aiming (Experimental)", groups.gyro.size, showGyro) { showGyro = !showGyro } }
             if (showGyro) items(groups.gyro, key = { "gyro-" + it.id }) { p -> Box(Modifier.padding(start = 14.dp)) { card(p) } }
         }
         if (groups.others.isNotEmpty()) {

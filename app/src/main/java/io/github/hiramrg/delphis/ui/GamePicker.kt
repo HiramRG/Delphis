@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.github.hiramrg.delphis.core.GameDatabase
 import io.github.hiramrg.delphis.core.Preset
+import io.github.hiramrg.delphis.core.Players
 import io.github.hiramrg.delphis.platform.GameEntry
 
 /**
@@ -14,8 +15,22 @@ import io.github.hiramrg.delphis.platform.GameEntry
 class GamePicker(private val act: MainActivity, val game: GameEntry) {
     val suggestion = GameDatabase.suggest(game.info)
     var custom by mutableStateOf(act.store.customFor(game.key))
-    val choices: List<Preset> get() = listOfNotNull(custom) + suggestion.choices
-    val alternatives: List<Preset> get() = suggestion.alternatives
+    /**
+     * Several players (or the Thor sitting out): gyro, tilt and trackpad presets aren't offered, so
+     * everyone has the same controls. Set by the game page from the connected controllers.
+     */
+    var multiplayer by mutableStateOf(false)
+        private set
+    private fun offered(list: List<Preset>) = if (multiplayer) list.filter { !Players.usesThorOnly(it) } else list
+    val choices: List<Preset> get() = offered(listOfNotNull(custom) + suggestion.choices)
+    val alternatives: List<Preset> get() = offered(suggestion.alternatives)
+
+    fun updateMultiplayer(on: Boolean) {
+        if (multiplayer == on) return
+        multiplayer = on
+        if (on) selected?.let { s -> if (Players.usesThorOnly(s)) selected = Players.multiplayerPreset(s).takeIf { m -> everyPreset.any { it.id == m.id } } ?: choices.firstOrNull() }
+        else act.prefs.presetFor(game.key)?.let { act.store.byId(it) }?.let { selected = it }
+    }
     /** Same order as on screen: main list, gyro folder, other layouts. */
     val everyPreset: List<Preset> get() = PresetGroups(choices, alternatives).ordered
     /** The game's first suggested preset, tagged "(suggested)" in the lists. */
@@ -39,7 +54,10 @@ class GamePicker(private val act: MainActivity, val game: GameEntry) {
 
     fun play() {
         val chosen = selected ?: return
-        act.prefs.setPresetFor(game.key, if (rememberChoice) chosen.id else null)
+        // In multiplayer, playing the plain version of a remembered gyro preset keeps the gyro one remembered for solo play.
+        val remembered = act.prefs.presetFor(game.key)?.let { act.store.byId(it) }
+        val keepSolo = multiplayer && remembered != null && Players.multiplayerPreset(remembered).id == chosen.id
+        if (!keepSolo) act.prefs.setPresetFor(game.key, if (rememberChoice) chosen.id else null)
         act.play(game, chosen)
     }
 

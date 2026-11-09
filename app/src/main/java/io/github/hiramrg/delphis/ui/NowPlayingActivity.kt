@@ -296,7 +296,12 @@ class NowPlayingActivity : ComponentActivity() {
 
     @Composable
     private fun NowPlaying(s: GameSession) {
-        val preset = remember(s.presetId) { resolve(s.presetId) }
+        // Who plays (multiplayer): with several players, gyro / tilt / trackpad were left out at launch.
+        val gid = s.info.gameId
+        val startPlayers = remember(startedAt) { if (gid != null) runCatching { io.github.hiramrg.delphis.platform.Pads.players(prefs, gid) }.getOrDefault(emptyList()) else emptyList() }
+        val preset = remember(s.presetId, startPlayers) {
+            resolve(s.presetId).let { if (io.github.hiramrg.delphis.platform.Pads.multiplayer(startPlayers)) io.github.hiramrg.delphis.core.Players.multiplayerPreset(it) else it }
+        }
         var mode by remember { mutableStateOf(Mode.VIEW) }
         var brightness by remember { mutableIntStateOf(prefs.brightnessPercent) }
         var showBrightness by remember { mutableStateOf(false) }
@@ -424,8 +429,6 @@ class NowPlayingActivity : ComponentActivity() {
                 Spacer(Modifier.height(8.dp))
 
                 // ---------------- players (multiplayer): who's who; tap to restart with the controllers connected now
-                val gid = s.info.gameId
-                val startPlayers = remember(startedAt) { if (gid != null) runCatching { io.github.hiramrg.delphis.platform.Pads.players(prefs, gid) }.getOrDefault(emptyList()) else emptyList() }
                 val livePads = io.github.hiramrg.delphis.platform.rememberPads(prefs)
                 val livePlayers = if (gid != null) io.github.hiramrg.delphis.core.Players.assign(livePads, prefs.playerSetup(gid)) else emptyList()
                 if (mode == Mode.VIEW && (startPlayers.size > 1 || livePlayers.size > 1)) {

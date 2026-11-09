@@ -75,4 +75,22 @@ class PlayersTest {
         assertTrue(ini.contains("PadProfile2 = Delphis-gamecube-p2"))
         assertTrue(ini.contains("PadType1 = 6"))
     }
+
+    @Test
+    fun multiplayerUsesThePlainVersionOfGyroAndTrackpadPresets() {
+        assertEquals(PresetLibrary.POINTER_ADVENTURE, Players.multiplayerPreset(PresetLibrary.POINTER_PRECISION))
+        assertEquals(PresetLibrary.POINTER_ADVENTURE, Players.multiplayerPreset(PresetLibrary.POINTER_TRACKPAD))
+        assertEquals(PresetLibrary.GALAXY_RIGHT_STICK, Players.multiplayerPreset(PresetLibrary.GALAXY_GYRO))
+        assertEquals(PresetLibrary.NSMB_SIDEWAYS, Players.multiplayerPreset(PresetLibrary.NSMB_SIDEWAYS))
+        assertTrue(PresetLibrary.ALL.none { Players.usesThorOnly(Players.multiplayerPreset(it)) })
+    }
+
+    @Test
+    fun presetNamesAreTitleCase() {
+        assertEquals("Wii Wheel (Tilt on Stick)", presetTitleCase("Wii Wheel (tilt on stick)"))
+        assertEquals("Sideways Wii Remote (Custom)", presetTitleCase("Sideways Wii Remote (custom)"))
+        assertEquals("Nunchuk + Pointer on Right Stick", presetTitleCase("Nunchuk + pointer on right stick"))
+        PresetLibrary.ALL.forEach { assertEquals(it.name, presetTitleCase(it.name), it.name) }
+        EmulatedController.entries.forEach { assertEquals(it.label, presetTitleCase(it.label)) }
+    }
 }

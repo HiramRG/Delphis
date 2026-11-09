@@ -43,19 +43,37 @@ object Players {
     /** True when there's anything to set up: at least one controller besides the Thor. */
     fun hasExternal(pads: List<Pad>) = pads.any { !it.builtIn }
 
+    /** Needs the Thor itself (gyro, tilt, gyro-hold button or the bottom-screen trackpad). */
+    fun usesThorOnly(p: Preset): Boolean = p.isTrackpad || p.mappings.any { m ->
+        m.control == ThorControl.GYRO || m.control == ThorControl.MOTION ||
+            (m.target is Target.Buttons && GYRO_HOLD in (m.target as Target.Buttons).keys)
+    }
+
+    /** Each gyro / tilt / trackpad preset and the plain preset it's built on. */
+    private val plainVersion: Map<String, Preset> by lazy {
+        val galaxy = PresetLibrary.GALAXY_GYRO_ALL + PresetLibrary.GALAXY_PRECISION_ALL + PresetLibrary.GALAXY_TRACKPAD
+        val pointer = PresetLibrary.POINTER_GYRO_ALL + PresetLibrary.POINTER_PRECISION_ALL + PresetLibrary.POINTER_TRACKPAD
+        galaxy.associate { it.id to PresetLibrary.GALAXY_RIGHT_STICK } + pointer.associate { it.id to PresetLibrary.POINTER_ADVENTURE } +
+            (PresetLibrary.MKW_WHEEL_GYRO.id to PresetLibrary.MKW_WHEEL_STICK)
+    }
+
     /**
-     * The preset for a player on an external controller: the Thor's motion sensors, gyro, gyro-hold
-     * button and trackpad belong to the Thor, so they're left out (the right stick still aims), and
-     * the Thor-tilt wheel becomes the stick-tilt wheel.
+     * The preset everyone uses in multiplayer (and anyone on an external controller): no gyro, tilt or
+     * trackpad, so all players have the same controls. Built-in gyro / tilt / trackpad presets become
+     * the plain preset they're built on (e.g. Precision Gyro → Nunchuk + Pointer on Right Stick, Wii
+     * Wheel (Tilt the Thor) → Wii Wheel (Tilt on Stick)); custom ones lose those mappings.
      */
-    fun forExternal(p: Preset): Preset {
-        if (p.id == PresetLibrary.MKW_WHEEL_GYRO.id) return PresetLibrary.MKW_WHEEL_STICK
+    fun multiplayerPreset(p: Preset): Preset {
+        plainVersion[p.id]?.let { return it }
+        if (!usesThorOnly(p)) return p
         val mappings = p.mappings.filter { m ->
             m.control != ThorControl.GYRO && m.control != ThorControl.MOTION &&
                 !(m.target is Target.Buttons && GYRO_HOLD in (m.target as Target.Buttons).keys)
         }
         return p.copy(mappings = mappings, options = p.options - TRACKPAD_OPTION)
     }
+
+    fun forExternal(p: Preset): Preset = multiplayerPreset(p)
 
     /** The profile written for player [n] (2-4): its own file, since it's bound to another controller. */
     fun profileFor(p: Preset, n: Int): Preset = if (n <= 1) p else p.copy(id = "${p.id}-p$n")

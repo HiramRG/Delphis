@@ -72,7 +72,7 @@ fun PresetEditor(
             }
         }
         Column(Modifier.fillMaxSize()) {
-            Text(withOrangeTags("Editing: ${base.name.removeSuffix(" (custom)")}", LocalWii.current.orange), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(withOrangeTags("Editing: ${base.name.removeSuffix(" (Custom)")}", LocalWii.current.orange), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (wide) {
                 Row(Modifier.weight(1f)) {
                     list(Modifier.weight(0.5f).fillMaxHeight())

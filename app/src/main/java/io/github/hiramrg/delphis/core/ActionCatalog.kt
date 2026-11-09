@@ -113,10 +113,10 @@ object ActionCatalog {
             val label = friendly.entries.firstOrNull { sameTarget(it.key, target) }?.value ?: pick.label
             edited += Mapping(control, target, label)
         }
-        val baseName = base.name.removeSuffix(" (custom)")
+        val baseName = base.name.removeSuffix(" (Custom)")
         return base.copy(
             id = customId,
-            name = "$baseName (custom)",
+            name = "$baseName (Custom)",
             summary = "Your own version of \"$baseName\".",
             mappings = edited,
         )
