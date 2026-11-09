@@ -804,13 +804,24 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
 fun Preset.isGyro(): Boolean =
     mappings.any { it.target is io.github.hiramrg.delphis.core.Target.GyroPointer } || name.contains("(experimental)", ignoreCase = true)
 
-/** How a game's presets are shown: the main list, the gyro folder, and "Other layouts". */
+/** How a game's presets are shown: the main list, then the "Gyro", "Trackpad" and "Other layouts" folders. */
 class PresetGroups(choices: List<Preset>, alternatives: List<Preset>) {
-    val main = choices.filterNot { it.isGyro() }
-    val gyro = (choices + alternatives).filter { it.isGyro() }.distinctBy { it.id }
-    val others = alternatives.filterNot { it.isGyro() }
+    private fun Preset.kind() = when { isTrackpad -> 2; isGyro() -> 1; else -> 0 }
+    private val all = (choices + alternatives).distinctBy { it.id }
+    // A game whose suggestions are all gyro/trackpad presets (Red Steel) keeps them in the main list.
+    private val folderChoices = choices.any { it.kind() == 0 }
+    val main = if (folderChoices) choices.filter { it.kind() == 0 } else choices
+    val gyro = all.filter { it.kind() == 1 && it !in main }
+    val trackpad = all.filter { it.kind() == 2 && it !in main }
+    val others = alternatives.filter { it.kind() == 0 && it !in main }
+    /** The folders in order: key, title, presets. */
+    val folders get() = listOf(
+        Triple("gyro", "Gyro Aiming (Experimental)", gyro),
+        Triple("trackpad", "Trackpad Aiming (Experimental)", trackpad),
+        Triple("others", "Other layouts", others),
+    ).filter { it.third.isNotEmpty() }
     /** Top-to-bottom order, used for D-pad navigation. */
-    val ordered get() = main + gyro + others
+    val ordered get() = main + gyro + trackpad + others
 }
 
 /** The preset's name with its "(experimental)" tag in orange and, if suggested, "(suggested)" in green. */
@@ -861,36 +872,28 @@ fun PresetChooser(
     onSelect: (Preset) -> Unit,
 ) {
     val groups = remember(choices, alternatives) { PresetGroups(choices, alternatives) }
-    var showGyro by remember { mutableStateOf(groups.gyro.any { it.id == selected?.id }) }
-    var showOthers by remember { mutableStateOf(groups.others.any { it.id == selected?.id }) }
+    val open = remember { mutableStateMapOf<String, Boolean>() }
+    fun isOpen(key: String) = open[key] ?: groups.folders.first { it.first == key }.third.any { it.id == selected?.id }
     // Keep the selected preset visible (it can change from the controller), opening its folder if needed.
     LaunchedEffect(selected?.id) {
         val id = selected?.id ?: return@LaunchedEffect
-        val m = groups.main.size
-        val g = groups.gyro.indexOfFirst { it.id == id }
-        val o = groups.others.indexOfFirst { it.id == id }
-        if (g >= 0) showGyro = true
-        if (o >= 0) showOthers = true
-        val gyroRows = if (groups.gyro.isEmpty()) 0 else 1 + if (showGyro) groups.gyro.size else 0
-        val index = when {
-            groups.main.any { it.id == id } -> 1 + groups.main.indexOfFirst { it.id == id }
-            g >= 0 -> 1 + m + 1 + g
-            o >= 0 -> 1 + m + gyroRows + 1 + o
-            else -> return@LaunchedEffect
+        var index = 1
+        if (groups.main.any { it.id == id }) { runCatching { listState.animateScrollToItem(index + groups.main.indexOfFirst { it.id == id }) }; return@LaunchedEffect }
+        index += groups.main.size
+        for ((key, _, list) in groups.folders) {
+            val at = list.indexOfFirst { it.id == id }
+            if (at >= 0) { open[key] = true; runCatching { listState.animateScrollToItem(index + 1 + at) }; return@LaunchedEffect }
+            index += 1 + if (isOpen(key)) list.size else 0
         }
-        runCatching { listState.animateScrollToItem(index) }
     }
     @Composable fun card(p: Preset) = PickerCard(p, selected?.id == p.id, suggested = p.id == suggestedId) { onSelect(p) }
     LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         item { Text(question, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 4.dp)) }
         items(groups.main, key = { it.id }) { p -> card(p) }
-        if (groups.gyro.isNotEmpty()) {
-            item(key = "gyro-folder") { PresetFolder("Gyro & Trackpad Aiming (Experimental)", groups.gyro.size, showGyro) { showGyro = !showGyro } }
-            if (showGyro) items(groups.gyro, key = { "gyro-" + it.id }) { p -> Box(Modifier.padding(start = 14.dp)) { card(p) } }
-        }
-        if (groups.others.isNotEmpty()) {
-            item(key = "others-folder") { PresetFolder("Other layouts", groups.others.size, showOthers) { showOthers = !showOthers } }
-            if (showOthers) items(groups.others, key = { "alt-" + it.id }) { p -> Box(Modifier.padding(start = 14.dp)) { card(p) } }
+        for ((key, title, list) in groups.folders) {
+            val shown = isOpen(key)
+            item(key = "$key-folder") { PresetFolder(title, list.size, shown) { open[key] = !shown } }
+            if (shown) items(list, key = { "$key-" + it.id }) { p -> Box(Modifier.padding(start = 14.dp)) { card(p) } }
         }
         item { Spacer(Modifier.height(8.dp)) }
     }

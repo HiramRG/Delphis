@@ -169,16 +169,49 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     val tw = Thor.W * k; val th = Thor.H * k; val tabs = Thor.TABS * k
     val colW = colW0(k)
 
-    // Side labels.
-    val lsL = fitted(actions[LEFT_STICK] ?: "—", fs, colW, if (used(LEFT_STICK)) c.text else c.textDim, 1)
-    val dpL = fitted(actions[DPAD] ?: "—", fs, colW, if (used(DPAD)) c.text else c.textDim, 1)
-    val rsL = fitted(actions[RIGHT_STICK] ?: "—", fs, colW, if (used(RIGHT_STICK)) c.text else c.textDim, -1)
+    // ---- vertical placement (independent of the side labels)
+    val oy = (H - (bandH + tabs + th + sysH)) / 2f + bandH + tabs
+    // Side columns live between the shoulder band (above the tabs) and the system row / card bottom.
+    val colTop = oy - tabs + 2f
+    val colBottom = if (sysParts.isNotEmpty()) oy + th + 4f else H - 2f
+    val blockGap = 5f
+    val small0 = small
+
+    // ---- side labels: shrink together until each column's blocks fit without touching
     val dotR = fs * 0.55f
-    val groups = linkedMapOf<String, MutableList<ThorControl>>()
-    listOf(FACE_EAST, FACE_SOUTH, FACE_NORTH, FACE_WEST).forEach { key -> actions[key]?.let { groups.getOrPut(it) { mutableListOf() } += key } }
-    val faceRows = groups.map { (act, keys) ->
-        val dotsW = keys.size * (dotR * 2f + 3f) + 4f
-        Triple(keys, dotsW, fitted(act, fs, colW - dotsW, c.text, -1))
+    val faceGroups = linkedMapOf<String, MutableList<ThorControl>>()
+    listOf(FACE_EAST, FACE_SOUTH, FACE_NORTH, FACE_WEST).forEach { key -> actions[key]?.let { faceGroups.getOrPut(it) { mutableListOf() } += key } }
+    val titleH = tm.measure("Ag", TextStyle(fontSize = (small0 * s).toSp(), fontWeight = FontWeight.SemiBold)).size.height / s
+    var fsS = fs
+    lateinit var lsL: TextLayoutResult; lateinit var dpL: TextLayoutResult; lateinit var rsL: TextLayoutResult
+    lateinit var faceRows: List<Triple<List<ThorControl>, Float, TextLayoutResult>>
+    var rowH = emptyList<Float>()
+    while (true) {
+        val lines = if (fsS < fs - 1.5f) 3 else 2
+        lsL = fitted(actions[LEFT_STICK] ?: "—", fsS, colW, if (used(LEFT_STICK)) c.text else c.textDim, 1, maxLines = lines, minSize = minOf(8.5f, fsS))
+        dpL = fitted(actions[DPAD] ?: "—", fsS, colW, if (used(DPAD)) c.text else c.textDim, 1, maxLines = lines, minSize = minOf(8.5f, fsS))
+        rsL = fitted(actions[RIGHT_STICK] ?: "—", fsS, colW, if (used(RIGHT_STICK)) c.text else c.textDim, -1, maxLines = lines, minSize = minOf(8.5f, fsS))
+        faceRows = faceGroups.map { (act, keys) ->
+            val dotsW = keys.size * (dotR * 2f + 3f) + 4f
+            Triple(keys, dotsW, fitted(act, fsS, colW - dotsW, c.text, -1, maxLines = lines, minSize = minOf(8.5f, fsS)))
+        }
+        rowH = faceRows.map { maxOf(h(it.third), dotR * 2f + 2f) }
+        val faceH = rowH.sum() + 3f * (rowH.size - 1).coerceAtLeast(0)
+        val leftNeed = titleH * 2 + h(lsL) + h(dpL) + blockGap
+        val rightNeed = faceH + titleH + h(rsL) + blockGap
+        if (maxOf(leftNeed, rightNeed) <= colBottom - colTop || fsS <= 7f) break
+        fsS -= 0.5f
+    }
+    val faceH = rowH.sum() + 3f * (rowH.size - 1).coerceAtLeast(0)
+
+    /** Tops for blocks wanting to be centred on [want]: no overlaps, inside [top]..[bottom] where possible. */
+    fun place(want: List<Float>, hs: List<Float>, top: Float, bottom: Float): List<Float> {
+        val t = want.mapIndexed { i, m -> m - hs[i] / 2f }.toMutableList()
+        fun forward() { for (i in t.indices) t[i] = maxOf(t[i], if (i == 0) top else t[i - 1] + hs[i - 1] + blockGap) }
+        forward()
+        for (i in t.indices.reversed()) t[i] = minOf(t[i], if (i == t.lastIndex) bottom - hs[i] else t[i + 1] - blockGap - hs[i])
+        forward()
+        return t
     }
 
     // ---- balance: centre the whole map (labels included), not just the drawing
@@ -192,7 +225,6 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
         shR.maxOf { shoulderOut(it) },
     )
     val ox = ((W - (leftExt + tw + rightExt)) / 2f + leftExt).coerceIn(minOf(leftExt, (W - tw) / 2f), maxOf(W - rightExt - tw, (W - tw) / 2f))
-    val oy = (H - (bandH + tabs + th + sysH)) / 2f + bandH + tabs
 
     fun p(x: Float, y: Float) = Offset(x * s, y * s)
     fun X(u: Float) = ox + u * k
@@ -212,11 +244,17 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
         return cw
     }
     /** Small grey title over the action, the pair centred on [yMid]. */
-    fun titled(title: String, l: TextLayoutResult, x: Float, yMid: Float, a: Int) {
+    fun titled(title: String, l: TextLayoutResult, x: Float, top: Float, a: Int) {
         val tl = tm.measure(title, TextStyle(fontSize = (small * s).toSp(), fontWeight = FontWeight.SemiBold, color = c.textDim))
-        val total = h(tl) + h(l)
-        val top = yMid - total / 2f + 2f
         draw(tl, x, top, a); draw(l, x, top + h(tl), a)
+    }
+    /** Leader from a control to its label: straight when level, with a short bend when the label moved. */
+    fun bentLeader(fromX: Float, fromY: Float, toX: Float, toY: Float) {
+        if (kotlin.math.abs(fromY - toY) < 1f) { leader(fromX, fromY, toX); return }
+        val dir = if (toX < fromX) -1f else 1f
+        val knee = fromX + dir * minOf(8f, kotlin.math.abs(toX - fromX) / 2f)
+        drawLine(line, p(fromX, fromY), p(knee, fromY), strokeWidth = 1.2f * s)
+        drawLine(line, p(knee, fromY), p(toX, toY), strokeWidth = 1.2f * s)
     }
 
     // ---- the Thor
@@ -243,16 +281,21 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
 
     val L = ox - gap
     val R = ox + tw + gap
-    // Left stick + D-pad.
+    // Left stick + D-pad (label blocks placed so they never touch).
+    val leftH = listOf(titleH + h(lsL), titleH + h(dpL))
+    val leftTops = place(listOf(Y(50f), Y(108f)), leftH, colTop, colBottom)
     drawCircle(unused, 19f * k * s, p(X(44f), Y(50f)))
     drawCircle(if (used(LEFT_STICK)) ChipBlue else unused, 19f * k * s, p(X(44f), Y(50f)), style = Stroke(3f * k * s))
-    leader(L + 3f, Y(50f), X(44f - 21f))
-    titled("Left stick", lsL, L, Y(50f), 1)
+    bentLeader(X(44f - 21f), Y(50f), L + 3f, leftTops[0] + leftH[0] / 2f)
+    titled("Left stick", lsL, L, leftTops[0], 1)
     val dpc = if (used(DPAD)) ChipBlue else unused
     drawRoundRect(dpc, p(X(38f), Y(90f)), Size(12f * k * s, 36f * k * s), CornerRadius(3f * k * s))
     drawRoundRect(dpc, p(X(26f), Y(102f)), Size(36f * k * s, 12f * k * s), CornerRadius(3f * k * s))
-    leader(L + 3f, Y(108f), X(26f))
-    titled("D-Pad", dpL, L, Y(108f), 1)
+    bentLeader(X(26f), Y(108f), L + 3f, leftTops[1] + leftH[1] / 2f)
+    titled("D-Pad", dpL, L, leftTops[1], 1)
+
+    val rightH = listOf(maxOf(faceH, 1f), titleH + h(rsL))
+    val rightTops = place(listOf(Y(50f), Y(108f)), rightH, colTop, colBottom)
 
     // Face buttons; actions grouped ("A B  Jump (2)") on the right, the block centred on the buttons.
     listOf(FACE_NORTH to Offset(0f, -14f), FACE_EAST to Offset(14f, 0f), FACE_SOUTH to Offset(0f, 14f), FACE_WEST to Offset(-14f, 0f)).forEach { (key, o) ->
@@ -260,12 +303,11 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
         val l = tm.measure(key.shortLabel, TextStyle(fontSize = (maxOf(6.5f, 8.5f * k) * s).toSp(), fontWeight = FontWeight.ExtraBold, color = White))
         draw(l, X(256f + o.x), Y(50f + o.y) - h(l) / 2f, 0)
     }
-    leader(X(256f + 23f), Y(50f), R - 3f)
-    val rowH = faceRows.map { maxOf(h(it.third), dotR * 2f + 2f) }
-    var fy = Y(50f) - (rowH.sum() + 4f * (rowH.size - 1).coerceAtLeast(0)) / 2f
+    if (faceRows.isNotEmpty()) bentLeader(X(256f + 23f), Y(50f), R - 3f, rightTops[0] + rightH[0] / 2f)
+    var fy = rightTops[0]
     faceRows.forEachIndexed { i, (keys, dotsW, l) ->
         var x = R + dotR
-        val firstLineMid = fy + minOf(h(l), fs * 1.18f) / 2f
+        val firstLineMid = fy + minOf(h(l), fsS * 1.18f) / 2f
         keys.forEach { key ->
             drawCircle(controlColor(key), dotR * s, p(x, firstLineMid))
             val kl = tm.measure(key.shortLabel, TextStyle(fontSize = (dotR * 1.1f * s).toSp(), fontWeight = FontWeight.ExtraBold, color = White))
@@ -273,14 +315,14 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
             x += dotR * 2f + 3f
         }
         draw(l, R + dotsW, fy, -1)
-        fy += rowH[i] + 4f
+        fy += rowH[i] + 3f
     }
 
     // Right stick.
     drawCircle(unused, 19f * k * s, p(X(256f), Y(108f)))
     drawCircle(if (used(RIGHT_STICK)) controlColor(RIGHT_STICK) else unused, 19f * k * s, p(X(256f), Y(108f)), style = Stroke(3f * k * s))
-    leader(X(256f + 21f), Y(108f), R - 3f)
-    titled("Right stick", rsL, R, Y(108f), -1)
+    bentLeader(X(256f + 21f), Y(108f), R - 3f, rightTops[1] + rightH[1] / 2f)
+    titled("Right stick", rsL, R, rightTops[1], -1)
 
     // Shoulders, above their tabs: L1 / R1 nearest the Thor, L2 / R2 above them.
     fun shoulders(list: List<Sh>, edge: Float, a: Int) {

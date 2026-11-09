@@ -21,6 +21,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -74,6 +75,9 @@ import io.github.hiramrg.delphis.core.BottomScreen
  *  - "Change preset" and "Edit preset" at the bottom (both restart the game to apply).
  * The window never takes input focus, so gamepad presses keep going to Dolphin on the top screen.
  */
+
+/** Narrowest back-gesture zone assumed when Android reports none (immersive mode on some firmwares). */
+private val EDGE_MIN = 28.dp
 
 class NowPlayingActivity : ComponentActivity() {
     companion object {
@@ -488,9 +492,19 @@ class NowPlayingActivity : ComponentActivity() {
                             Modifier.align(Alignment.CenterHorizontally).padding(bottom = 6.dp).alpha(fade),
                         )
                         val touchButtons = remember(preset) { io.github.hiramrg.delphis.core.TouchButtons.of(preset) }
-                        if (padView) Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Keep the pad (and its buttons) out of Android's left/right back-gesture zones: a swipe that starts
+                        // there sends Back to Dolphin, which opens its menu. Padding moves them clear; exclusion covers the rest.
+                        val density = androidx.compose.ui.platform.LocalDensity.current
+                        val dir = androidx.compose.ui.platform.LocalLayoutDirection.current
+                        val gestures = WindowInsets.systemGestures
+                        val edgeL = with(density) { gestures.getLeft(density, dir).toDp() }.coerceAtLeast(EDGE_MIN)
+                        val edgeR = with(density) { gestures.getRight(density, dir).toDp() }.coerceAtLeast(EDGE_MIN)
+                        if (padView) Row(
+                            Modifier.weight(1f).fillMaxWidth().padding(start = (edgeL - 10.dp + 4.dp).coerceAtLeast(0.dp), end = (edgeR - 10.dp + 4.dp).coerceAtLeast(0.dp)),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                             TrackpadPad(
-                                Modifier.weight(1f).fillMaxHeight().onGloballyPositioned { padBounds = it.boundsInRoot() },
+                                Modifier.weight(1f).fillMaxHeight().systemGestureExclusion().onGloballyPositioned { padBounds = it.boundsInRoot() },
                                 onActive = { padActive = it },
                                 onDown = { DolphinExitService.trackpadDown(topDisplay) },
                                 onMove = { dx, dy -> DolphinExitService.trackpadMove(dx, dy, padSpeed) },
@@ -500,7 +514,7 @@ class NowPlayingActivity : ComponentActivity() {
                             )
                             // Motion touch buttons (e.g. Red Steel Trackpad + Touch Buttons): held while touched.
                             if (touchButtons.isNotEmpty()) TouchButtonColumn(
-                                touchButtons, Modifier.width(96.dp).fillMaxHeight(),
+                                touchButtons, Modifier.width(96.dp).fillMaxHeight().systemGestureExclusion(),
                                 onPress = { i, pressed -> io.github.hiramrg.delphis.platform.DsuServer.setTouchButton(i, pressed) },
                             )
                         } else WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
