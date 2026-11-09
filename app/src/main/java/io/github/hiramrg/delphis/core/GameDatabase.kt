@@ -120,7 +120,10 @@ object GameDatabase {
     fun suggest(game: GameInfo): Suggestion {
         val rule = findRule(game)
         if (rule != null) {
-            val alternatives = (rule.more + wiiGenerics).distinctBy { it.id }.filter { candidate -> rule.choices.none { it.id == candidate.id } }
+            // One gyro preset per game: a game with its own leaves out the generic one.
+            val ownGyro = (rule.choices + rule.more).any { it.isGyro }
+            val alternatives = (rule.more + wiiGenerics.filter { !(ownGyro && it.isGyro) })
+                .distinctBy { it.id }.filter { candidate -> rule.choices.none { it.id == candidate.id } }
             return Suggestion(rule.title, rule.question, rule.choices, alternatives, rule.askBeforePlaying)
         }
 

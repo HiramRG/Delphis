@@ -82,6 +82,9 @@ data class Preset(
     /** Uses the bottom-screen trackpad for the pointer (see [PresetLibrary.POINTER_TRACKPAD]). */
     val isTrackpad: Boolean get() = options[TRACKPAD_OPTION] == "True"
 
+    /** Aims the pointer with the Thor's gyroscope. */
+    val isGyro: Boolean get() = mappings.any { it.control == ThorControl.GYRO }
+
     /** File name (without .ini) used under Config/Profiles/<Wiimote|GCPad>/. */
     val profileName: String get() = "Delphis-$id"
 
