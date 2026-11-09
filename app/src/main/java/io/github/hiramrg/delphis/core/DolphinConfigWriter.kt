@@ -225,7 +225,7 @@ object DolphinConfigWriter {
         set("Server", mapOf("Enabled" to "True", "Entries" to others + entry))
     }.toString()
 
-    const val DSU_CLIENT_INI = "Config/DSUClient.ini"
+    val DSU_CLIENT_INI = listOf("Config", "DSUClient.ini")
 
     /** Dolphin's Quick Save/Load slot: NativeLibrary.SaveState(9) → StateSaves/<GAMEID>.s09. */
     fun quickStatePath(gameId: String) = listOf("StateSaves", "$gameId.s09")
