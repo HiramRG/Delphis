@@ -88,7 +88,7 @@ class CoreLogicTest {
         val opts = ActionCatalog.buttonOptions(base.controller)
         val two = opts.first { it.label == "2 button" }
         val edited = ActionCatalog.applyEdits(base, mapOf(ThorControl.FACE_SOUTH to two, ThorControl.R3 to ActionCatalog.NOTHING), "custom-RMGE01")
-        check(edited.id == "custom-RMGE01" && edited.name == "Pointer on right stick (custom)", "custom id/name")
+        check(edited.id == "custom-RMGE01" && edited.name == "Pointer on Right Stick (Custom)", "custom id/name")
         check(edited.mappings.first { it.control == ThorControl.FACE_SOUTH }.target == io.github.hiramrg.delphis.core.Target.Buttons(listOf("Buttons/2")), "edited target")
         check(edited.mappings.none { it.control == ThorControl.R3 }, "nothing removes")
         check(edited.mappings.first { it.control == ThorControl.FACE_EAST }.action == "Jump (A)", "unchanged kept")
