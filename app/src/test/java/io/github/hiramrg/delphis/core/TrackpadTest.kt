@@ -49,4 +49,29 @@ class TrackpadTest {
     fun dolphinsOwnTouchPointerIsTurnedOff() {
         assertTrue(DolphinConfigWriter.trackpadDolphinIni("[Android]\nIRMode = 1\n").contains("IRMode = 0"))
     }
+
+    @Test
+    fun redSteelPresetsAreSuggestedAndTouchButtonsReachDolphin() {
+        val s = GameDatabase.suggest(GameInfo("REDE41", "Red Steel", Platform.WII))
+        assertEquals(listOf(PresetLibrary.RED_STEEL_TRACKPAD, PresetLibrary.RED_STEEL_TOUCH), s.choices)
+        assertTrue(PresetLibrary.RED_STEEL_TOUCH.isTrackpad)
+        assertTrue(TouchButtons.of(PresetLibrary.RED_STEEL_TRACKPAD).isEmpty())
+        assertEquals(4, TouchButtons.of(PresetLibrary.RED_STEEL_TOUCH).size)
+        val ini = DolphinConfigWriter.renderProfile(PresetLibrary.RED_STEEL_TOUCH, ControllerProfile())
+        // Zoom (touch button 0) holds A and pushes the remote forward, next to L1's own binding.
+        assertTrue(ini.lines().first { it.startsWith("Swing/Forward = ") }.contains("${Dsu.DEVICE}:Square"))
+        assertTrue(ini.lines().first { it.startsWith("Buttons/A = ") }.contains("${Dsu.DEVICE}:Square"))
+        assertTrue(ini.contains("IR/Up = `${Dsu.DEVICE}:Touch Y-`"))
+        assertFalse(ini.contains("Delphis/"))
+        // Multiplayer falls back to the plain Nunchuk + pointer preset.
+        assertEquals(PresetLibrary.POINTER_ADVENTURE, Players.multiplayerPreset(PresetLibrary.RED_STEEL_TOUCH))
+    }
+
+    @Test
+    fun touchButtonsPressTheDsuFaceButtons() {
+        val pad = Dsu.padData(7, 1, 1, 0, 0, faceButtons = 0b0101)
+        // Analog face buttons at offset 48: Square, Cross, Circle, Triangle.
+        assertEquals(255, pad[48].toInt() and 0xFF); assertEquals(0, pad[49].toInt())
+        assertEquals(255, pad[50].toInt() and 0xFF); assertEquals(0, pad[51].toInt())
+    }
 }

@@ -454,15 +454,23 @@ class NowPlayingActivity : ComponentActivity() {
                             listOf(false to "▦ Map", true to "◎ Trackpad"), padView, { padView = it },
                             Modifier.align(Alignment.CenterHorizontally).padding(bottom = 6.dp).alpha(fade),
                         )
-                        if (padView) TrackpadPad(
-                            Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { padBounds = it.boundsInRoot() },
-                            onActive = { padActive = it },
-                            onDown = { DolphinExitService.trackpadDown(topDisplay) },
-                            onMove = { dx, dy -> DolphinExitService.trackpadMove(dx, dy, padSpeed) },
-                            onUp = { DolphinExitService.trackpadUp() },
-                            onDoubleTap = { recenterPointer() },
-                            recenterCount = recenterCount,
-                        ) else WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
+                        val touchButtons = remember(preset) { io.github.hiramrg.delphis.core.TouchButtons.of(preset) }
+                        if (padView) Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TrackpadPad(
+                                Modifier.weight(1f).fillMaxHeight().onGloballyPositioned { padBounds = it.boundsInRoot() },
+                                onActive = { padActive = it },
+                                onDown = { DolphinExitService.trackpadDown(topDisplay) },
+                                onMove = { dx, dy -> DolphinExitService.trackpadMove(dx, dy, padSpeed) },
+                                onUp = { DolphinExitService.trackpadUp() },
+                                onDoubleTap = { recenterPointer() },
+                                recenterCount = recenterCount,
+                            )
+                            // Motion touch buttons (e.g. Red Steel Trackpad + Touch Buttons): held while touched.
+                            if (touchButtons.isNotEmpty()) TouchButtonColumn(
+                                touchButtons, Modifier.width(96.dp).fillMaxHeight(),
+                                onPress = { i, pressed -> io.github.hiramrg.delphis.platform.DsuServer.setTouchButton(i, pressed) },
+                            )
+                        } else WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
                             ControlsMap(preset, Modifier.fillMaxSize())
                         }
                     }

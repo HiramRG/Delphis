@@ -91,16 +91,24 @@ object Dsu {
         put(0)
     }
 
-    /** Pad 0's state: sticks centred, nothing pressed, touch 1 down at ([touchX], [touchY]) with id [touchId]. */
-    fun padData(serverId: Int, counter: Int, touchId: Int, touchX: Int, touchY: Int): ByteArray = message(100, TYPE_PAD_DATA, serverId) {
+    /**
+     * Pad 0's state: sticks centred, touch 1 down at ([touchX], [touchY]) with id [touchId]. Bit i of
+     * [faceButtons] presses face button i (Square, Cross, Circle, Triangle; the trackpad's touch buttons).
+     */
+    fun padData(serverId: Int, counter: Int, touchId: Int, touchX: Int, touchY: Int, faceButtons: Int = 0): ByteArray = message(100, TYPE_PAD_DATA, serverId) {
         put(0); put(2); put(3); put(1) // pad 0, connected, generic, USB
         put(ByteArray(6) { if (it == 5) 1 else 0 })
         put(5) // battery full
         put(1) // active
         putInt(counter)
-        put(0); put(0); put(0); put(0) // buttons, PS, touch button
+        // Digital face bits (states2: Triangle 0x10, Circle 0x20, Cross 0x40, Square 0x80), PS, touch button.
+        val digital = (if (faceButtons and 1 != 0) 0x80 else 0) or (if (faceButtons and 2 != 0) 0x40 else 0) or
+            (if (faceButtons and 4 != 0) 0x20 else 0) or (if (faceButtons and 8 != 0) 0x10 else 0)
+        put(0); put(digital.toByte()); put(0); put(0)
         put(128.toByte()); put(128.toByte()); put(128.toByte()); put(128.toByte()) // sticks centred
-        repeat(12) { put(0) } // analog d-pad, face buttons, R1 L1 R2 L2
+        repeat(4) { put(0) } // analog d-pad
+        for (i in 0 until 4) put((if (faceButtons and (1 shl i) != 0) 255 else 0).toByte()) // Square, Cross, Circle, Triangle (what Dolphin reads)
+        repeat(4) { put(0) } // R1 L1 R2 L2
         put(1); put(touchId.toByte()); putShort(touchX.toShort()); putShort(touchY.toShort()) // touch 1
         put(0); put(0); putShort(0); putShort(0) // touch 2
         putLong(0L) // motion timestamp

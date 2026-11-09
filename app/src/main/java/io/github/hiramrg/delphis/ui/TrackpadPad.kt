@@ -146,3 +146,57 @@ fun <T> SegmentedPill(options: List<Pair<T, String>>, selected: T, onSelect: (T)
         }
     }
 }
+
+/**
+ * Touch buttons beside the trackpad (presets with [io.github.hiramrg.delphis.core.TOUCH_BUTTONS_OPTION]).
+ * Each is held while a finger is on it, so it works together with a finger on the pad.
+ */
+@Composable
+fun TouchButtonColumn(
+    buttons: List<io.github.hiramrg.delphis.core.TouchButton>,
+    modifier: Modifier,
+    onPress: (index: Int, pressed: Boolean) -> Unit,
+) {
+    DisposableEffect(buttons) { onDispose { buttons.indices.forEach { onPress(it, false) } } }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        buttons.forEachIndexed { i, b ->
+            TouchMotionButton(b, Modifier.weight(1f).fillMaxWidth()) { onPress(i, it) }
+        }
+    }
+}
+
+@Composable
+private fun TouchMotionButton(b: io.github.hiramrg.delphis.core.TouchButton, modifier: Modifier, onPress: (Boolean) -> Unit) {
+    var down by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(14.dp)
+    Column(
+        modifier
+            .clip(shape)
+            .background(if (down) PadAccent.copy(alpha = 0.28f) else Color(0xFF1D2329))
+            .border(2.dp, if (down) PadAccent else Color(0xFF3A424C), shape)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val first = awaitFirstDown(requireUnconsumed = false)
+                    first.consume()
+                    down = true; onPress(true)
+                    try {
+                        while (true) {
+                            val ev = awaitPointerEvent()
+                            val ch = ev.changes.firstOrNull { it.id == first.id } ?: break
+                            ch.consume()
+                            if (!ch.pressed) break
+                        }
+                    } finally {
+                        down = false; onPress(false)
+                    }
+                }
+            }
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(b.icon, fontSize = 15.sp, color = Color(0xFF7FD6F5))
+        Text(b.label, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFE8EDF2), maxLines = 1)
+        Text(b.sub, fontSize = 9.sp, color = Color(0xFF8E9AA6), maxLines = 1, textAlign = TextAlign.Center)
+    }
+}

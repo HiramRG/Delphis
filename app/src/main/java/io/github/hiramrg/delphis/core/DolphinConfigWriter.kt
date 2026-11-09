@@ -39,6 +39,11 @@ object DolphinConfigWriter {
             }
         }
 
+        // Touch buttons beside the trackpad press the DSU pad's face buttons (platform/DsuServer).
+        TouchButtons.of(preset).forEachIndexed { i, b ->
+            b.keys.forEach { bind(it, "`${Dsu.DEVICE}:${TouchButtons.INPUTS[i]}`") }
+        }
+
         val lines = linkedMapOf<String, String>()
         for ((key, exprs) in bindings) lines[key] = exprs.joinToString(" | ")
         // Trackpad presets: the pointer follows the bottom-screen trackpad, which Delphis serves to Dolphin

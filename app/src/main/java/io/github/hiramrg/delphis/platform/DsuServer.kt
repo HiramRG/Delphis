@@ -32,6 +32,7 @@ object DsuServer {
     private val encoder = Dsu.TouchEncoder()
     private var x = 0f
     private var y = 0f
+    private var faceButtons = 0
 
     @Volatile var requests = 0; private set
     @Volatile var packetsSent = 0; private set
@@ -81,7 +82,7 @@ object DsuServer {
         val s = socket ?: return
         val to = client ?: return
         if (SystemClock.uptimeMillis() - lastRequestAt > 5000) return // Dolphin isn't listening
-        for ((id, tx, ty) in list) send(s, to, Dsu.padData(serverId, ++counter, id, tx, ty))
+        for ((id, tx, ty) in list) send(s, to, Dsu.padData(serverId, ++counter, id, tx, ty, faceButtons))
     }
 
     private fun send(s: DatagramSocket, to: SocketAddress, bytes: ByteArray) {
@@ -107,10 +108,25 @@ object DsuServer {
         sender.post { x = 0f; y = 0f; CrashLog.event("trackpad: recenter"); sendTouches(encoder.sync(x, y)) }
     }
 
-    /** New game: start in the middle. */
+    /** New game: start in the middle, nothing held. */
     fun reset() {
         ensureStarted()
-        sender.post { x = 0f; y = 0f; sendTouches(encoder.sync(x, y)) }
+        sender.post { x = 0f; y = 0f; faceButtons = 0; sendTouches(encoder.sync(x, y)) }
+    }
+
+    /** A touch button beside the trackpad went down / up: it holds the pad's face button [index]. */
+    fun setTouchButton(index: Int, pressed: Boolean) {
+        ensureStarted()
+        sender.post {
+            val bit = 1 shl index
+            faceButtons = if (pressed) faceButtons or bit else faceButtons and bit.inv()
+            sendTouches(listOf(encoder.current()))
+        }
+    }
+
+    /** Lets go of every touch button (leaving the trackpad). */
+    fun releaseTouchButtons() {
+        sender.post { if (faceButtons != 0) { faceButtons = 0; sendTouches(listOf(encoder.current())) } }
     }
 
     fun status(): String =

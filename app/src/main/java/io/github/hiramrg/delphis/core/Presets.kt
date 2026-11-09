@@ -499,12 +499,47 @@ object PresetLibrary {
         "Left stick moves; aim the Wii pointer by sliding a finger on the bottom screen.",
     )
 
+    // ---------------------------------------------------------------- Red Steel
+    /**
+     * Red Steel's motions as buttons: aim with the trackpad, zoom = A held while the remote is pushed
+     * toward the screen, the katana follows right-stick flicks (Swing), and the Nunchuk's flick (Shake)
+     * and thrust (Swing forward) sit on Y and X.
+     */
+    val RED_STEEL_TRACKPAD = preset("redsteel-trackpad", "Red Steel Trackpad", EmulatedController.WIIMOTE_NUNCHUK) {
+        summary = "Aim with the bottom-screen trackpad; zoom, push, Nunchuk flicks and the katana are all on the Thor's buttons."
+        directional(ThorControl.LEFT_STICK, "Move", "Nunchuk/Stick")
+        button(ThorControl.R2, "Fire (B)", "Buttons/B")
+        button(ThorControl.R1, "Lock on (A)", "Buttons/A")
+        button(ThorControl.L1, "Zoom (A + push toward screen)", "Buttons/A", "Swing/Forward")
+        button(ThorControl.L2, "Crouch (Z)", "Nunchuk/Buttons/Z")
+        button(ThorControl.FACE_EAST, "Push (Wii Remote forward)", "Swing/Forward")
+        button(ThorControl.FACE_SOUTH, "Jump (C)", "Nunchuk/Buttons/C")
+        button(ThorControl.FACE_NORTH, "Block (Nunchuk thrust)", "Nunchuk/Swing/Forward")
+        button(ThorControl.FACE_WEST, "Reload · Doors (Nunchuk flick)", *NUNCHUK_SHAKE)
+        directional(ThorControl.RIGHT_STICK, "Katana (flick)", "Swing")
+        directional(ThorControl.DPAD, "Reload · Switch gun · Grenade", "D-Pad")
+        wiiSystemButtons()
+        option("Extension", "Nunchuk")
+        option(TRACKPAD_OPTION, "True")
+        option("IR/Relative Input", "False")
+        tip("Slide a finger on the bottom screen to aim. Double-tap the pad (or press Recenter) to put the pointer back in the middle.")
+        tip("Hold L1 to zoom; let go to zoom back out. Flick the right stick in the direction of a katana slash.")
+        tip("Grenade: hold D-pad down to take one out, then press R2 to throw it (or Y for an overhand throw).")
+        tip("First time only: force-stop Dolphin (Android Settings → Apps → Dolphin → Force stop) so it connects to Delphis' trackpad.")
+    }
+
+    val RED_STEEL_TOUCH = RED_STEEL_TRACKPAD.copy(
+        id = "redsteel-touch", name = "Red Steel Trackpad + Touch Buttons",
+        summary = "The same controls, plus Zoom, Reload, Grenade and Push as touch buttons beside the trackpad.",
+        options = RED_STEEL_TRACKPAD.options + (TOUCH_BUTTONS_OPTION to TouchButtons.RED_STEEL_SET),
+    )
+
     val ALL: List<Preset> = listOf(
         GALAXY_RIGHT_STICK, NSMB_SIDEWAYS, MKW_NUNCHUK, MKW_WHEEL_STICK, MKW_WHEEL_GYRO,
         DKCR_SIDEWAYS, KIRBY_SIDEWAYS, PAPER_MARIO_SIDEWAYS, POINTER_ADVENTURE,
         GENERIC_SIDEWAYS, CLASSIC_CONTROLLER, GAMECUBE, SMASH_GC,
     ) + GALAXY_GYRO_ALL + POINTER_GYRO_ALL + GALAXY_PRECISION_ALL + POINTER_PRECISION_ALL +
-        listOf(GALAXY_TRACKPAD, POINTER_TRACKPAD)
+        listOf(GALAXY_TRACKPAD, POINTER_TRACKPAD, RED_STEEL_TRACKPAD, RED_STEEL_TOUCH)
 
     fun byId(id: String): Preset? = ALL.firstOrNull { it.id == id }
 }

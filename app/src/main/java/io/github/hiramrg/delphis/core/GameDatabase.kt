@@ -90,6 +90,12 @@ object GameDatabase {
             more = PresetLibrary.POINTER_GYRO_ALL + PresetLibrary.POINTER_TRACKPAD,
         ),
         GameRule(
+            setOf("RED"), "Red Steel", listOf("red steel"),
+            "Red Steel aims with the pointer and uses lots of motions. Aim with the trackpad; motions are on buttons:",
+            listOf(PresetLibrary.RED_STEEL_TRACKPAD, PresetLibrary.RED_STEEL_TOUCH),
+            more = listOf(PresetLibrary.POINTER_ADVENTURE, PresetLibrary.POINTER_TRACKPAD) + PresetLibrary.POINTER_PRECISION_ALL,
+        ),
+        GameRule(
             setOf("RSB"), "Super Smash Bros. Brawl", listOf("smash bros", "brawl"),
             "Brawl supports the GameCube controller, which is the best fit for the Thor:",
             listOf(PresetLibrary.SMASH_GC, PresetLibrary.CLASSIC_CONTROLLER),

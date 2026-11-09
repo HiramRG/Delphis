@@ -90,7 +90,8 @@ object Players {
     /** Each gyro / tilt / trackpad preset and the plain preset it's built on. */
     private val plainVersion: Map<String, Preset> by lazy {
         val galaxy = PresetLibrary.GALAXY_GYRO_ALL + PresetLibrary.GALAXY_PRECISION_ALL + PresetLibrary.GALAXY_TRACKPAD
-        val pointer = PresetLibrary.POINTER_GYRO_ALL + PresetLibrary.POINTER_PRECISION_ALL + PresetLibrary.POINTER_TRACKPAD
+        val pointer = PresetLibrary.POINTER_GYRO_ALL + PresetLibrary.POINTER_PRECISION_ALL + PresetLibrary.POINTER_TRACKPAD +
+            PresetLibrary.RED_STEEL_TRACKPAD + PresetLibrary.RED_STEEL_TOUCH
         galaxy.associate { it.id to PresetLibrary.GALAXY_RIGHT_STICK } + pointer.associate { it.id to PresetLibrary.POINTER_ADVENTURE } +
             (PresetLibrary.MKW_WHEEL_GYRO.id to PresetLibrary.MKW_WHEEL_STICK)
     }
@@ -108,7 +109,7 @@ object Players {
             m.control != ThorControl.GYRO && m.control != ThorControl.MOTION &&
                 !(m.target is Target.Buttons && GYRO_HOLD in (m.target as Target.Buttons).keys)
         }
-        return p.copy(mappings = mappings, options = p.options - TRACKPAD_OPTION)
+        return p.copy(mappings = mappings, options = p.options - TRACKPAD_OPTION - TOUCH_BUTTONS_OPTION)
     }
 
     fun forExternal(p: Preset): Preset = multiplayerPreset(p)
