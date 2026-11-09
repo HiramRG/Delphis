@@ -63,7 +63,7 @@ fun GyroTestScreen(act: MainActivity) {
     var speedLevel by remember { mutableFloatStateOf(prefs.gyroSensitivity.toFloat()) }
     var invertX by remember { mutableStateOf(prefs.gyroInvertX) }
     var invertY by remember { mutableStateOf(prefs.gyroInvertY) }
-    var precision by remember { mutableStateOf(true) }
+    val precision = true // only the precision style is offered (the "Gyro Aiming" presets)
     val state = remember { GyroState() }
     var frame by remember { mutableLongStateOf(0L) }
 
@@ -180,14 +180,8 @@ fun GyroTestScreen(act: MainActivity) {
         // Right: settings.
         WiiCard(Modifier.weight(1f).fillMaxHeight(), radius = 20.dp, padding = 12.dp) {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Style", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    WiiChip("Precision", precision, { precision = true })
-                    WiiChip("Classic", !precision, { precision = false })
-                }
                 Text(
-                    if (precision) "Slow moves aim finely, fast moves go far. Hold R1 to freeze the pointer and re-position. Matches the \"Precision gyro\" presets."
-                    else "Up/down follows gravity. Matches the \"Gyro aiming\" presets.",
+                    "Slow moves aim finely, fast moves go far. Hold R1 to freeze the pointer and re-position. Matches the \"Gyro Aiming\" presets.",
                     fontSize = 11.sp, color = c.textDim,
                 )
                 Text("Left/right follows", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)

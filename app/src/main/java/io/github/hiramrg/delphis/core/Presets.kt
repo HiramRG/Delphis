@@ -405,6 +405,7 @@ object PresetLibrary {
         )
     }
 
+    /** Plain gyro presets: no longer offered (see [byId]); kept for their expressions and old saves. */
     /** A gyro preset (inverting up/down or left/right is a setting: Settings → Gyro aiming). */
     private fun gyroVariants(base: Preset, idBase: String, name: String, summary: String) = listOf(
         withGyroAiming(base, idBase, "$name (Experimental)", summary, invertX = false, invertY = false),
@@ -446,7 +447,7 @@ object PresetLibrary {
     private fun precisionVariants(
         base: Preset, idBase: String, summary: String, relabel: Map<ThorControl, Mapping>, extraTips: List<String> = emptyList(),
     ): List<Preset> {
-        return listOf(withPrecisionAim(base, idBase, "Precision Gyro (Experimental)", summary, false, false, relabel, extraTips))
+        return listOf(withPrecisionAim(base, idBase, "Gyro Aiming (Experimental)", summary, false, false, relabel, extraTips))
     }
 
     val GALAXY_PRECISION_ALL = precisionVariants(
@@ -538,10 +539,16 @@ object PresetLibrary {
         GALAXY_RIGHT_STICK, NSMB_SIDEWAYS, MKW_NUNCHUK, MKW_WHEEL_STICK, MKW_WHEEL_GYRO,
         DKCR_SIDEWAYS, KIRBY_SIDEWAYS, PAPER_MARIO_SIDEWAYS, POINTER_ADVENTURE,
         GENERIC_SIDEWAYS, CLASSIC_CONTROLLER, GAMECUBE, SMASH_GC,
-    ) + GALAXY_GYRO_ALL + POINTER_GYRO_ALL + GALAXY_PRECISION_ALL + POINTER_PRECISION_ALL +
+    ) + GALAXY_PRECISION_ALL + POINTER_PRECISION_ALL +
         listOf(GALAXY_TRACKPAD, POINTER_TRACKPAD, RED_STEEL_TRACKPAD, RED_STEEL_TOUCH)
 
-    fun byId(id: String): Preset? = ALL.firstOrNull { it.id == id }
+    /**
+     * One gyro preset per game (Nov 2026): the plain gyro presets were retired in favour of the
+     * precision ones ("Gyro Aiming"). Games that remembered a retired preset get its replacement.
+     */
+    private val retired = mapOf(GALAXY_GYRO.id to GALAXY_PRECISION, POINTER_GYRO.id to POINTER_PRECISION)
+
+    fun byId(id: String): Preset? = ALL.firstOrNull { it.id == id } ?: retired[id]
 }
 
 /**

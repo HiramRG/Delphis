@@ -41,15 +41,15 @@ object GameDatabase {
     private val rules = listOf(
         GameRule(
             setOf("RMG"), "Super Mario Galaxy", listOf("mario galaxy"),
-            "Galaxy needs the Wii pointer and a spin. Aim with the right stick, or by turning the Thor (gyro):",
+            "Galaxy needs the Wii pointer and a spin. Aim with the right stick, or by turning the Thor:",
             listOf(PresetLibrary.GALAXY_RIGHT_STICK) + PresetLibrary.GALAXY_PRECISION_ALL,
-            more = PresetLibrary.GALAXY_GYRO_ALL + PresetLibrary.GALAXY_TRACKPAD,
+            more = listOf(PresetLibrary.GALAXY_TRACKPAD),
         ),
         GameRule(
             setOf("SB4"), "Super Mario Galaxy 2", listOf("mario galaxy 2", "galaxy 2"),
-            "Galaxy 2 needs the Wii pointer and a spin. Aim with the right stick, or by turning the Thor (gyro):",
+            "Galaxy 2 needs the Wii pointer and a spin. Aim with the right stick, or by turning the Thor:",
             listOf(PresetLibrary.GALAXY_RIGHT_STICK) + PresetLibrary.GALAXY_PRECISION_ALL,
-            more = PresetLibrary.GALAXY_GYRO_ALL + PresetLibrary.GALAXY_TRACKPAD,
+            more = listOf(PresetLibrary.GALAXY_TRACKPAD),
         ),
         GameRule(
             setOf("SMN"), "New Super Mario Bros. Wii", listOf("new super mario", "nsmb"),
@@ -81,13 +81,13 @@ object GameDatabase {
             setOf("RZD"), "Zelda: Twilight Princess (Wii)", listOf("twilight princess"),
             "Twilight Princess uses the Nunchuk, the pointer and shakes. Aim with the right stick or the gyro:",
             listOf(PresetLibrary.POINTER_ADVENTURE) + PresetLibrary.POINTER_PRECISION_ALL,
-            more = PresetLibrary.POINTER_GYRO_ALL + PresetLibrary.POINTER_TRACKPAD,
+            more = listOf(PresetLibrary.POINTER_TRACKPAD),
         ),
         GameRule(
             setOf("RM3", "R3M"), "Metroid Prime 3 / Trilogy", listOf("metroid prime"),
-            "Metroid Prime aims with the Wii pointer. Aim with the right stick, or by turning the Thor (gyro):",
+            "Metroid Prime aims with the Wii pointer. Aim with the right stick, or by turning the Thor:",
             listOf(PresetLibrary.POINTER_ADVENTURE) + PresetLibrary.POINTER_PRECISION_ALL,
-            more = PresetLibrary.POINTER_GYRO_ALL + PresetLibrary.POINTER_TRACKPAD,
+            more = listOf(PresetLibrary.POINTER_TRACKPAD),
         ),
         GameRule(
             setOf("RED"), "Red Steel", listOf("red steel"),
@@ -106,7 +106,6 @@ object GameDatabase {
     private val wiiGenerics = listOf(
         PresetLibrary.POINTER_ADVENTURE,
         *PresetLibrary.POINTER_PRECISION_ALL.toTypedArray(),
-        *PresetLibrary.POINTER_GYRO_ALL.toTypedArray(),
         PresetLibrary.POINTER_TRACKPAD,
         PresetLibrary.GENERIC_SIDEWAYS,
         PresetLibrary.CLASSIC_CONTROLLER,

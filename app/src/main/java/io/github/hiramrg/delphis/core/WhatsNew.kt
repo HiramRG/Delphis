@@ -11,6 +11,7 @@ object WhatsNew {
 
     val items = listOf(
         Item("Red Steel presets.", "Two new presets made for Red Steel: aim with the trackpad, hold L1 to zoom, flick the right stick to slash, and the Nunchuk's motions are on Y and X. \"+ Touch Buttons\" adds Zoom, Reload, Grenade and Push beside the trackpad."),
+        Item("One gyro preset per game.", "Games that offered two gyro presets now offer just \"Gyro Aiming\" (the precise one: hold R1 to re-position). Games set to the old one switch to it by themselves."),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

@@ -99,7 +99,7 @@ object Players {
     /**
      * The preset everyone uses in multiplayer (and anyone on an external controller): no gyro, tilt or
      * trackpad, so all players have the same controls. Built-in gyro / tilt / trackpad presets become
-     * the plain preset they're built on (e.g. Precision Gyro → Nunchuk + Pointer on Right Stick, Wii
+     * the plain preset they're built on (e.g. Gyro Aiming → Nunchuk + Pointer on Right Stick, Wii
      * Wheel (Tilt the Thor) → Wii Wheel (Tilt on Stick)); custom ones lose those mappings.
      */
     fun multiplayerPreset(p: Preset): Preset {

@@ -95,11 +95,17 @@ class GyroAimingTest {
     }
 
     @Test
-    fun galaxyOffersStickAndAllGyroVariants() {
+    fun galaxyOffersStickAndOneGyroPreset() {
         val s = GameDatabase.suggest(GameInfo("SB4E01", "Super Mario Galaxy 2", Platform.WII))
         assertEquals(listOf("galaxy-rstick", "galaxy-precise"), s.choices.map { it.id })
-        // The classic gyro presets are still there, first under "Other layouts".
-        assertEquals("galaxy-gyro", s.alternatives.first().id)
+        // Only one gyro preset per game: the plain ones are retired.
+        assertTrue((s.choices + s.alternatives).none { it.id == "galaxy-gyro" || it.id == "nunchuk-gyro" })
+        assertEquals(1, (s.choices + s.alternatives).count { p -> p.mappings.any { it.control == ThorControl.GYRO } })
+        // A game that remembered a retired preset gets the remaining one.
+        assertEquals(PresetLibrary.GALAXY_PRECISION, PresetLibrary.byId("galaxy-gyro"))
+        assertEquals(PresetLibrary.POINTER_PRECISION, PresetLibrary.byId("nunchuk-gyro"))
+        val generic = GameDatabase.suggest(GameInfo("RXXE01", "Some Wii game", Platform.WII))
+        assertEquals(1, generic.choices.count { p -> p.mappings.any { it.control == ThorControl.GYRO } })
     }
 
     @Test
