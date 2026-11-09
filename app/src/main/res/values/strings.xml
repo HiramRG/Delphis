@@ -2,5 +2,5 @@
 <resources>
     <string name="app_name">Delphis</string>
     <string name="exit_service_label">Delphis – close games</string>
-    <string name="exit_service_description">Lets Delphis close the running game for you (it presses Dolphin\'s own \"Exit Emulation\" button) when you choose Main menu, Change preset or Edit preset. Without it, Android on the AYN Thor may keep the old game running. Delphis never reads or changes your controller input with this.</string>
+    <string name="exit_service_description">Lets Delphis close the running game for you (it presses Dolphin\'s own \"Exit Emulation\" button) when you choose Main menu, Change preset or Edit preset. Without it, Android on the AYN Thor may keep the old game running. With a trackpad preset it also passes your bottom-screen trackpad to Dolphin\'s touch pointer. Delphis never reads or changes your controller input with this.</string>
 </resources>

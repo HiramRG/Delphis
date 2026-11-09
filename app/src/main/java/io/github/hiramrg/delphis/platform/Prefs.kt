@@ -192,6 +192,10 @@ class Prefs(context: Context) {
         get() = sp.getString("last_applied", null)
         set(v) = sp.edit().putString("last_applied", v).apply()
 
+    /** Bottom-screen trackpad speed, per game. */
+    fun trackpadSpeed(gameKey: String) = io.github.hiramrg.delphis.core.Trackpad.Speed.of(sp.getString("trackpad_speed_$gameKey", null))
+    fun setTrackpadSpeed(gameKey: String, speed: io.github.hiramrg.delphis.core.Trackpad.Speed) = sp.edit().putString("trackpad_speed_$gameKey", speed.id).apply()
+
     fun presetFor(gameKey: String): String? = sp.getString("preset_$gameKey", null)
     fun setPresetFor(gameKey: String, presetId: String?) = sp.edit().putString("preset_$gameKey", presetId).apply()
 

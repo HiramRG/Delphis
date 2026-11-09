@@ -34,6 +34,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -309,6 +311,15 @@ class NowPlayingActivity : ComponentActivity() {
             else helperPrompt = action
         }
 
+        // Bottom-screen trackpad (trackpad presets): Map / Trackpad switch, finger-on-pad state, speed.
+        var padView by remember(preset.id) { mutableStateOf(preset.isTrackpad) }
+        var padActive by remember { mutableStateOf(false) }
+        var padBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+        var padSpeed by remember(s.key) { mutableStateOf(prefs.trackpadSpeed(s.key)) }
+        val topDisplay = remember { DeviceInfo.screenRoles(this@NowPlayingActivity, prefs.swapScreens).topDisplayId }
+        LaunchedEffect(startedAt) { DolphinExitService.trackpadReset() }
+        val fade by animateFloatAsState(if (padActive) 0.25f else 1f, tween(200), label = "padFade")
+
         // Turned off with "Turn screen off" in the brightness panel; the next touch wakes it.
         var screenOff by remember { mutableStateOf(false) }
         // Android's back gesture must never just hide this screen and leave the game running
@@ -342,6 +353,10 @@ class NowPlayingActivity : ComponentActivity() {
         }
         val look = BottomScreen.look(screenMode, autoDim, idle, screenOff, keepBright)
         val dimmedNow by rememberUpdatedState(look != BottomScreen.Look.BRIGHT)
+        // Touches on the trackpad aim; they never wake, dim or get swallowed.
+        val padHit by rememberUpdatedState<(androidx.compose.ui.geometry.Offset) -> Boolean> { p ->
+            mode == Mode.VIEW && padView && padBounds?.contains(p) == true
+        }
 
         // Window brightness: the system level when bright; while the panel is open, the level being
         // picked. Changes fade over FADE_MS instead of snapping.
@@ -374,6 +389,7 @@ class NowPlayingActivity : ComponentActivity() {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.changes.isNotEmpty() && event.changes.all { padHit(it.position) }) continue
                         if (dimmedNow) event.changes.forEach { it.consume() }
                         screenOff = false
                         lastTouch = SystemClock.uptimeMillis()
@@ -381,10 +397,10 @@ class NowPlayingActivity : ComponentActivity() {
                 }
             },
         ) {
-            StatusBanner(Modifier.alpha(contentAlpha))
+            StatusBanner(Modifier.alpha(contentAlpha * fade))
             Column(Modifier.fillMaxSize().alpha(contentAlpha).padding(start = 10.dp, end = 10.dp, top = 28.dp, bottom = 6.dp)) {
                 // ---------------- top bar: Home | title (centred) | brightness
-                Box(Modifier.fillMaxWidth()) {
+                Box(Modifier.fillMaxWidth().alpha(fade)) {
                     Box(Modifier.align(Alignment.CenterStart)) {
                         HomePill { if (prefs.skipExitWarning) backToMainMenu() else confirmExit = true }
                     }
@@ -410,8 +426,23 @@ class NowPlayingActivity : ComponentActivity() {
                 // ---------------- middle
                 when (mode) {
                     // Same Thor button map as the game page.
-                    Mode.VIEW -> WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
+                    Mode.VIEW -> if (!preset.isTrackpad) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
                         ControlsMap(preset, Modifier.fillMaxSize())
+                    } else Column(Modifier.weight(1f).fillMaxWidth()) {
+                        SegmentedPill(
+                            listOf(false to "▦ Map", true to "◎ Trackpad"), padView, { padView = it },
+                            Modifier.align(Alignment.CenterHorizontally).padding(bottom = 6.dp).alpha(fade),
+                        )
+                        if (padView) TrackpadPad(
+                            Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { padBounds = it.boundsInRoot() },
+                            onActive = { padActive = it },
+                            onDown = { DolphinExitService.trackpadDown(topDisplay) },
+                            onMove = { dx, dy -> DolphinExitService.trackpadMove(dx, dy, padSpeed) },
+                            onUp = { DolphinExitService.trackpadUp() },
+                            onDoubleTap = { DolphinExitService.trackpadRecenter(topDisplay) },
+                        ) else WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
+                            ControlsMap(preset, Modifier.fillMaxSize())
+                        }
                     }
                     Mode.CHANGE -> LayoutSwitcher(s, preset, onCancel = { mode = Mode.VIEW }) { chosen ->
                         restartAction = { mode = Mode.VIEW; applyAndRestart(s, chosen, remember = true) }
@@ -431,7 +462,17 @@ class NowPlayingActivity : ComponentActivity() {
                 }
 
                 // ---------------- bottom bar
-                if (mode == Mode.VIEW) {
+                if (mode == Mode.VIEW && preset.isTrackpad && padView) {
+                    Row(Modifier.fillMaxWidth().padding(top = 6.dp).alpha(fade), verticalAlignment = Alignment.CenterVertically) {
+                        SecondaryGlowButton("◎ Recenter", null, onClick = { DolphinExitService.trackpadRecenter(topDisplay) }, fontSize = 13.sp)
+                        Spacer(Modifier.weight(1f))
+                        Text("Speed", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 6.dp))
+                        SegmentedPill(
+                            io.github.hiramrg.delphis.core.Trackpad.Speed.entries.map { it to it.label }, padSpeed,
+                            { padSpeed = it; prefs.setTrackpadSpeed(s.key, it) },
+                        )
+                    }
+                } else if (mode == Mode.VIEW) {
                     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         PrimaryGlowButton("Change preset", null, onClick = { showBrightness = false; mode = Mode.CHANGE }, modifier = Modifier.weight(1f))
                         SecondaryGlowButton("Edit preset", null, onClick = { showBrightness = false; mode = Mode.EDIT }, modifier = Modifier.weight(1f))

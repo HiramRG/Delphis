@@ -49,6 +49,9 @@ const val GYRO_HOLD = "Delphis/GyroHold"
 /** One row of a preset: "this Thor control does this Wii action". [action] is shown on the diagram. */
 data class Mapping(val control: ThorControl, val target: Target, val action: String)
 
+/** Delphis-only preset option (not written to Dolphin's profile): the trackpad aims the pointer. */
+const val TRACKPAD_OPTION = "Delphis/Trackpad"
+
 data class Preset(
     val id: String,
     val name: String,
@@ -61,6 +64,9 @@ data class Preset(
     val tips: List<String> = emptyList(),
     val experimental: Boolean = false,
 ) {
+    /** Uses the bottom-screen trackpad for the pointer (see [PresetLibrary.POINTER_TRACKPAD]). */
+    val isTrackpad: Boolean get() = options[TRACKPAD_OPTION] == "True"
+
     /** File name (without .ini) used under Config/Profiles/<Wiimote|GCPad>/. */
     val profileName: String get() = "Delphis-$id"
 
@@ -450,11 +456,38 @@ object PresetLibrary {
     )
     val POINTER_PRECISION = POINTER_PRECISION_ALL.first()
 
+    // ---------------------------------------------------------------- Trackpad aiming
+    /**
+     * [base] plus the bottom-screen trackpad: sliding a finger on the in-game bottom screen moves the
+     * Wii pointer (relayed to Dolphin's own touch pointer in "Drag" mode). The right stick keeps
+     * working until the trackpad is first used.
+     */
+    private fun withTrackpad(base: Preset, id: String, summary: String) = base.copy(
+        id = id, name = "Trackpad aiming (Experimental)", summary = summary,
+        options = base.options + (TRACKPAD_OPTION to "True"),
+        tips = listOf(
+            "Slide a finger on the bottom screen to aim; the pointer moves from where it is, like a laptop trackpad.",
+            "Double-tap the pad (or press Recenter) to put the pointer back in the middle.",
+            "First time only: force-stop Dolphin (Android Settings → Apps → Dolphin → Force stop) so it picks up the trackpad setting.",
+        ),
+    )
+
+    val GALAXY_TRACKPAD = withTrackpad(
+        GALAXY_RIGHT_STICK, "galaxy-trackpad",
+        "Aim the Star Pointer by sliding a finger on the bottom screen.",
+    )
+
+    val POINTER_TRACKPAD = withTrackpad(
+        POINTER_ADVENTURE, "nunchuk-trackpad",
+        "Left stick moves; aim the Wii pointer by sliding a finger on the bottom screen.",
+    )
+
     val ALL: List<Preset> = listOf(
         GALAXY_RIGHT_STICK, NSMB_SIDEWAYS, MKW_NUNCHUK, MKW_WHEEL_STICK, MKW_WHEEL_GYRO,
         DKCR_SIDEWAYS, KIRBY_SIDEWAYS, PAPER_MARIO_SIDEWAYS, POINTER_ADVENTURE,
         GENERIC_SIDEWAYS, CLASSIC_CONTROLLER, GAMECUBE, SMASH_GC,
-    ) + GALAXY_GYRO_ALL + POINTER_GYRO_ALL + GALAXY_PRECISION_ALL + POINTER_PRECISION_ALL
+    ) + GALAXY_GYRO_ALL + POINTER_GYRO_ALL + GALAXY_PRECISION_ALL + POINTER_PRECISION_ALL +
+        listOf(GALAXY_TRACKPAD, POINTER_TRACKPAD)
 
     fun byId(id: String): Preset? = ALL.firstOrNull { it.id == id }
 }

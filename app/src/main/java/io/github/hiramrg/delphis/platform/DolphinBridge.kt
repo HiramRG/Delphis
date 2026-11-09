@@ -68,6 +68,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             val iniPath = DolphinConfigWriter.gameIniPath(gameId)
             val existing = readText(tree, iniPath) ?: ""
             writeText(tree, iniPath, DolphinConfigWriter.mergeGameIni(existing, preset))
+            if (preset.isTrackpad) ensureTrackpadOverlay(tree)
             prefs.lastApplied = "$gameId|${preset.id}"
             ApplyResult.Ok
         } catch (e: Exception) {
@@ -118,6 +119,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             val path = DolphinConfigWriter.globalConfigPath(preset)
             val existing = readText(tree, path) ?: ""
             writeText(tree, path, DolphinConfigWriter.mergeGlobalConfig(existing, preset, controller))
+            if (preset.isTrackpad) ensureTrackpadOverlay(tree)
             prefs.lastApplied = "|${preset.id}"
             ApplyResult.Ok
         } catch (e: Exception) {
@@ -302,6 +304,21 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
     // ------------------------------------------------------------------ autosave / resume
 
     /** Turns on Dolphin's "Enable Savestates" (Config/Dolphin.ini [Core]) so its Quick Save/Load buttons exist. */
+    /**
+     * Sets Dolphin's touch overlay up as the trackpad's target (see DolphinConfigWriter.trackpadOverlay).
+     * Dolphin only reads Dolphin.ini when its app starts, so a running Dolphin picks it up after a restart.
+     */
+    private fun ensureTrackpadOverlay(tree: Uri) {
+        runCatching {
+            val existing = readText(tree, DolphinConfigWriter.dolphinIniPath) ?: ""
+            val updated = DolphinConfigWriter.trackpadOverlay(existing)
+            if (updated != existing) {
+                writeText(tree, DolphinConfigWriter.dolphinIniPath, updated)
+                CrashLog.event("trackpad: Dolphin overlay set up (Drag mode, buttons hidden)")
+            }
+        }.onFailure { CrashLog.event("trackpad: couldn't set up Dolphin's overlay: ${it.message}") }
+    }
+
     fun ensureSaveStatesEnabled() {
         val tree = prefs.dolphinTreeUri ?: return
         runCatching {

@@ -854,7 +854,7 @@ fun PresetChooser(
         item { Text(question, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 4.dp)) }
         items(groups.main, key = { it.id }) { p -> card(p) }
         if (groups.gyro.isNotEmpty()) {
-            item(key = "gyro-folder") { PresetFolder("Gyro aiming (Experimental)", groups.gyro.size, showGyro) { showGyro = !showGyro } }
+            item(key = "gyro-folder") { PresetFolder("Gyro & trackpad aiming (Experimental)", groups.gyro.size, showGyro) { showGyro = !showGyro } }
             if (showGyro) items(groups.gyro, key = { "gyro-" + it.id }) { p -> Box(Modifier.padding(start = 14.dp)) { card(p) } }
         }
         if (groups.others.isNotEmpty()) {

@@ -43,7 +43,8 @@ object DolphinConfigWriter {
         for ((key, exprs) in bindings) lines[key] = exprs.joinToString(" | ")
         // Not a Dolphin input: the gyro expressions read it to pause aiming while it's held.
         val hold = lines.remove(GYRO_HOLD)
-        val options = LinkedHashMap(preset.options)
+        // "Delphis/…" options are Delphis' own (e.g. the trackpad switch), not Dolphin keys.
+        val options = LinkedHashMap(preset.options.filterKeys { !it.startsWith("Delphis/") })
         gyro?.let { g ->
             // The pointer becomes absolute (positioned by our expressions), so drop relative mode.
             options.remove("IR/Relative Input")
@@ -198,6 +199,23 @@ object DolphinConfigWriter {
 
     fun enableSaveStates(existing: String): String =
         IniEditor(existing).apply { set("Core", mapOf("EnableSaveStates" to "True")) }.toString()
+
+    /**
+     * Dolphin's touch overlay set up as an invisible trackpad target for the Wii pointer: overlay on
+     * (Dolphin only registers its touch pointer then), every Wii Remote / Nunchuk button hidden (so a
+     * relayed touch can never press one), pointer in Drag mode (moves from where it is) and never
+     * recentred on release. Keys from Dolphin's IntSetting / BooleanSetting.
+     */
+    fun trackpadOverlay(existing: String): String = IniEditor(existing).apply {
+        set("Android", mapOf("ShowInputOverlay" to "True", "IRMode" to "2", "IRAlwaysRecenter" to "False", "OverlayWiiController" to "4"))
+        set("AndroidOverlayButtons", TRACKPAD_HIDDEN_BUTTONS.associateWith { "False" })
+    }.toString()
+
+    val TRACKPAD_HIDDEN_BUTTONS = listOf(
+        "ButtonToggleWiimoteButtonA", "ButtonToggleWiimoteButtonB", "ButtonToggleWiimoteButton1", "ButtonToggleWiimoteButton2",
+        "ButtonToggleWiimoteButtonPlus", "ButtonToggleWiimoteButtonMinus", "ButtonToggleWiimoteButtonHome", "ButtonToggleWiimoteDPad",
+        "ButtonToggleNunchukC", "ButtonToggleNunchukZ", "ButtonToggleNunchukStick",
+    )
 
     /** Dolphin's Quick Save/Load slot: NativeLibrary.SaveState(9) → StateSaves/<GAMEID>.s09. */
     fun quickStatePath(gameId: String) = listOf("StateSaves", "$gameId.s09")

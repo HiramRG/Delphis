@@ -61,6 +61,15 @@ class DolphinExitService : AccessibilityService() {
 
         fun hideLoading(delayMs: Long = 0) { instance?.let { s -> s.handler.post { s.loading.hide(delayMs) } } }
 
+        // ---- bottom-screen trackpad (see TrackpadRelay); no-ops without the service
+        fun trackpadDown(topDisplayId: Int) { instance?.let { s -> s.handler.post { s.trackpad.down(topDisplayId) } } }
+        fun trackpadMove(dxDp: Float, dyDp: Float, speed: io.github.hiramrg.delphis.core.Trackpad.Speed) {
+            instance?.let { s -> s.handler.post { s.trackpad.move(dxDp, dyDp, speed) } }
+        }
+        fun trackpadUp() { instance?.let { s -> s.handler.post { s.trackpad.up() } } }
+        fun trackpadRecenter(topDisplayId: Int) { instance?.let { s -> s.handler.post { s.trackpad.recenter(topDisplayId) } } }
+        fun trackpadReset() { instance?.let { s -> s.handler.post { s.trackpad.reset() } } }
+
         /** True if Dolphin's game screen is up. */
         fun gameShowing(pkg: String): Boolean = instance?.find(pkg, "frame_emulation_fragment") != null
 
@@ -90,6 +99,7 @@ class DolphinExitService : AccessibilityService() {
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val loading by lazy { LoadingOverlay(this) }
+    private val trackpad by lazy { TrackpadRelay(this, handler) }
     private val checkGame = Runnable {
         if (GameWatch.session == null || GameLauncher.busy) return@Runnable
         val stillShowing = DolphinBridge.KNOWN_PACKAGES.any { find(it, "frame_emulation_fragment") != null }

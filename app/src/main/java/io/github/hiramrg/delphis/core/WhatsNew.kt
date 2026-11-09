@@ -5,14 +5,12 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 11
+    const val RELEASE = 12
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("Full-screen menus.", "The top screen now uses the whole display: Android's status bar is hidden, and Home's bar shows the battery, Wi-Fi, Bluetooth audio and Do Not Disturb next to the clock. Swipe down from the top edge to see Android's bar for a moment."),
-        Item("Clearer controls map.", "The Thor in the controls map now has its real shape, the map is balanced on the screen, shoulder buttons are labelled above their tabs and Select / Start on the screen next to their buttons. On the game page and in game."),
-        Item("Sharper cover on the loading screen.", "The cover shown while a game is saving, closing or starting is now shown at full quality.", fix = true),
+        Item("Trackpad aiming (Experimental).", "For pointer games (Metroid Prime 3, Galaxy, Twilight Princess…): pick \"Trackpad aiming (Experimental)\" and slide a finger on the bottom screen to aim, like a laptop trackpad. First time only: force-stop Dolphin in Android's settings so it picks up the trackpad setting."),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

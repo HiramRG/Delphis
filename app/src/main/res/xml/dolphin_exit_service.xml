@@ -5,6 +5,8 @@
   - No flagRequestFilterKeyEvents: it never sees or delays key / controller input.
   - Only typeWindowsChanged events, which the system generates; apps (Dolphin included) don't
     send any accessibility events because of this service.
+  - canPerformGestures: the bottom-screen trackpad (trackpad presets only) is relayed as a touch on
+    Dolphin's game screen, which Dolphin's own touch pointer turns into Wii pointer movement.
   Window contents are only read on demand (when closing a game, or once after a window change).
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
@@ -12,6 +14,6 @@
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="true"
-    android:canPerformGestures="false"
+    android:canPerformGestures="true"
     android:notificationTimeout="300"
     android:description="@string/exit_service_description" />
