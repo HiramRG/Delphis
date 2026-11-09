@@ -423,6 +423,22 @@ class NowPlayingActivity : ComponentActivity() {
                 }
                 Spacer(Modifier.height(8.dp))
 
+                // ---------------- players (multiplayer): who's who; tap to restart with the controllers connected now
+                val gid = s.info.gameId
+                val startPlayers = remember(startedAt) { if (gid != null) runCatching { io.github.hiramrg.delphis.platform.Pads.players(prefs, gid) }.getOrDefault(emptyList()) else emptyList() }
+                val livePads = io.github.hiramrg.delphis.platform.rememberPads(prefs)
+                val livePlayers = if (gid != null) io.github.hiramrg.delphis.core.Players.assign(livePads, prefs.playerSetup(gid)) else emptyList()
+                if (mode == Mode.VIEW && (startPlayers.size > 1 || livePlayers.size > 1)) {
+                    val changed = livePlayers.map { it.key } != startPlayers.map { it.key }
+                    Column(Modifier.fillMaxWidth().padding(bottom = 6.dp).alpha(fade), horizontalAlignment = Alignment.CenterHorizontally) {
+                        PlayersRow(if (changed) livePlayers else startPlayers, onChange = {
+                            showBrightness = false
+                            restartAction = { applyAndRestart(s, preset, remember = false) }
+                        }, label = false)
+                        if (changed) Text("↻ Controllers changed · tap to restart with these players", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(top = 3.dp))
+                    }
+                }
+
                 // ---------------- middle
                 when (mode) {
                     // Same Thor button map as the game page.

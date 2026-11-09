@@ -699,6 +699,15 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         }
     }
 
+    // Multiplayer: who plays this game (only offered when a controller besides the Thor is connected).
+    val pads = io.github.hiramrg.delphis.platform.rememberPads(act.prefs)
+    var playerSetup by remember(gameId) { mutableStateOf(gameId?.let { act.prefs.playerSetup(it) } ?: io.github.hiramrg.delphis.core.PlayerSetup()) }
+    val multiplayer = gameId != null && io.github.hiramrg.delphis.core.Players.hasExternal(pads)
+    var showPlayers by remember { mutableStateOf(false) }
+    if (showPlayers && multiplayer) {
+        PlayersDialog(game.info.title, pads, playerSetup, onChange = { playerSetup = it; act.prefs.setPlayerSetup(gameId!!, it) }, onDismiss = { showPlayers = false })
+    }
+
     // Physical buttons: A / Start = Play, D-pad or left stick = pick a preset, X = Edit, Y = Remember,
     // L1 = autosave on/off for this game, R1 = remember controls on/off, Y = earlier autosaves. B = Back.
     val onKey by rememberUpdatedState<(KeyEvent) -> Boolean> { e ->
@@ -711,6 +720,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             KeyEvent.KEYCODE_DPAD_UP -> { p.move(-1); true }
             KeyEvent.KEYCODE_BUTTON_X -> { if (e.repeatCount == 0 && p.selected != null) p.editing = true; true }
             KeyEvent.KEYCODE_BUTTON_Y -> { if (e.repeatCount == 0 && backups.isNotEmpty()) showBackups = true; true }
+            KeyEvent.KEYCODE_BUTTON_SELECT -> { if (e.repeatCount == 0 && multiplayer) showPlayers = true; multiplayer }
             else -> false
         }
     }
@@ -741,6 +751,10 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val sel = p.selected
             WiiCard(Modifier.fillMaxWidth().weight(1f), radius = 20.dp, padding = 12.dp) {
+                if (multiplayer) {
+                    PlayersRow(io.github.hiramrg.delphis.core.Players.assign(pads, playerSetup), onChange = { showPlayers = true }, modifier = Modifier.fillMaxWidth())
+                    Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(c.cardBorder))
+                }
                 if (companion && sel != null) {
                     // Picture + name, then a map of what each of the Thor's controls does.
                     ControlsMapCard(sel, sel.id == p.suggestedId, Modifier.weight(1f).fillMaxWidth())
@@ -764,7 +778,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                 WiiButton("Ⓧ Edit", onClick = { p.editing = true }, enabled = sel != null)
                 WiiButton(if (sel == null) "Choose a style" else "Ⓐ Play", onClick = { p.play() }, primary = true, enabled = sel != null, fontSize = 17.sp)
             }
-            HintLine("Ⓐ Play · ✚ choose · Ⓧ Edit" + (if (canAutosave) " · L1 Autosave" else "") + " · R1 Remember" + (if (backups.isNotEmpty()) " · Ⓨ Earlier autosaves" else "") + " · Ⓑ Back")
+            HintLine("Ⓐ Play · ✚ choose · Ⓧ Edit" + (if (canAutosave) " · L1 Autosave" else "") + " · R1 Remember" + (if (backups.isNotEmpty()) " · Ⓨ Earlier autosaves" else "") + (if (multiplayer) " · ⊖ Players" else "") + " · Ⓑ Back")
         }
     }
 }

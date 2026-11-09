@@ -192,6 +192,10 @@ class Prefs(context: Context) {
         get() = sp.getString("last_applied", null)
         set(v) = sp.edit().putString("last_applied", v).apply()
 
+    /** Multiplayer: who plays a game, in which order (see core/Players). */
+    fun playerSetup(gameKey: String) = io.github.hiramrg.delphis.core.PlayerSetup.decode(sp.getString("players_$gameKey", null))
+    fun setPlayerSetup(gameKey: String, setup: io.github.hiramrg.delphis.core.PlayerSetup) = sp.edit().putString("players_$gameKey", setup.encode()).apply()
+
     /** Bottom-screen trackpad speed, per game. */
     fun trackpadSpeed(gameKey: String) = io.github.hiramrg.delphis.core.Trackpad.Speed.of(sp.getString("trackpad_speed_$gameKey", null))
     fun setTrackpadSpeed(gameKey: String, speed: io.github.hiramrg.delphis.core.Trackpad.Speed) = sp.edit().putString("trackpad_speed_$gameKey", speed.id).apply()

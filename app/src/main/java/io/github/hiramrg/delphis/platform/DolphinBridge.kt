@@ -112,6 +112,25 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
     }
 
     /** For games without a readable ID: make the preset player 1's default controller config. */
+    /**
+     * Players 2-4 for [gameId] ([others] = their preset and controller, may be empty): writes each
+     * player's profile and switches their Wii Remote / GameCube port on for this game only.
+     */
+    fun applyPlayers(gameId: String, others: List<Pair<Preset, ControllerProfile>>) {
+        val tree = prefs.dolphinTreeUri ?: return
+        runCatching {
+            others.forEachIndexed { i, (p, controller) ->
+                val profile = io.github.hiramrg.delphis.core.Players.profileFor(p, i + 2)
+                writeText(tree, DolphinConfigWriter.profilePath(profile), DolphinConfigWriter.renderProfile(profile, controller))
+            }
+            val iniPath = DolphinConfigWriter.gameIniPath(gameId)
+            val existing = readText(tree, iniPath) ?: ""
+            val updated = io.github.hiramrg.delphis.core.Players.mergeGameIni(existing, others.map { it.first })
+            if (updated != existing) writeText(tree, iniPath, updated)
+            if (others.isNotEmpty()) CrashLog.event("players: ${others.size + 1} for $gameId (" + others.joinToString { it.second.dolphinDevice } + ")")
+        }.onFailure { CrashLog.event("players: couldn't set up players 2-4: ${it.message}") }
+    }
+
     fun applyGlobally(preset: Preset, controller: ControllerProfile): ApplyResult {
         val tree = prefs.dolphinTreeUri ?: return ApplyResult.Failed("Dolphin's folder hasn't been connected yet.")
         return try {

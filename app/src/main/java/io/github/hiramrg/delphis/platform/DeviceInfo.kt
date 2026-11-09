@@ -54,6 +54,23 @@ object DeviceInfo {
      * assignment, then also adds ids 0-4 for the same name so a binding survives the controller being
      * renumbered after a reconnect (unknown devices simply read as 0 in Dolphin).
      */
+    /** Dolphin's "Android/<id>/<name>" for every input device, by Android device id (same assignment as below). */
+    fun dolphinQualifiersById(): Map<Int, String> {
+        val assigned = mutableMapOf<String, MutableSet<Int>>()
+        val out = mutableMapOf<Int, String>()
+        for (d in allDevices()) {
+            val used = assigned.getOrPut(d.name) { mutableSetOf() }
+            val preferred = d.controllerNumber.takeIf { it != 0 && it !in used }
+            val id = preferred ?: generateSequence(0) { it + 1 }.first { it !in used }
+            used += id
+            out[d.id] = "Android/$id/${d.name}"
+        }
+        return out
+    }
+
+    /** Real gamepads (not virtual), for multiplayer: Android device, its name and whether it's external. */
+    fun gamepads(): List<InputDevice> = allDevices().filter { !it.isVirtual && isGamepad(it) }
+
     fun dolphinQualifiers(names: List<String>): List<String> {
         val assigned = mutableMapOf<String, MutableSet<Int>>()
         val exact = mutableListOf<String>()
@@ -70,7 +87,9 @@ object DeviceInfo {
 
     /** Builds the controller description used to write profiles, from the user's calibration. */
     fun controllerProfile(prefs: Prefs): ControllerProfile {
+        // Only the Thor's own pad: an external controller is a separate player (see Pads).
         val names = listOfNotNull(prefs.deviceName ?: prefs.calibratedDeviceName)
+            .ifEmpty { listOfNotNull(builtInGamepadName()) }
             .ifEmpty { allGamepadNames() }
             .ifEmpty { listOf(ControllerProfile.DEFAULT_DEVICE_NAME) }
         return ControllerProfile(

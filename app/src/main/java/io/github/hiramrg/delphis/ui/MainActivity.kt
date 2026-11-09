@@ -432,10 +432,13 @@ class MainActivity : ComponentActivity() {
 
         /** Writes the preset (per game when the ID is known, otherwise as the default config). */
         suspend fun applyPreset(ctx: android.content.Context, bridge: DolphinBridge, prefs: Prefs, gameId: String?, preset: Preset): Boolean {
-            val profile = DeviceInfo.controllerProfile(prefs)
             val result = withContext(Dispatchers.IO) {
                 if (prefs.autoSaveResume) bridge.ensureSaveStatesEnabled()
-                if (gameId != null) bridge.applyPreset(gameId, preset, profile) else bridge.applyGlobally(preset, profile)
+                // Multiplayer: P1 is the Thor unless it sits out; players 2-4 are the other controllers connected now.
+                val slots = io.github.hiramrg.delphis.platform.Pads.slots(prefs, gameId, preset)
+                val (p1, profile) = slots.first()
+                if (gameId != null) bridge.applyPreset(gameId, p1, profile).also { bridge.applyPlayers(gameId, slots.drop(1)) }
+                else bridge.applyGlobally(p1, profile)
             }
             if (result is DolphinBridge.ApplyResult.Failed) {
                 Toast.makeText(ctx.applicationContext, "Couldn't write the preset: ${result.reason}", Toast.LENGTH_LONG).show()
