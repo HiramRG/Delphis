@@ -474,12 +474,15 @@ object PresetLibrary {
     // ---------------------------------------------------------------- Trackpad aiming
     /**
      * [base] plus the bottom-screen trackpad: sliding a finger on the in-game bottom screen moves the
-     * Wii pointer (relayed to Dolphin's own touch pointer in "Drag" mode). The right stick keeps
-     * working until the trackpad is first used.
+     * Wii pointer (relayed to Dolphin's own touch pointer). The right stick and R3 are left free.
      */
     private fun withTrackpad(base: Preset, id: String, summary: String) = base.copy(
         id = id, name = "Trackpad Aiming (Experimental)", summary = summary,
-        options = base.options + (TRACKPAD_OPTION to "True"),
+        // Nothing else may drive the pointer: Dolphin drops its touch override as soon as the mapped
+        // IR value changes at all (InputOverrider: normal_state != controller_state), so a right stick on
+        // the pointer, drifting even slightly in relative mode, kept snapping the pointer back.
+        mappings = base.mappings.filter { it.control != ThorControl.RIGHT_STICK && it.control != ThorControl.R3 },
+        options = base.options + mapOf(TRACKPAD_OPTION to "True", "IR/Relative Input" to "False"),
         tips = listOf(
             "Slide a finger on the bottom screen to aim; the pointer moves from where it is, like a laptop trackpad.",
             "Double-tap the pad (or press Recenter) to put the pointer back in the middle.",

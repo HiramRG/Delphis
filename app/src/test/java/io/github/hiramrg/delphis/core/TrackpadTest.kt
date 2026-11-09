@@ -79,4 +79,14 @@ class TrackpadTest {
         assertEquals(Trackpad.DEFAULT_PITCH, pitch * a.reachY, 0.1)
         assertTrue(DolphinConfigWriter.renderProfile(p, ControllerProfile()).contains("IR/Total Yaw = "))
     }
+
+    @Test
+    fun nothingElseDrivesThePointerInTrackpadPresets() {
+        listOf(PresetLibrary.POINTER_TRACKPAD, PresetLibrary.GALAXY_TRACKPAD).forEach { p ->
+            assertTrue(p.mappings.none { it.control == ThorControl.RIGHT_STICK || it.control == ThorControl.R3 })
+            val ini = DolphinConfigWriter.renderProfile(p, ControllerProfile())
+            assertFalse(ini.contains("IR/Up ="))
+            assertFalse(ini.contains("IR/Relative Input = True"))
+        }
+    }
 }
