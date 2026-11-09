@@ -59,4 +59,24 @@ class TrackpadTest {
         assertTrue(ini.contains("IRAlwaysRecenter = False"))
         DolphinConfigWriter.TRACKPAD_HIDDEN_BUTTONS.forEach { assertTrue(it, ini.contains("$it = False")) }
     }
+
+    @Test
+    fun touchesStayOutOfAndroidsGestureEdges() {
+        // Thor top screen: 1920x1080 px, ~2.75 px per dp.
+        val a = Trackpad.area(1920f, 1080f, 2.75f)
+        assertTrue(960f - a.halfW >= Trackpad.SIDE_MARGIN_DP * 2.75f - 0.5f)
+        assertTrue(540f - a.halfH >= Trackpad.BOTTOM_MARGIN_DP * 2.75f - 0.5f)
+        assertTrue(a.reachX < 1f && a.reachY < 1f)
+    }
+
+    @Test
+    fun yawAndPitchWidenSoThePointerStillReachesTheEdges() {
+        val a = Trackpad.area(1920f, 1080f, 2.75f)
+        val p = Trackpad.withReach(PresetLibrary.POINTER_TRACKPAD, a)
+        val yaw = p.options.getValue("IR/Total Yaw").toDouble()
+        val pitch = p.options.getValue("IR/Total Pitch").toDouble()
+        assertEquals(Trackpad.DEFAULT_YAW, yaw * a.reachX, 0.1)
+        assertEquals(Trackpad.DEFAULT_PITCH, pitch * a.reachY, 0.1)
+        assertTrue(DolphinConfigWriter.renderProfile(p, ControllerProfile()).contains("IR/Total Yaw = "))
+    }
 }

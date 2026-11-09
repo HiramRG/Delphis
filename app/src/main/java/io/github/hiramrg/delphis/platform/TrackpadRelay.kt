@@ -83,8 +83,11 @@ class TrackpadRelay(private val service: AccessibilityService, private val handl
         val d = service.getSystemService(DisplayManager::class.java)?.getDisplay(id) ?: return
         val size = android.graphics.Point()
         @Suppress("DEPRECATION") d.getRealSize(size)
-        val (pw, ph) = Trackpad.picture(size.x.toFloat(), size.y.toFloat())
-        cx = size.x / 2f; cy = size.y / 2f; halfW = pw / 2f; halfH = ph / 2f; pictureW = pw
+        // Only inside Android's gesture zones' edges (else a touch near the bottom opens Recents); the
+        // profile's IR yaw / pitch are widened to match, so the pointer still reaches the picture's edges.
+        val m = android.util.DisplayMetrics().also { @Suppress("DEPRECATION") d.getRealMetrics(it) }
+        val area = Trackpad.area(size.x.toFloat(), size.y.toFloat(), m.density)
+        cx = size.x / 2f; cy = size.y / 2f; halfW = area.halfW; halfH = area.halfH; pictureW = 2f * area.halfW
         pos = pos.moved(0f, 0f, halfW, halfH); at = at.moved(0f, 0f, halfW, halfH)
         displayId = id
     }

@@ -32,6 +32,50 @@ object Trackpad {
     fun picture(w: Float, h: Float, aspect: Float = 16f / 9f): Pair<Float, Float> =
         if (w / h >= aspect) (h * aspect) to h else w to (w / aspect)
 
+    /**
+     * Android's gesture zones on the top screen: a touch starting near the bottom edge swipes Home /
+     * Recents, near the sides it's Back, near the top it pulls the notification shade. Relayed touches
+     * stay this far (dp) inside the edges.
+     */
+    const val SIDE_MARGIN_DP = 40f
+    const val TOP_MARGIN_DP = 40f
+    const val BOTTOM_MARGIN_DP = 60f
+
+    /** Dolphin's default IR "Total Yaw" / "Total Pitch" (degrees), which reach the screen edges in most games. */
+    const val DEFAULT_YAW = 25.0
+    const val DEFAULT_PITCH = 20.0
+
+    /**
+     * The area relayed touches may use on a [w]×[h] px screen ([density] px per dp): half width and half
+     * height around the centre, inside the gesture zones and the game picture (symmetric, so the
+     * pointer's middle stays the screen's middle).
+     */
+    data class Area(val halfW: Float, val halfH: Float, val pictureHalfW: Float, val pictureHalfH: Float) {
+        /** How much of the pointer's range ([-1, 1]) the area covers, horizontally and vertically. */
+        val reachX: Float get() = halfW / pictureHalfW
+        val reachY: Float get() = halfH / pictureHalfH
+    }
+
+    fun area(w: Float, h: Float, density: Float): Area {
+        val (pw, ph) = picture(w, h)
+        val halfW = minOf(pw / 2f, w / 2f - SIDE_MARGIN_DP * density).coerceAtLeast(1f)
+        val halfH = minOf(ph / 2f, h / 2f - maxOf(TOP_MARGIN_DP, BOTTOM_MARGIN_DP) * density).coerceAtLeast(1f)
+        return Area(halfW, halfH, pw / 2f, ph / 2f)
+    }
+
+    /**
+     * [preset] with Dolphin's IR yaw / pitch widened so the smaller touch area still reaches the edges of
+     * the game picture: Dolphin turns the pointer by (Total Yaw / 2) × x, so dividing x's range by
+     * reachX is undone by multiplying the yaw by 1 / reachX.
+     */
+    fun withReach(preset: Preset, area: Area): Preset {
+        fun f(v: Double) = "%.1f".format(java.util.Locale.US, v)
+        return preset.copy(options = preset.options + mapOf(
+            "IR/Total Yaw" to f(DEFAULT_YAW / area.reachX.coerceIn(0.2f, 1f)),
+            "IR/Total Pitch" to f(DEFAULT_PITCH / area.reachY.coerceIn(0.2f, 1f)),
+        ))
+    }
+
     /** Pointer position (px from the picture's centre), clamped to the picture. */
     data class Pos(val x: Float = 0f, val y: Float = 0f) {
         fun moved(dx: Float, dy: Float, halfW: Float, halfH: Float) =

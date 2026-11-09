@@ -5,12 +5,12 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 13
+    const val RELEASE = 14
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("Steadier trackpad aiming.", "The trackpad no longer drifts or jumps after a while. Force-stop Dolphin once more (Android Settings → Apps → Dolphin → Force stop) so it picks up the new touch setting.", fix = true),
+        Item("Trackpad no longer triggers Android's gestures.", "Aiming near the edges used to open Recents or go Back. The trackpad now stays clear of Android's gesture edges and still reaches the whole picture.", fix = true),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

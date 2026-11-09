@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import io.github.hiramrg.delphis.core.Trackpad
 import android.provider.DocumentsContract
 import io.github.hiramrg.delphis.core.AutosaveBackups
 import io.github.hiramrg.delphis.core.DolphinConfigWriter
@@ -60,7 +61,19 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
     }
 
     /** Writes the profile and points the game's INI at it. Safe to call before every launch. */
-    fun applyPreset(gameId: String, preset: Preset, controller: ControllerProfile): ApplyResult {
+    /** Trackpad presets: Dolphin's IR yaw / pitch widened to match the area the relayed touches use (see Trackpad.area). */
+    private fun withTrackpadReach(preset: Preset): Preset {
+        if (!preset.isTrackpad) return preset
+        return runCatching {
+            val top = DeviceInfo.screenRoles(context, prefs.swapScreens).topDisplayId
+            val d = context.getSystemService(android.hardware.display.DisplayManager::class.java).getDisplay(top)!!
+            val m = android.util.DisplayMetrics().also { @Suppress("DEPRECATION") d.getRealMetrics(it) }
+            Trackpad.withReach(preset, Trackpad.area(m.widthPixels.toFloat(), m.heightPixels.toFloat(), m.density))
+        }.getOrDefault(preset)
+    }
+
+    fun applyPreset(gameId: String, preset0: Preset, controller: ControllerProfile): ApplyResult {
+        val preset = withTrackpadReach(preset0)
         val tree = prefs.dolphinTreeUri ?: return ApplyResult.Failed("Dolphin's folder hasn't been connected yet.")
         return try {
             ensureBaseConfig(tree, controller)
@@ -131,7 +144,8 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         }.onFailure { CrashLog.event("players: couldn't set up players 2-4: ${it.message}") }
     }
 
-    fun applyGlobally(preset: Preset, controller: ControllerProfile): ApplyResult {
+    fun applyGlobally(preset0: Preset, controller: ControllerProfile): ApplyResult {
+        val preset = withTrackpadReach(preset0)
         val tree = prefs.dolphinTreeUri ?: return ApplyResult.Failed("Dolphin's folder hasn't been connected yet.")
         return try {
             writeText(tree, DolphinConfigWriter.profilePath(preset), DolphinConfigWriter.renderProfile(preset, controller))
