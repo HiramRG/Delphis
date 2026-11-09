@@ -333,7 +333,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             val updated = DolphinConfigWriter.trackpadOverlay(existing)
             if (updated != existing) {
                 writeText(tree, DolphinConfigWriter.dolphinIniPath, updated)
-                CrashLog.event("trackpad: Dolphin overlay set up (Drag mode, buttons hidden)")
+                CrashLog.event("trackpad: Dolphin overlay set up (Follow mode, buttons hidden)")
             }
         }.onFailure { CrashLog.event("trackpad: couldn't set up Dolphin's overlay: ${it.message}") }
     }
