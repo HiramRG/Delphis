@@ -19,6 +19,12 @@ object ActionCatalog {
         b("1 button", "Buttons/1"), b("2 button", "Buttons/2"),
         b("+ (Pause)", "Buttons/+"), b("− (Minus)", "Buttons/-"), b("HOME menu", "Buttons/Home"),
         b("Shake Wii Remote", "Shake/X", "Shake/Y", "Shake/Z"),
+        b("Wii Remote: push forward", "Swing/Forward"), b("Wii Remote: pull back", "Swing/Backward"),
+        b("Wii Remote: swing up", "Swing/Up"), b("Wii Remote: swing down", "Swing/Down"),
+        b("Wii Remote: swing left", "Swing/Left"), b("Wii Remote: swing right", "Swing/Right"),
+        b("Wii Remote: tilt forward", "Tilt/Forward"), b("Wii Remote: tilt back", "Tilt/Backward"),
+        b("Wii Remote: tilt left", "Tilt/Left"), b("Wii Remote: tilt right", "Tilt/Right"),
+        b("A + push forward", "Buttons/A", "Swing/Forward"), b("B + push forward", "Buttons/B", "Swing/Forward"),
         b("D-pad Up", "D-Pad/Up"), b("D-pad Down", "D-Pad/Down"), b("D-pad Left", "D-Pad/Left"), b("D-pad Right", "D-Pad/Right"),
         b("Recenter pointer", "IR/Recenter"),
         b("Hold: pause gyro aim", GYRO_HOLD),
@@ -26,6 +32,10 @@ object ActionCatalog {
     private val nunchukButtons = listOf(
         b("C button (Nunchuk)", "Nunchuk/Buttons/C"), b("Z button (Nunchuk)", "Nunchuk/Buttons/Z"),
         b("Shake Nunchuk", "Nunchuk/Shake/X", "Nunchuk/Shake/Y", "Nunchuk/Shake/Z"),
+        b("Nunchuk: thrust forward", "Nunchuk/Swing/Forward"), b("Nunchuk: pull back", "Nunchuk/Swing/Backward"),
+        b("Nunchuk: swing up", "Nunchuk/Swing/Up"), b("Nunchuk: swing down", "Nunchuk/Swing/Down"),
+        b("Nunchuk: swing left", "Nunchuk/Swing/Left"), b("Nunchuk: swing right", "Nunchuk/Swing/Right"),
+        b("Nunchuk: tilt forward", "Nunchuk/Tilt/Forward"), b("Nunchuk: tilt back", "Nunchuk/Tilt/Backward"),
     )
     private val wiiDirectional = listOf(
         d("Pointer (aim)", "IR"), d("D-pad", "D-Pad"),
@@ -50,7 +60,8 @@ object ActionCatalog {
     }
 
     fun directionalOptions(c: EmulatedController): List<Option> = listOf(NOTHING) + when (c) {
-        EmulatedController.WIIMOTE_NUNCHUK -> listOf(d("Nunchuk stick", "Nunchuk/Stick")) + wiiDirectional
+        EmulatedController.WIIMOTE_NUNCHUK -> listOf(d("Nunchuk stick", "Nunchuk/Stick")) + wiiDirectional +
+            listOf(d("Swing Nunchuk", "Nunchuk/Swing"), d("Tilt Nunchuk", "Nunchuk/Tilt", "Forward", "Backward"))
         EmulatedController.WIIMOTE_SIDEWAYS, EmulatedController.WIIMOTE_WHEEL -> wiiDirectional
         EmulatedController.CLASSIC -> listOf(d("Left stick", "Classic/Left Stick"), d("Right stick", "Classic/Right Stick"), d("D-pad", "Classic/D-Pad"))
         EmulatedController.GAMECUBE -> listOf(d("Control stick", "Main Stick"), d("C-Stick", "C-Stick"), d("D-pad", "D-Pad"))
@@ -71,6 +82,24 @@ object ActionCatalog {
         control == ThorControl.GYRO -> gyroOptions(c)
         control.kind == ThorControl.Kind.DIRECTIONAL -> directionalOptions(c)
         else -> buttonOptions(c)
+    }
+
+    /**
+     * The editor's choices for a control: first this preset's own actions of the same kind (so game
+     * actions like "Zoom (A + push toward screen)" or "Katana (flick)" can be moved to another
+     * control), then everything in the catalog not already listed.
+     */
+    fun optionsFor(control: ThorControl, base: Preset): List<Option> {
+        val catalog = optionsFor(control, base.controller)
+        if (control == ThorControl.GYRO) return catalog
+        val wantDirectional = control.kind == ThorControl.Kind.DIRECTIONAL
+        val own = base.mappings.asSequence()
+            .filter { (it.target is Target.Directional) == wantDirectional && (it.target is Target.Buttons || it.target is Target.Directional) }
+            .map { Option(it.action, it.target) }
+            .distinctBy { o -> (o.target as? Target.Buttons)?.keys?.toSet() ?: o.target.toString() }
+            .toList()
+        val rest = catalog.filter { opt -> opt.target == null || own.none { sameTarget(it.target, opt.target) } }
+        return listOf(NOTHING) + own + rest.filter { it.target != null }
     }
 
     /** Controls the editor lets you change, in the order they sit on the Thor. */

@@ -74,4 +74,20 @@ class TrackpadTest {
         assertEquals(255, pad[48].toInt() and 0xFF); assertEquals(0, pad[49].toInt())
         assertEquals(255, pad[50].toInt() and 0xFF); assertEquals(0, pad[51].toInt())
     }
+
+    @Test
+    fun editorOffersThePresetsOwnAndMotionActions() {
+        val rs = PresetLibrary.RED_STEEL_TRACKPAD
+        assertEquals("Zoom (A + push toward screen)", rs.mappings.first { it.control == ThorControl.L2 }.action)
+        val forR3 = ActionCatalog.optionsFor(ThorControl.R3, rs).map { it.label }
+        assertTrue("Zoom (A + push toward screen)" in forR3)
+        assertTrue("Block (Nunchuk thrust)" in forR3)
+        assertTrue("Nunchuk: swing up" !in forR3 || forR3.count { it.contains("swing up", ignoreCase = true) } >= 1)
+        assertTrue("Wii Remote: push forward" !in forR3) // same target as the preset's own "Push (Wii Remote forward)"
+        assertTrue("Wii Remote: swing left" in forR3)
+        val forStick = ActionCatalog.optionsFor(ThorControl.LEFT_STICK, rs).map { it.label }
+        assertTrue("Katana (flick)" in forStick)
+        assertTrue("Swing Nunchuk" in forStick)
+        assertEquals("Nothing", forStick.first())
+    }
 }

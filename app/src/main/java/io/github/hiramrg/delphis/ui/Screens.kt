@@ -239,7 +239,6 @@ fun HomeScreen(act: MainActivity) {
                     item(key = "recent-row", span = { GridItemSpan(maxLineSpan) }) {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             items(recent.drop(1).take(12), key = { it.uri.toString() }) { g -> ChannelTile(act, g, 64.dp) }
-                            item { AllGamesTile(act, 64.dp) }
                         }
                     }
                 }
@@ -436,17 +435,6 @@ private fun ChannelTile(act: MainActivity, g: GameEntry, height: androidx.compos
     ) {
         Cover(act, g, act.prefs.showCovers, Modifier.fillMaxSize(), titleSize = 11)
     }
-}
-
-@Composable
-private fun AllGamesTile(act: MainActivity, height: androidx.compose.ui.unit.Dp) {
-    val c = LocalWii.current
-    val shape = RoundedCornerShape(16.dp)
-    Box(
-        Modifier.height(height).aspectRatio(1.33f).clip(shape).background(c.accentSoft).border(2.dp, c.accent, shape)
-            .clickable { act.showAllGames() },
-        contentAlignment = Alignment.Center,
-    ) { Text("All games\n▸", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, textAlign = TextAlign.Center) }
 }
 
 /** Wii Menu-style bottom bar: settings button, big date/time, controller hints. */

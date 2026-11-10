@@ -56,9 +56,9 @@ fun PresetEditor(
                     Text("Tap a control to change what it does", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // Rows with nothing to pick (e.g. gyro on a GameCube preset) are hidden.
-                items(ActionCatalog.EDITABLE.filter { ActionCatalog.optionsFor(it, base.controller).size > 1 }, key = { it.name }) { control ->
+                items(ActionCatalog.EDITABLE.filter { ActionCatalog.optionsFor(it, base).size > 1 }, key = { it.name }) { control ->
                     val current = draft.mappings.firstOrNull { it.control == control }
-                    EditRow(control, current?.action ?: "Nothing", ActionCatalog.optionsFor(control, base.controller)) { choices[control] = it }
+                    EditRow(control, current?.action ?: "Nothing", ActionCatalog.optionsFor(control, base)) { choices[control] = it }
                 }
                 item { Spacer(Modifier.height(4.dp)) }
             }
