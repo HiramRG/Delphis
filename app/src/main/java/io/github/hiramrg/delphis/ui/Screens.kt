@@ -1199,6 +1199,7 @@ private fun BottomScreenSettings(act: MainActivity) {
             )
             Text("${brightness.toInt()}", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.End, modifier = Modifier.width(34.dp))
         }
+        Text("Normal brightness is set with the ☀ button on the in-game bottom screen.", fontSize = 11.sp, color = c.textDim)
     }
     Text(
         "Touching the screen lights it up again for the full time; the first touch only wakes it. In game, tap the brightness pill " +

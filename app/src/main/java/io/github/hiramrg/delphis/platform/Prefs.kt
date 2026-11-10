@@ -44,6 +44,14 @@ class Prefs(context: Context) {
      * Bottom-screen brightness while playing, 0 (dimmest) .. 100 (full).
      * Older versions stored a 1..4 level instead; that carries over the first time.
      */
+    /**
+     * The in-game bottom screen's normal brightness (0..100), set with its ☀ pill; used whenever the
+     * screen isn't dimmed. Null = follow the system brightness (until the player picks a level).
+     */
+    var bottomBrightness: Int?
+        get() = if (sp.contains("bottom_brightness")) sp.getInt("bottom_brightness", 50).coerceIn(0, 100) else null
+        set(v) { if (v == null) sp.edit().remove("bottom_brightness").apply() else sp.edit().putInt("bottom_brightness", v.coerceIn(0, 100)).apply() }
+
     var brightnessPercent: Int
         get() = if (sp.contains("brightness_percent")) sp.getInt("brightness_percent", 12).coerceIn(0, 100)
         else when (sp.getInt("brightness_level", 2)) { 1 -> 2; 2 -> 12; 3 -> 40; else -> 100 }

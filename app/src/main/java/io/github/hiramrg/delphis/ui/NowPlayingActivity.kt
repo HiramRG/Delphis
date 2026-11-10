@@ -69,7 +69,7 @@ import io.github.hiramrg.delphis.core.BottomScreen
 /**
  * The bottom screen while a game runs:
  *  - top-left back arrow closes the game and Dolphin and returns to Delphis,
- *  - top-right brightness pill opens a panel: dimmed brightness, Auto-dim for this session and
+ *  - top-right brightness pill opens a panel: normal brightness, Auto-dim for this session and
  *    "Turn screen off" (black at minimum brightness until the next touch),
  *  - the controls in the middle: main actions as big tiles, everything else in a small grid,
  *  - "Change preset" and "Edit preset" at the bottom (both restart the game to apply).
@@ -322,7 +322,10 @@ class NowPlayingActivity : ComponentActivity() {
             resolve(s.presetId).let { if (io.github.hiramrg.delphis.platform.Pads.multiplayer(startPlayers)) io.github.hiramrg.delphis.core.Players.multiplayerPreset(it) else it }
         }
         var mode by remember { mutableStateOf(Mode.VIEW) }
-        var brightness by remember { mutableIntStateOf(prefs.brightnessPercent) }
+        // ☀ pill: the bottom screen's normal brightness (awake, or dimming off). The dimmed level is set in Settings.
+        var brightness by remember { mutableIntStateOf(prefs.bottomBrightness ?: (systemBrightness() * 100).roundToInt()) }
+        var brightnessChosen by remember { mutableStateOf(prefs.bottomBrightness != null) }
+        val dimLevel = remember { prefs.brightnessPercent }
         var showBrightness by remember { mutableStateOf(false) }
         var confirmExit by remember { mutableStateOf(false) }
         // Set when a change needs the game restarted; shows the confirmation first.
@@ -407,12 +410,12 @@ class NowPlayingActivity : ComponentActivity() {
             mode == Mode.VIEW && padView && !showAchievements && padBounds?.contains(p) == true
         }
 
-        // Window brightness: the system level when bright; while the panel is open, the level being
-        // picked. Changes fade over FADE_MS instead of snapping.
+        // Window brightness: the chosen normal level when bright (the system level until one is chosen);
+        // the dimmed level (never brighter than normal) when dimmed. Changes fade over FADE_MS.
         val target: Float? = when {
             showBrightness -> Prefs.windowBrightness(brightness)
-            look == BottomScreen.Look.BRIGHT -> null
-            look == BottomScreen.Look.DIM -> Prefs.windowBrightness(brightness)
+            look == BottomScreen.Look.BRIGHT -> if (brightnessChosen) Prefs.windowBrightness(brightness) else null
+            look == BottomScreen.Look.DIM -> Prefs.windowBrightness(minOf(dimLevel, brightness))
             else -> Prefs.windowBrightness(0)
         }
         val level = remember { Animatable(-1f) } // -1 = follow the system brightness
@@ -431,7 +434,7 @@ class NowPlayingActivity : ComponentActivity() {
         }
         val blackAlpha by animateFloatAsState(if (look == BottomScreen.Look.BLACK) 1f else 0f, tween(BottomScreen.FADE_MS), label = "black")
         // Firmwares that ignore per-display brightness still get darker pixels at the lowest settings.
-        val contentAlpha = if (look == BottomScreen.Look.DIM && brightness <= 5) 0.6f else 1f
+        val contentAlpha = if ((look == BottomScreen.Look.DIM && minOf(dimLevel, brightness) <= 5) || brightness <= 3) 0.6f else 1f
 
         Box(
             Modifier.fillMaxSize().pointerInput(Unit) {
@@ -586,7 +589,7 @@ class NowPlayingActivity : ComponentActivity() {
                 }
                 BrightnessPanel(
                     value = brightness,
-                    onChange = { brightness = it; prefs.brightnessPercent = it },
+                    onChange = { brightness = it; brightnessChosen = true; prefs.bottomBrightness = it },
                     autoDim = autoDim,
                     onAutoDim = { autoDim = it },
                     onScreenOff = { showBrightness = false; screenOff = true },
@@ -654,7 +657,7 @@ class NowPlayingActivity : ComponentActivity() {
 
     }
 
-    /** The panel under the brightness pill: dimmed brightness, Auto-dim for this session, Turn screen off. */
+    /** The panel under the brightness pill: normal brightness, Auto-dim for this session, Turn screen off. */
     @Composable
     private fun BrightnessPanel(
         value: Int, onChange: (Int) -> Unit, autoDim: Boolean, onAutoDim: (Boolean) -> Unit,
@@ -669,7 +672,7 @@ class NowPlayingActivity : ComponentActivity() {
                     .clickable(enabled = false) {}.padding(horizontal = 16.dp, vertical = 12.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Brightness when dimmed", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text("Brightness", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     Text("$value", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Glow.Yellow)
                 }
                 Slider(
