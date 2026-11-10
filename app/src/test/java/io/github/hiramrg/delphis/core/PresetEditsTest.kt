@@ -50,4 +50,21 @@ class PresetEditsTest {
             p.mappings.forEach { m -> PresetEdits.describe(m.target) }
         }
     }
+
+    @Test
+    fun combosSplitIntoTilesAndBuildBack() {
+        val zoom = rs.mappings.first { it.control == ThorControl.L2 }
+        val d = PresetEdits.decompose(rs.controller, ThorControl.L2, zoom.target)!!
+        assertEquals(listOf("A", "⤒"), d.tiles.map { it.glyph })
+        assertTrue(d.isCombo && d.extra.isEmpty())
+        val single = PresetEdits.decompose(rs.controller, ThorControl.FACE_WEST, rs.mappings.first { it.control == ThorControl.FACE_WEST }.target)!!
+        assertEquals(listOf("shake"), single.tiles.map { it.small }) // the 3 shake keys are one tile
+        val b = PresetEdits.sections(rs.controller, ThorControl.L2)[0].tiles.first { it.glyph == "B" }
+        val edited = PresetEdits.setCombo(rs.mappings, ThorControl.L2, listOf(b, d.tiles[1]))
+        val m = edited.first { it.control == ThorControl.L2 }
+        assertEquals(listOf("Buttons/B", "Swing/Forward"), (m.target as Target.Buttons).keys)
+        assertEquals("Zoom (B + Wii Remote push)", m.action)
+        assertEquals("Choose a Wii button or move", PresetEdits.pickerTitle(rs.controller, ThorControl.L2))
+        assertEquals("Choose a GameCube button", PresetEdits.pickerTitle(EmulatedController.GAMECUBE, ThorControl.L2))
+    }
 }

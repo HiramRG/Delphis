@@ -93,6 +93,7 @@ fun PresetEditor(
             select = { selected = it },
             move = { to -> selected?.let { from -> if (PresetEdits.compatible(from, to)) { maps = PresetEdits.move(maps, from, to); selected = to } } },
             pick = { tile -> selected?.let { maps = PresetEdits.setTarget(maps, it, tile) } },
+            setCombo = { tiles, extra -> selected?.let { maps = PresetEdits.setCombo(maps, it, tiles, extra) } },
             clear = { selected?.let { maps = PresetEdits.clear(maps, it) } },
             undo = { maps = base.mappings },
             changed = changed,
@@ -110,6 +111,7 @@ private class EditorState(
     val select: (ThorControl) -> Unit,
     val move: (ThorControl) -> Unit,
     val pick: (PresetEdits.Tile) -> Unit,
+    val setCombo: (List<PresetEdits.Tile>, List<String>) -> Unit,
     val clear: () -> Unit,
     val undo: () -> Unit,
     val changed: Boolean,
@@ -130,47 +132,36 @@ private fun controlName(c: ThorControl) = when (c) {
 @Composable
 private fun TopEditor(s: EditorState, saveLabel: String, controlForKey: ((AndroidKey) -> ThorControl?)?, onCancel: () -> Unit, onSave: () -> Unit) {
     val c = LocalWii.current
-    var listening by remember { mutableStateOf(false) }
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(listening) { if (listening) runCatching { focus.requestFocus() } }
-    Column(
-        Modifier.fillMaxSize().focusRequester(focus).focusable()
-            .onPreviewKeyEvent { e ->
-                if (!listening || controlForKey == null) return@onPreviewKeyEvent false
-                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent true
-                val control = controlForKey(e.nativeKeyEvent)
-                if (control != null) { s.move(control); listening = false }
-                true
-            },
-    ) {
-        Text(withOrangeTags("Editing: ${s.base.name.removeSuffix(" (Custom)")}", c.orange), fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text("Pick an action, then press the Thor button for it", fontSize = 11.sp, color = c.textDim)
-        Spacer(Modifier.height(6.dp))
-        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            LazyColumn(Modifier.weight(0.47f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(s.used, key = { it.name }) { control ->
-                    ActionRow(control, s.mappingOn(control), control == s.selected, tail = if (control == s.selected) (if (listening) "press…" else "editing") else "›") {
-                        s.select(control); listening = controlForKey != null && control.kind == ThorControl.Kind.BUTTON && control != GYRO
+    var swap by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            Text("Editing: ${s.base.name.removeSuffix(" (Custom)")}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Left: the actions, with Cancel · Undo · Save closing the column.
+                Column(Modifier.weight(0.43f).fillMaxHeight()) {
+                    LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        items(s.used, key = { it.name }) { control ->
+                            ActionRow(control, s.mappingOn(control), control == s.selected, tail = if (control == s.selected) "editing" else "›") { s.select(control) }
+                        }
+                        if (s.free.isNotEmpty()) {
+                            item { SectionLabel("NOT USED · pick one to give it an action") }
+                            items(s.free, key = { "free-" + it.name }) { control ->
+                                ActionRow(control, null, control == s.selected, tail = if (control == s.selected) "editing" else "＋") { s.select(control) }
+                            }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        WiiButton("Cancel", onClick = onCancel, modifier = Modifier.weight(1f), fontSize = 13.sp)
+                        WiiButton("↶ Undo", onClick = s.undo, modifier = Modifier.weight(1f), enabled = s.changed, fontSize = 13.sp)
+                        PrimaryGlowButton(saveLabel, androidx.compose.material.icons.Icons.Filled.Save, onClick = onSave, modifier = Modifier.weight(1.3f), enabled = s.changed, fontSize = 13.sp)
                     }
                 }
-                if (s.free.isNotEmpty()) {
-                    item { SectionLabel("NOT USED · pick one to give it an action") }
-                    items(s.free, key = { "free-" + it.name }) { control ->
-                        ActionRow(control, null, control == s.selected, tail = if (control == s.selected) "editing" else "＋") { s.select(control); listening = false }
-                    }
-                }
-            }
-            Column(Modifier.weight(0.53f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                AssignBox(s, listening = listening, canPress = controlForKey != null, onTap = { listening = !listening && controlForKey != null })
-                PickerPanel(s, Modifier.weight(1f).fillMaxWidth(), tileW = 35.dp, tileH = 33.dp)
+                // Right: the picker, as big as it can be (it scrolls).
+                PickerPanel(s, Modifier.weight(0.57f).fillMaxHeight(), tileW = 54.dp, tileH = 50.dp, onSwap = { swap = true })
             }
         }
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            WiiButton("Undo", onClick = s.undo, enabled = s.changed, fontSize = 13.sp)
-            Text("Ⓐ pick action · press any Thor button to move it · ✚ tiles", fontSize = 10.sp, color = c.textDim, modifier = Modifier.weight(1f), maxLines = 1)
-            WiiButton("Cancel", onClick = onCancel, fontSize = 13.sp)
-            PrimaryGlowButton(saveLabel, androidx.compose.material.icons.Icons.Filled.Save, onClick = onSave, enabled = s.changed, fontSize = 13.sp)
-        }
+        if (swap) SwapOverlay(s) { swap = false }
     }
 }
 
@@ -180,44 +171,81 @@ private fun TopEditor(s: EditorState, saveLabel: String, controlForKey: ((Androi
 private fun BottomEditor(s: EditorState, saveLabel: String, onCancel: () -> Unit, onSave: () -> Unit) {
     val c = LocalWii.current
     var sheet by remember { mutableStateOf(false) }
-    Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Pill("✕ Cancel", onClick = onCancel)
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Edit controls", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
-                    Text(s.base.name.removeSuffix(" (Custom)"), fontSize = 10.sp, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                if (s.changed) Pill("Undo", onClick = s.undo)
-                Pill(saveLabel, onClick = onSave, primary = true, enabled = s.changed)
-            }
-            LazyVerticalGrid(GridCells.Fixed(2), Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(s.used + s.free, key = { it.name }) { control ->
-                    ActionRow(control, s.mappingOn(control), false, compact = true, tail = null) { s.select(control); sheet = true }
-                }
-            }
-        }
-        if (sheet && s.selected != null) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).clickable { sheet = false })
-            val shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
-            Column(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.8f).clip(shape)
-                    .background(if (c.dark) Color(0xFF1B1F24) else c.card).border(2.dp, SelBorder, shape).padding(horizontal = 10.dp, vertical = 6.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    MapBadge(s.selected, 20.dp)
-                    Spacer(Modifier.width(7.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(s.selectedName, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        WiiGetsText(s.mappingOn(s.selected)?.target, 10.5.sp)
+    var swap by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            Column(Modifier.fillMaxSize()) {
+                Text("Edit controls · ${s.base.name.removeSuffix(" (Custom)")}", fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 5.dp))
+                LazyVerticalGrid(GridCells.Fixed(2), Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    items(s.used + s.free, key = { it.name }) { control ->
+                        ActionRow(control, s.mappingOn(control), false, compact = true, tail = null) { s.select(control); sheet = true }
                     }
-                    Pill("Done", onClick = { sheet = false })
                 }
-                Spacer(Modifier.height(5.dp))
-                // The game owns the Thor's buttons here, so the new button is tapped instead of pressed.
-                TapAssignBox(s)
-                Spacer(Modifier.height(5.dp))
-                PickerPanel(s, Modifier.weight(1f).fillMaxWidth(), tileW = 31.dp, tileH = 30.dp, framed = false)
+            }
+            if (sheet && s.selected != null) {
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).clickable { sheet = false })
+                val shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
+                Column(
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.88f).clip(shape)
+                        .background(if (c.dark) Color(0xFF1B1F24) else c.card).border(2.dp, SelBorder, shape).padding(horizontal = 10.dp, vertical = 6.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        MapBadge(s.selected, 22.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(s.selectedName, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            WiiGetsText(s.mappingOn(s.selected)?.target, 11.sp)
+                        }
+                        Pill("Done", onClick = { sheet = false })
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    PickerPanel(s, Modifier.weight(1f).fillMaxWidth(), tileW = 50.dp, tileH = 46.dp, framed = false, onSwap = { swap = true })
+                }
+            }
+            if (swap) SwapOverlay(s) { swap = false }
+        }
+        // Sticky footer.
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Pill("Cancel", onClick = onCancel, big = true)
+            Pill("↶ Undo", onClick = s.undo, enabled = s.changed, big = true)
+            Spacer(Modifier.weight(1f))
+            Pill(saveLabel, onClick = onSave, primary = true, enabled = s.changed, big = true)
+        }
+    }
+}
+
+/** ⇄ Swap: the Thor's other controls of the same kind, with what each does now; picking one trades the two actions. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SwapOverlay(s: EditorState, onClose: () -> Unit) {
+    val c = LocalWii.current
+    val sel = s.selected ?: return
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
+        val shape = RoundedCornerShape(16.dp)
+        Column(
+            Modifier.fillMaxWidth(0.9f).clip(shape).background(if (c.dark) Color(0xFF1B1F24) else c.card).border(2.dp, SelBorder, shape)
+                .clickable(enabled = false) {}.padding(12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Swap ${s.selectedName} with…", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                Pill("✕", onClick = onClose)
+            }
+            Text("The two actions trade buttons.", fontSize = 11.sp, color = c.textDim, modifier = Modifier.padding(bottom = 8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                s.editable.filter { it != sel && PresetEdits.compatible(sel, it) }.forEach { to ->
+                    val m = s.mappingOn(to)
+                    val pill = RoundedCornerShape(50)
+                    Row(
+                        Modifier.focusRing(pill).clip(pill).background(if (c.dark) Color(0xFF20252B) else c.bg).border(2.dp, c.cardBorder, pill)
+                            .clickable { s.move(to); onClose() }.padding(start = 4.dp, end = 11.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        MapBadge(to, 22.dp)
+                        Spacer(Modifier.width(6.dp))
+                        Text(m?.let { PresetEdits.actionName(it) } ?: "—", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = if (m == null) c.textDim else c.text)
+                    }
+                }
             }
         }
     }
@@ -303,109 +331,143 @@ private fun ActionRow(control: ThorControl, m: Mapping?, selected: Boolean, comp
     }
 }
 
-/** Top screen: "Press the button for Block · now on X". Tap it to start / stop listening. */
-@Composable
-private fun AssignBox(s: EditorState, listening: Boolean, canPress: Boolean, onTap: () -> Unit) {
-    val c = LocalWii.current
-    val shape = RoundedCornerShape(14.dp)
-    val sel = s.selected ?: return
-    val directional = sel.kind == ThorControl.Kind.DIRECTIONAL || sel == GYRO
-    Column(
-        Modifier.fillMaxWidth().clip(shape).background(if (c.dark) PressFill else c.accentSoft)
-            .dashedBorder(if (listening) SelBorder else SelBorder.copy(alpha = 0.6f), shape)
-            .clickable(enabled = canPress && !directional, onClick = onTap).padding(horizontal = 10.dp, vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        if (directional) {
-            Text("Move ${s.selectedName} to", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
-            Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                s.editable.filter { it != sel && PresetEdits.compatible(sel, it) }.forEach { to ->
-                    Box(Modifier.clip(RoundedCornerShape(50)).clickable { s.move(to) }.padding(2.dp)) { MapBadge(to, 22.dp) }
-                }
-                if (s.editable.none { it != sel && PresetEdits.compatible(sel, it) }) Text("nowhere else", fontSize = 11.sp, color = c.textDim)
-            }
-        } else {
-            Text(if (listening) "Press the button for ${s.selectedName}" else "${s.selectedName}: tap here, then press a Thor button",
-                fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-                Text(if (s.mappingOn(sel) != null) "now on " else "not used yet · ", fontSize = 11.sp, color = c.textDim)
-                MapBadge(sel, 18.dp)
-                if (s.mappingOn(sel) != null) Text("  ·  ✕ clear", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, modifier = Modifier.clickable(onClick = s.clear))
-            }
-        }
-    }
-}
 
-/** Bottom screen: the game owns the Thor's buttons, so the new one is tapped from a strip. */
-@Composable
-private fun TapAssignBox(s: EditorState) {
-    val c = LocalWii.current
-    val shape = RoundedCornerShape(12.dp)
-    val sel = s.selected ?: return
-    Column(Modifier.fillMaxWidth().clip(shape).background(if (c.dark) PressFill else c.accentSoft).dashedBorder(SelBorder, shape).padding(horizontal = 8.dp, vertical = 5.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Tap the Thor button for ${s.selectedName}", fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (s.mappingOn(sel) != null) Text("✕ clear", fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, modifier = Modifier.clickable(onClick = s.clear))
-        }
-        Row(Modifier.padding(top = 4.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-            s.editable.filter { PresetEdits.compatible(sel, it) }.forEach { to ->
-                val on = to == sel
-                Box(
-                    Modifier.clip(RoundedCornerShape(50)).border(2.dp, if (on) SelBorder else Color.Transparent, RoundedCornerShape(50))
-                        .clickable { s.move(to) }.padding(3.dp),
-                ) { MapBadge(to, 20.dp) }
-            }
-        }
-    }
-}
 
-/** "What X does in the game": labelled rows of tiles, no tabs. */
+/**
+ * "Choose a Wii button or move": labelled rows of tiles, no tabs. Button actions get a Single / Combo
+ * switch; in Combo a row of big slots (A + ⤒ push + ＋) shows what the game gets: tap a slot, then a tile.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PickerPanel(s: EditorState, modifier: Modifier, tileW: Dp, tileH: Dp, framed: Boolean = true) {
+private fun PickerPanel(s: EditorState, modifier: Modifier, tileW: Dp, tileH: Dp, framed: Boolean = true, onSwap: () -> Unit) {
     val c = LocalWii.current
     val sel = s.selected ?: return
-    val sections = remember(s.base.controller, sel) { PresetEdits.sections(s.base.controller, sel) }
+    val controller = s.base.controller
+    val sections = remember(controller, sel) { PresetEdits.sections(controller, sel) }
     val current = s.mappingOn(sel)?.target
+    val decomposed = PresetEdits.decompose(controller, sel, current)
+    val canCombo = sel.kind == ThorControl.Kind.BUTTON && sel != GYRO
+    var combo by remember(sel) { mutableStateOf(decomposed?.isCombo == true) }
+    var slot by remember(sel) { mutableStateOf(0) }
+    val parts = decomposed?.tiles.orEmpty()
+    val extra = decomposed?.extra.orEmpty()
     val shape = RoundedCornerShape(14.dp)
     Column(
-        (if (framed) modifier.clip(shape).background(if (c.dark) Color(0xFF1B1F24) else c.card).border(2.dp, c.cardBorder, shape).padding(8.dp) else modifier)
+        (if (framed) modifier.clip(shape).background(if (c.dark) Color(0xFF1B1F24) else c.card).border(2.dp, c.cardBorder, shape).padding(10.dp) else modifier)
             .verticalScroll(rememberScrollState()),
     ) {
-        Text("What ${s.selectedName} does in the game", fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(PresetEdits.pickerTitle(controller, sel), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.text, modifier = Modifier.weight(1f))
+            if (canCombo) SingleCombo(combo) { on ->
+                if (!on && combo) {
+                    // Back to Single: keep only the selected slot's tile.
+                    parts.getOrNull(slot)?.let { s.pick(it) }
+                }
+                combo = on; slot = 0
+            }
+            Text("⇄ Swap", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText,
+                modifier = Modifier.padding(start = 10.dp).clip(RoundedCornerShape(8.dp)).clickable(onClick = onSwap).padding(4.dp))
+        }
+        if (combo && canCombo) {
+            // The formula: one big slot per part, then an empty ＋ slot.
+            Row(
+                Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if (c.dark) Color(0xFF15191D) else c.bg)
+                    .padding(8.dp).horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                parts.forEachIndexed { i, t ->
+                    if (i > 0) PlusSign()
+                    Slot(t.glyph, t.small, t.motion, active = i == slot, w = tileW + 8.dp, h = tileH + 6.dp, onClick = { slot = i },
+                        onRemove = if (parts.size > 1) ({ s.setCombo(parts.filterIndexed { j, _ -> j != i }, extra); slot = 0 }) else null)
+                }
+                if (parts.size < 3) {
+                    if (parts.isNotEmpty()) PlusSign(dim = true)
+                    Slot("＋", "add", false, active = slot >= parts.size, w = tileW + 8.dp, h = tileH + 6.dp, empty = true, onClick = { slot = parts.size })
+                }
+            }
+            Text("Tap a slot, then a tile. Everything in the row happens together.", fontSize = 10.5.sp, color = c.textDim, modifier = Modifier.padding(top = 3.dp, start = 2.dp))
+        }
         sections.forEach { sec ->
             SectionLabel(sec.title)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                sec.tiles.forEach { t -> Tile(t, ActionCatalog.sameTarget(t.target, current), tileW, tileH) { s.pick(t) } }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                sec.tiles.forEach { t ->
+                    val on = if (combo && canCombo) parts.getOrNull(slot)?.let { it == t } == true else ActionCatalog.sameTarget(t.target, current)
+                    Tile(t, on, tileW, tileH) {
+                        if (combo && canCombo) {
+                            val list = parts.toMutableList()
+                            if (slot < list.size) list[slot] = t else { list += t; slot = list.size - 1 }
+                            s.setCombo(list, extra)
+                        } else s.pick(t)
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun SingleCombo(combo: Boolean, onChange: (Boolean) -> Unit) {
+    val c = LocalWii.current
+    Row(Modifier.clip(RoundedCornerShape(50)).background(if (c.dark) Color(0xFF262C33) else c.bar).padding(2.dp)) {
+        listOf(false to "Single", true to "Combo").forEach { (v, label) ->
+            Text(label, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = if (combo == v) Color(0xFF0A2533) else c.textDim,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(if (combo == v) c.accent else Color.Transparent).clickable { onChange(v) }.padding(horizontal = 12.dp, vertical = 5.dp))
+        }
+    }
+}
+
+@Composable
+private fun PlusSign(dim: Boolean = false) {
+    Text("+", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = LocalWii.current.textDim.copy(alpha = if (dim) 0.5f else 1f), modifier = Modifier.padding(horizontal = 6.dp))
+}
+
+@Composable
+private fun Slot(glyph: String, small: String, motion: Boolean, active: Boolean, w: Dp, h: Dp, empty: Boolean = false, onClick: () -> Unit, onRemove: (() -> Unit)? = null) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(14.dp)
+    Box {
+        Column(
+            Modifier.size(w, h).focusRing(shape).clip(shape)
+                .background(if (active) (if (c.dark) SelFill else c.accentSoft) else if (empty) Color.Transparent else (if (c.dark) Color(0xFF20252B) else c.card))
+                .then(if (empty && !active) Modifier.dashedBorder(c.textDim, shape) else Modifier.border(if (active) 3.dp else 2.dp, if (active) SelBorder else c.cardBorder, shape))
+                .clickable(onClick = onClick),
+            verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(glyph, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = if (motion) motionColor() else if (empty) c.textDim else c.text, lineHeight = 24.sp)
+            if (small.isNotEmpty()) Text(small, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.textDim, lineHeight = 11.sp)
+        }
+        if (onRemove != null) Text("✕", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = Color.White,
+            modifier = Modifier.align(Alignment.TopEnd).offset(6.dp, (-6).dp).size(18.dp).clip(CircleShape).background(Color(0xFF4A535E)).clickable(onClick = onRemove).padding(top = 1.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 
 @Composable
 private fun Tile(t: PresetEdits.Tile, on: Boolean, w: Dp, h: Dp, onClick: () -> Unit) {
     val c = LocalWii.current
-    val shape = RoundedCornerShape(9.dp)
+    val shape = RoundedCornerShape(12.dp)
     Column(
         Modifier.size(w, h).focusRing(shape).clip(shape)
             .background(if (on) (if (c.dark) SelFill else c.accentSoft) else (if (c.dark) Color(0xFF20252B) else c.bg))
-            .border(2.dp, if (on) SelBorder else c.cardBorder, shape).clickable(onClick = onClick),
+            .border(if (on) 3.dp else 2.dp, if (on) SelBorder else c.cardBorder, shape).clickable(onClick = onClick),
         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(t.glyph, fontSize = if (t.small.isEmpty()) 14.sp else 12.sp, fontWeight = FontWeight.ExtraBold, color = if (t.motion) motionColor() else c.text, lineHeight = 13.sp, maxLines = 1)
-        if (t.small.isNotEmpty()) Text(t.small, fontSize = 7.sp, fontWeight = FontWeight.Bold, color = if (on) c.accentText else c.textDim, lineHeight = 8.sp, maxLines = 1)
+        val big = w >= 52.dp
+        Text(t.glyph, fontSize = if (big) 21.sp else 19.sp, fontWeight = FontWeight.ExtraBold, color = if (t.motion) motionColor() else c.text, lineHeight = if (big) 23.sp else 21.sp, maxLines = 1)
+        if (t.small.isNotEmpty()) Text(t.small, fontSize = if (big) 9.5.sp else 9.sp, fontWeight = FontWeight.Bold, color = if (on) c.accentText else c.textDim, lineHeight = 10.sp, maxLines = 1)
     }
 }
 
 @Composable
-private fun Pill(text: String, onClick: () -> Unit, primary: Boolean = false, enabled: Boolean = true) {
+private fun Pill(text: String, onClick: () -> Unit, primary: Boolean = false, enabled: Boolean = true, big: Boolean = false) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(50)
     Text(
-        text, fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold, color = if (primary) Color(0xFF0A2533) else c.text, maxLines = 1,
+        text, fontSize = if (big) 13.sp else 11.5.sp, fontWeight = FontWeight.ExtraBold,
+        color = (if (primary) Color(0xFF0A2533) else c.text).copy(alpha = if (enabled) 1f else 0.45f), maxLines = 1,
         modifier = Modifier.clip(shape).background(if (primary) c.accent.copy(alpha = if (enabled) 1f else 0.4f) else Color.Transparent)
             .border(2.dp, if (primary) c.accent.copy(alpha = if (enabled) 1f else 0.4f) else c.cardBorder, shape)
-            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 10.dp, vertical = 5.dp),
+            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = if (big) 16.dp else 10.dp, vertical = if (big) 8.dp else 5.dp),
     )
 }
 

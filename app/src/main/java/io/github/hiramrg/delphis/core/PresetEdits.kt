@@ -181,6 +181,54 @@ object PresetEdits {
         return maps.filterNot { it.control == control } + Mapping(control, tile.target, action)
     }
 
+    /** A button action split into picker tiles (A + ⤒ push), plus any keys no tile covers. */
+    data class Combo(val tiles: List<Tile>, val extra: List<String>) {
+        val isCombo: Boolean get() = tiles.size + extra.size > 1
+    }
+
+    /** Splits [target] into the tiles it's made of (for the Combo slots). Null for sticks, gyro or nothing. */
+    fun decompose(c: EmulatedController, control: ThorControl, target: Target?): Combo? {
+        if (target !is Target.Buttons) return null
+        val keys = target.keys
+        val remaining = keys.toMutableList()
+        val found = mutableListOf<Tile>()
+        sections(c, control).flatMap { it.tiles }.filter { it.target is Target.Buttons }
+            .sortedByDescending { (it.target as Target.Buttons).keys.size }
+            .forEach { t ->
+                val tk = (t.target as Target.Buttons).keys
+                if (tk.first() in remaining) { found += t; remaining.removeAll(tk) }
+            }
+        found.sortBy { t -> keys.indexOf((t.target as Target.Buttons).keys.first()) }
+        return Combo(found, remaining)
+    }
+
+    /** Makes [control] press every tile in [tiles] (and [extra] keys) together. */
+    fun setCombo(maps: List<Mapping>, control: ThorControl, tiles: List<Tile>, extra: List<String> = emptyList()): List<Mapping> {
+        if (tiles.isEmpty() && extra.isEmpty()) return clear(maps, control)
+        if (tiles.size == 1 && extra.isEmpty()) return setTarget(maps, control, tiles[0])
+        val keys = (tiles.flatMap { (it.target as Target.Buttons).keys } + extra).distinct()
+        val label = tiles.joinToString(" + ") { it.label }
+        val old = maps.firstOrNull { it.control == control }
+        val action = if (old == null) label else "${actionName(old)} ($label)"
+        return maps.filterNot { it.control == control } + Mapping(control, Target.Buttons(keys), action)
+    }
+
+    /** The picker's title: "Choose a Wii button or move", "Choose a GameCube button", … */
+    fun pickerTitle(c: EmulatedController, control: ThorControl): String {
+        val wii = c == EmulatedController.WIIMOTE_NUNCHUK || c == EmulatedController.WIIMOTE_SIDEWAYS || c == EmulatedController.WIIMOTE_WHEEL
+        return when {
+            control == ThorControl.GYRO -> "Choose how to aim"
+            control.kind == ThorControl.Kind.DIRECTIONAL -> when (c) {
+                EmulatedController.GAMECUBE -> "Choose a GameCube stick"
+                EmulatedController.CLASSIC -> "Choose a Classic Controller stick"
+                else -> "Choose a Wii stick or move"
+            }
+            wii -> "Choose a Wii button or move"
+            c == EmulatedController.GAMECUBE -> "Choose a GameCube button"
+            else -> "Choose a Classic Controller button"
+        }
+    }
+
     fun clear(maps: List<Mapping>, control: ThorControl): List<Mapping> = maps.filterNot { it.control == control }
 
     /** The edited preset, saved as the game's own "(Custom)" version. */
