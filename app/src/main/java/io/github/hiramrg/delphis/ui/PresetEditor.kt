@@ -86,7 +86,8 @@ fun PresetEditor(
     val draft = PresetEdits.build(base, maps, customId)
 
     BoxWithConstraints(modifier) {
-        val wide = maxWidth > maxHeight * 1.05f
+        // The top screen is ~700 dp wide; the in-game bottom screen ~450 dp.
+        val wide = maxWidth >= 520.dp
         val state = EditorState(
             base = base, maps = maps, editable = editable, selected = selected,
             select = { selected = it },
