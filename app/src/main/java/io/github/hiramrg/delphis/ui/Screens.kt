@@ -645,6 +645,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             PresetEditor(
                 base = p.selected!!, customId = act.store.customIdFor(game.key), saveLabel = "Save",
                 modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp),
+                controlForKey = remember { thorControlForKey(act.prefs) },
                 onCancel = { p.editing = false },
                 onSave = { p.saveEdited(it) },
             )
@@ -1287,5 +1288,19 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChang
             Text(subtitle, fontSize = 12.sp, color = LocalWii.current.textDim)
         }
         Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+/** Which Thor control a key press came from (for "press the button" in the editor), using the Controller Check's mapping. */
+fun thorControlForKey(prefs: io.github.hiramrg.delphis.platform.Prefs): (KeyEvent) -> io.github.hiramrg.delphis.core.ThorControl? {
+    val profile = io.github.hiramrg.delphis.platform.DeviceInfo.controllerProfile(prefs)
+    val buttons = io.github.hiramrg.delphis.core.ThorControl.entries.filter { it.kind == io.github.hiramrg.delphis.core.ThorControl.Kind.BUTTON }
+    return { e ->
+        val name = io.github.hiramrg.delphis.platform.DeviceInfo.dolphinNameForKeycode(e.keyCode)
+        when {
+            name == null -> null
+            name in listOf("Up", "Down", "Left", "Right") -> io.github.hiramrg.delphis.core.ThorControl.DPAD
+            else -> buttons.firstOrNull { c -> profile.inputsFor(c).any { it == name || it.endsWith(":$name") } }
+        }
     }
 }

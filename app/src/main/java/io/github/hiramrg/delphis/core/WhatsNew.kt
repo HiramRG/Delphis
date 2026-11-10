@@ -5,13 +5,15 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 19
+    const val RELEASE = 20
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("No more surprise Dolphin menu.", "Android's swipe gestures are turned off on the in-game bottom screen, so a swipe there can't open Dolphin's menu anymore."),
-        Item("Red Steel: Nunchuk swing up.", "Click the left stick (L3) to swing the Nunchuk up. In \"+ Touch Buttons\" it's also a touch button (replacing Push, which stays on A)."),
+        Item("New preset editor.", "Pick an action, then press the Thor button you want for it. Underneath, choose what it does in the game from Buttons, Wii Remote moves and Nunchuk moves: every motion is there now. On the in-game bottom screen, tap an action and pick from the same tiles."),
+        Item("Cleaner controls map.", "No more connector lines: every label starts with its button's own badge."),
+        Item("Red Steel.", "Zoom is now on L2 and crouch on L1."),
+        Item("Tidier Home.", "The \"All games\" tile in Recently played is gone (the full list is right below)."),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */
