@@ -118,6 +118,21 @@ class NowPlayingActivity : ComponentActivity() {
         session = GameSession.from(intent)
         watch(session)
         setContent { WiiTheme(dark = true) { session?.let { NowPlaying(it) } } }
+        blockSystemGestures()
+    }
+
+    /**
+     * No Android navigation gestures on the in-game bottom screen: an edge swipe there is Android's
+     * Back, which goes to Dolphin (the focused app) and opens its menu. The whole window is excluded;
+     * with the bars stickily hidden Android honours all of it (otherwise the bottom 200 dp of each edge).
+     * The swipe up from the very bottom edge (Home) can't be turned off by apps.
+     */
+    private fun blockSystemGestures() {
+        if (android.os.Build.VERSION.SDK_INT < 29) return
+        val decor = window.decorView
+        decor.addOnLayoutChangeListener { v, l, t, r, b, _, _, _, _ ->
+            v.systemGestureExclusionRects = listOf(android.graphics.Rect(0, 0, r - l, b - t))
+        }
     }
 
     // ------------------------------------------------------------------ focus sink

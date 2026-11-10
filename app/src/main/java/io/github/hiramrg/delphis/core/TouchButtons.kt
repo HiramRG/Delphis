@@ -23,7 +23,7 @@ object TouchButtons {
             TouchButton("🔍", "Zoom", "hold", listOf("Buttons/A", "Swing/Forward")),
             TouchButton("↻", "Reload", "Nunchuk flick", listOf("Nunchuk/Shake/X", "Nunchuk/Shake/Y", "Nunchuk/Shake/Z")),
             TouchButton("💣", "Grenade", "hold · R2 throws", listOf("D-Pad/Down")),
-            TouchButton("✋", "Push", "Wii Remote", listOf("Swing/Forward")),
+            TouchButton("⤴", "Swing up", "Nunchuk", listOf("Nunchuk/Swing/Up")),
         ),
     )
 

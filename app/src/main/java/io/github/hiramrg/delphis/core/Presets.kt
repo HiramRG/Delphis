@@ -521,6 +521,7 @@ object PresetLibrary {
         button(ThorControl.FACE_NORTH, "Block (Nunchuk thrust)", "Nunchuk/Swing/Forward")
         button(ThorControl.FACE_WEST, "Reload · Doors (Nunchuk flick)", *NUNCHUK_SHAKE)
         directional(ThorControl.RIGHT_STICK, "Katana (flick)", "Swing")
+        button(ThorControl.L3, "Swing up (Nunchuk up)", "Nunchuk/Swing/Up")
         directional(ThorControl.DPAD, "Reload · Switch gun · Grenade", "D-Pad")
         wiiSystemButtons()
         option("Extension", "Nunchuk")
@@ -528,13 +529,14 @@ object PresetLibrary {
         option("IR/Relative Input", "False")
         tip("Slide a finger on the bottom screen to aim. Double-tap the pad (or press Recenter) to put the pointer back in the middle.")
         tip("Hold L1 to zoom; let go to zoom back out. Flick the right stick in the direction of a katana slash.")
+        tip("When the game asks you to swing the Nunchuk up (from down to up), click the left stick (L3).")
         tip("Grenade: hold D-pad down to take one out, then press R2 to throw it (or Y for an overhand throw).")
         tip("First time only: force-stop Dolphin (Android Settings → Apps → Dolphin → Force stop) so it connects to Delphis' trackpad.")
     }
 
     val RED_STEEL_TOUCH = RED_STEEL_TRACKPAD.copy(
         id = "redsteel-touch", name = "Red Steel Trackpad + Touch Buttons",
-        summary = "The same controls, plus Zoom, Reload, Grenade and Push as touch buttons beside the trackpad.",
+        summary = "The same controls, plus Zoom, Reload, Grenade and Nunchuk swing up as touch buttons beside the trackpad.",
         options = RED_STEEL_TRACKPAD.options + (TOUCH_BUTTONS_OPTION to TouchButtons.RED_STEEL_SET),
     )
 
