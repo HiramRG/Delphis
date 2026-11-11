@@ -639,15 +639,23 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     val p = act.picker?.takeIf { it.game.uri == game.uri } ?: return
     val companion = MenuCompanion.showing.value
 
-    if (p.editing && p.selected != null) {
+    val target = p.editTarget
+    if (p.editing && target != null) {
         Column(Modifier.fillMaxSize()) {
             Header(game.info.title, onBack = { p.editing = false })
             PresetEditor(
-                base = p.selected!!, customId = act.store.customIdFor(game.key), saveLabel = "Save",
+                base = target, customId = act.store.customIdFor(game.key), saveLabel = "Save",
                 modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp),
                 controlForKey = remember { thorControlForKey(act.prefs) },
+                updateName = if (act.store.isMine(target.id)) null else act.store.root(target).name,
+                newName = act.store.newName(game.key, target),
+                onReset = if (p.isEdited(target)) ({ p.resetToDefault(target); p.editing = false }) else null,
                 onCancel = { p.editing = false },
-                onSave = { p.saveEdited(it) },
+                // One of My presets is simply updated; a built-in asks: this game's version, or a new preset.
+                onSave = { edited, newName ->
+                    if (act.store.isMine(target.id)) p.saveEdited(edited.copy(id = target.id, name = target.name), target, null, keepId = true)
+                    else p.saveEdited(edited, target, newName)
+                },
             )
         }
         return
@@ -730,17 +738,19 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         }
     }
 
-    // Physical buttons: A / Start = Play, D-pad or left stick = pick a preset, X = Edit, Y = Remember,
+    // Physical buttons: A = use the preset under the ring, or Play if it's already in use; Start = Play;
+    // D-pad = move the ring, X = Edit,
     // L1 = autosave on/off for this game, R1 = remember controls on/off, Y = earlier autosaves. B = Back.
     val onKey by rememberUpdatedState<(KeyEvent) -> Boolean> { e ->
         if (p.editing || e.action != KeyEvent.ACTION_DOWN) false
         else when (e.keyCode) {
             KeyEvent.KEYCODE_BUTTON_L1 -> { if (e.repeatCount == 0) toggleGameAutosave(); canAutosave }
             KeyEvent.KEYCODE_BUTTON_R1 -> { if (e.repeatCount == 0) p.rememberChoice = !p.rememberChoice; true }
-            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> { if (e.repeatCount == 0) p.play(); true }
+            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> { if (e.repeatCount == 0) p.confirm(); true }
+            KeyEvent.KEYCODE_BUTTON_START -> { if (e.repeatCount == 0) p.play(); true }
             KeyEvent.KEYCODE_DPAD_DOWN -> { p.move(1); true }
             KeyEvent.KEYCODE_DPAD_UP -> { p.move(-1); true }
-            KeyEvent.KEYCODE_BUTTON_X -> { if (e.repeatCount == 0 && p.selected != null) p.editing = true; true }
+            KeyEvent.KEYCODE_BUTTON_X -> { if (e.repeatCount == 0 && p.editTarget != null) p.editing = true; true }
             KeyEvent.KEYCODE_BUTTON_Y -> { if (e.repeatCount == 0 && backups.isNotEmpty()) showBackups = true; true }
             KeyEvent.KEYCODE_BUTTON_SELECT -> {
                 if (e.repeatCount == 0) { if (multiplayer) showPlayers = true else if (screen != null) showScreen = true }
@@ -752,65 +762,149 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     }
     DisposableEffect(Unit) { act.keyListener = { onKey(it) }; onDispose { act.keyListener = null } }
 
-    Row(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        // Left: the game.
-        Column(Modifier.fillMaxHeight().widthIn(max = 220.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    var showList by remember { mutableStateOf(!companion) }
+    var menu by remember { mutableStateOf(false) }
+    var confirmReset by remember { mutableStateOf<Preset?>(null) }
+    val shown = p.focused ?: p.selected
+
+    Box(Modifier.fillMaxSize()) {
+    Row(Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        // Left: the game, then Edit and Play.
+        Column(Modifier.fillMaxHeight().width(160.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text("◀ Back", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { act.screen = Screen.Home }.padding(4.dp))
             // No accent frame: the only blue ring is the one that follows the D-pad focus.
             Box(Modifier.weight(1f, fill = false).aspectRatio(0.72f).clip(RoundedCornerShape(14.dp))) {
                 Cover(act, game, act.prefs.showCovers, Modifier.fillMaxSize(), titleSize = 14)
             }
-            Text(game.info.title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(game.info.title, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 19.sp)
             Text(platformLabel(game.info.platform) + " · " + playSummary(act, game), fontSize = 11.sp, color = c.textDim, maxLines = 2)
-            achievements?.let { AchievementsChip(it, onClick = { showAchievements = true }) }
-            screen?.let { sc -> ScreenSection(sc, screenGid, act.prefs.gcUseHack, onShape = { setScreen(sc.copy(shape = it)) }, onOpen = { showScreen = true }) }
-            if (rememberHasAutosave(act, game)) Text("▶ Continues from your autosave", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.accentText)
-            if (backups.isNotEmpty()) Text(
-                "↺ Earlier autosaves (${backups.size}) · Ⓨ", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.textDim,
-                modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { showBackups = true }.padding(vertical = 2.dp),
+            if (rememberHasAutosave(act, game)) Text("▶ Resumes from autosave", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, maxLines = 1)
+            else if (canAutosave && !gameAutosave && io.github.hiramrg.delphis.core.AutosaveRules.offByDefault(gameId)) Text(
+                "🕒 Autosave is off so the game's clock matches the real time. Save in the game.",
+                fontSize = 10.5.sp, color = c.textDim, maxLines = 3, overflow = TextOverflow.Ellipsis, lineHeight = 13.sp,
             )
-            if (canAutosave && !gameAutosave && io.github.hiramrg.delphis.core.AutosaveRules.offByDefault(gameId)) Text(
-                "🕒 Autosave is off so the game's clock always matches the real time. Save in the game before closing it.",
-                fontSize = 11.sp, color = c.textDim, maxLines = 3, overflow = TextOverflow.Ellipsis,
-            )
+            Spacer(Modifier.height(2.dp))
+            GameButton("✎", "Edit", "X", primary = false, enabled = p.editTarget != null) { p.editing = true }
+            GameButton("▶", if (shown == null) "Choose a style" else "Play", "A", primary = true, enabled = shown != null) { p.play() }
         }
-        // Right: controls preview (picker on the bottom screen) or the picker itself (single screen).
+        // Right: one row of chips, then the controls card.
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val sel = p.selected
-            WiiCard(Modifier.fillMaxWidth().weight(1f), radius = 20.dp, padding = 12.dp) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                achievements?.let { a -> GameChip("🏆 ${a.unlocked}/${a.total}", "R3") { showAchievements = true } }
                 if (multiplayer) {
-                    PlayersRow(io.github.hiramrg.delphis.core.Players.assign(pads, playerSetup), onChange = { showPlayers = true }, modifier = Modifier.fillMaxWidth())
-                    if (pads.any { !it.builtIn && it.byLabel == null }) Text(
-                        "New controller: press ⊖ to check its buttons once", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.orange,
-                        modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(6.dp)).clickable { showPlayers = true },
-                    )
-                    Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(c.cardBorder))
-                }
-                if (companion && sel != null) {
-                    // Picture + name, then a map of what each of the Thor's controls does.
-                    ControlsMapCard(sel, sel.id == p.suggestedId, Modifier.weight(1f).fillMaxWidth())
-                } else {
-                if (sel != null) SelectedControlsTitle() else Text("CONTROLS", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
-                Text(if (sel != null) presetTitle(sel.name, sel.id == p.suggestedId) else androidx.compose.ui.text.AnnotatedString(p.suggestion.question), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(6.dp))
-                if (companion) {
-                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Text("Pick a control style on the bottom screen (or with the D-pad).", color = c.textDim, textAlign = TextAlign.Center)
-                    }
-                } else {
-                    PresetChooser(p.suggestion.question, p.choices, p.alternatives, sel, p.suggestedId, Modifier.weight(1f)) { p.selected = it }
-                }
-                }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (canAutosave) WiiChip(if (gameAutosave) "✓ Autosave · L1" else "Autosave off · L1", gameAutosave, { toggleGameAutosave() })
-                WiiChip(if (p.rememberChoice) "✓ Remember controls · R1" else "Remember controls · R1", p.rememberChoice, { p.rememberChoice = !p.rememberChoice })
+                    val newPad = pads.any { !it.builtIn && it.byLabel == null }
+                    val n = io.github.hiramrg.delphis.core.Players.assign(pads, playerSetup).size
+                    GameChip(if (newPad) "🎮 New controller" else "🎮 $n player" + (if (n == 1) "" else "s"), "⊖", warn = newPad) { showPlayers = true }
+                } else screen?.let { sc -> GameChip("▭ " + screenChipLabel(sc, screenGid, act.prefs.gcUseHack), "⊖") { showScreen = true } }
                 Spacer(Modifier.weight(1f))
-                WiiButton("Ⓧ Edit", onClick = { p.editing = true }, enabled = sel != null)
-                WiiButton(if (sel == null) "Choose a style" else "Ⓐ Play", onClick = { p.play() }, primary = true, enabled = sel != null, fontSize = 17.sp)
+                if (canAutosave) GameChip((if (gameAutosave) "✓ " else "") + "Autosave", "L1", on = gameAutosave) { toggleGameAutosave() }
+                GameChip((if (p.rememberChoice) "✓ " else "") + "Remember", "R1", on = p.rememberChoice) { p.rememberChoice = !p.rememberChoice }
             }
-            HintLine("Ⓐ Play · ✚ choose · Ⓧ Edit" + (if (canAutosave) " · L1 Autosave" else "") + " · R1 Remember" + (if (backups.isNotEmpty()) " · Ⓨ Earlier autosaves" else "") + (if (multiplayer) " · ⊖ Players" else if (screen != null) " · ⊖ Screen" else "") + (if (achievements != null) " · R3 Achievements" else "") + " · Ⓑ Back")
+            WiiCard(Modifier.fillMaxWidth().weight(1f), radius = 20.dp, padding = 12.dp) {
+                // Header: what the map shows. "✓ Selected controls" only when it's the preset in use.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.size(76.dp, 52.dp).clip(RoundedCornerShape(12.dp)).background(if (c.dark) c.sidebar else c.bg), contentAlignment = Alignment.Center) {
+                        shown?.let { PresetIcon(it, Modifier.size(60.dp, 44.dp)) }
+                    }
+                    Column(Modifier.weight(1f)) {
+                        when {
+                            shown == null -> Text("CONTROLS", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
+                            p.browsing -> Text("Ⓐ USE THESE CONTROLS", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, letterSpacing = 1.sp)
+                            else -> SelectedControlsTitle(10.sp)
+                        }
+                        Text(
+                            if (shown == null) androidx.compose.ui.text.AnnotatedString(p.suggestion.question)
+                            else androidx.compose.ui.text.buildAnnotatedString {
+                                append(withOrangeTags(shown.name, c.orange))
+                                if (p.isEdited(shown)) withStyle(androidx.compose.ui.text.SpanStyle(color = EditedAmber)) { append("  ●") }
+                            },
+                            fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        shown?.let { Text(it.controller.label, fontSize = 11.sp, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    }
+                    GameChip(if (showList) "Done" else "Change ›", null, on = showList, outline = true) { showList = !showList }
+                    val canReset = shown != null && p.isEdited(shown)
+                    val canDelete = shown != null && act.store.isMine(shown.id)
+                    if (canReset || canDelete || backups.isNotEmpty()) Box {
+                        GameChip("⋯", null) { menu = true }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            if (canReset) DropdownMenuItem(text = { Text("↺ Reset to default", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; confirmReset = shown })
+                            if (canDelete) DropdownMenuItem(text = { Text("🗑 Delete this preset", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; p.deleteMine(shown!!) })
+                            if (backups.isNotEmpty()) DropdownMenuItem(text = { Text("↺ Earlier autosaves (${backups.size}) · Ⓨ", fontWeight = FontWeight.Bold) }, onClick = { menu = false; showBackups = true })
+                        }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                if (showList) {
+                    PresetChooser(p.groups, p.selected, p.focused, game.info.title, { p.isEdited(it) }, Modifier.weight(1f).fillMaxWidth()) { p.choose(it) }
+                } else if (shown != null) {
+                    ControlsMap(shown, Modifier.weight(1f).fillMaxWidth())
+                } else {
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text(if (companion) "Pick a control style on the bottom screen (or with the D-pad)." else "Press Change › to pick a control style.", color = c.textDim, textAlign = TextAlign.Center)
+                    }
+                }
+            }
+        }
+    }
+    confirmReset?.let { r -> ResetConfirm(r.name, wide = true, onKeep = { confirmReset = null }) { confirmReset = null; p.resetToDefault(r) } }
+    }
+}
+
+/** The screen chip's text: "16:9", "16:9 · Stretch", "4:3 · Pattern"… */
+private fun screenChipLabel(sc: io.github.hiramrg.delphis.core.GameScreen.Choice, gameId: String?, useHack: Boolean): String {
+    val G = io.github.hiramrg.delphis.core.GameScreen
+    return when (G.method(sc, gameId, useHack)) {
+        G.Method.STANDARD -> "4:3 · " + sc.sides.label
+        G.Method.STRETCH -> "16:9 · Stretch"
+        else -> "16:9"
+    }
+}
+
+/** A chip in the game page's top row: text, then the button that toggles it in small grey type ("L1"). */
+@Composable
+private fun GameChip(text: String, key: String?, on: Boolean = false, warn: Boolean = false, outline: Boolean = false, onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(50)
+    Row(
+        Modifier.height(32.dp).clip(shape)
+            .background(if (on) c.accentSoft else c.card)
+            .border(2.dp, when { warn -> c.orange; on || outline -> c.accent; else -> c.cardBorder }, shape)
+            .clickable(onClick = onClick).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(text, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = if (warn) c.orange else c.text, maxLines = 1)
+        if (key != null) Text(key, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, maxLines = 1)
+    }
+}
+
+/**
+ * Edit / Play under the cover: both 40 dp tall and as wide as the column; icon, word and the button's
+ * ring badge are centred together.
+ */
+@Composable
+private fun GameButton(icon: String, label: String, key: String, primary: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(50)
+    val fg = if (primary) Color(0xFF0A2533) else c.text
+    Row(
+        Modifier.fillMaxWidth().height(40.dp).alpha(if (enabled) 1f else 0.45f).clip(shape)
+            .background(if (primary) c.accent else c.card)
+            .border(2.dp, if (primary) c.accent else c.cardBorder, shape)
+            .clickable(enabled = enabled, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+    ) {
+        Text(icon, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1)
+        Spacer(Modifier.width(6.dp))
+        Text(label, fontSize = 14.5.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1)
+        Spacer(Modifier.width(8.dp))
+        Box(
+            Modifier.size(18.dp).border(1.5.dp, if (primary) fg.copy(alpha = 0.55f) else c.textDim, RoundedCornerShape(50)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(key, fontSize = 10.sp, fontWeight = FontWeight.Black, color = if (primary) fg else c.textDim, maxLines = 1,
+                style = TextStyle(platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)))
         }
     }
 }
@@ -819,24 +913,30 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
 fun Preset.isGyro(): Boolean =
     mappings.any { it.target is io.github.hiramrg.delphis.core.Target.GyroPointer } || name.contains("(experimental)", ignoreCase = true)
 
-/** How a game's presets are shown: the main list, then the "Gyro", "Trackpad" and "Other layouts" folders. */
-class PresetGroups(choices: List<Preset>, alternatives: List<Preset>) {
+/**
+ * How a game's presets are shown: sections that don't fold, in this order: Suggested, My presets,
+ * Gyro aiming, Trackpad aiming, Other layouts.
+ */
+class PresetGroups(choices: List<Preset>, alternatives: List<Preset>, mine: List<Preset> = emptyList()) {
     private fun Preset.kind() = when { isTrackpad -> 2; isGyro() -> 1; else -> 0 }
     private val all = (choices + alternatives).distinctBy { it.id }
-    // A game whose suggestions are all gyro/trackpad presets (Red Steel) keeps them in the main list.
+    // A game whose suggestions are all gyro/trackpad presets (Red Steel) keeps them under Suggested.
     private val folderChoices = choices.any { it.kind() == 0 }
     val main = if (folderChoices) choices.filter { it.kind() == 0 } else choices
+    val mine = mine.filter { m -> main.none { it.id == m.id } }
     val gyro = all.filter { it.kind() == 1 && it !in main }
     val trackpad = all.filter { it.kind() == 2 && it !in main }
     val others = alternatives.filter { it.kind() == 0 && it !in main }
-    /** The folders in order: key, title, presets. */
-    val folders get() = listOf(
-        Triple("gyro", "Gyro Aiming (Experimental)", gyro),
-        Triple("trackpad", "Trackpad Aiming (Experimental)", trackpad),
+    /** The sections in order: key, title (null = "Suggested for <game>"), presets. */
+    val sections get() = listOf(
+        Triple("suggested", null, main),
+        Triple("mine", "My presets", mine),
+        Triple("gyro", "Gyro aiming", gyro),
+        Triple("trackpad", "Trackpad aiming", trackpad),
         Triple("others", "Other layouts", others),
     ).filter { it.third.isNotEmpty() }
     /** Top-to-bottom order, used for D-pad navigation. */
-    val ordered get() = main + gyro + trackpad + others
+    val ordered get() = sections.flatMap { it.third }
 }
 
 /** The preset's name with its "(experimental)" tag in orange and, if suggested, "(suggested)" in green. */
@@ -852,63 +952,77 @@ fun presetTitle(name: String, suggested: Boolean): androidx.compose.ui.text.Anno
     }
 }
 
-/** A folder row in a preset list (tap to open or close it). */
+/** A section heading in a preset list ("MY PRESETS"). */
 @Composable
-private fun PresetFolder(title: String, count: Int, open: Boolean, onClick: () -> Unit) {
+private fun PresetSection(title: String) {
     val c = LocalWii.current
-    val shape = RoundedCornerShape(16.dp)
-    Row(
-        Modifier.fillMaxWidth().clip(shape).background(c.accentSoft).border(2.dp, c.accent.copy(alpha = 0.5f), shape)
-            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(if (open) "▾" else "▸", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
-        Spacer(Modifier.width(8.dp))
-        Text(withOrangeTags(title, c.orange), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text("$count", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText,
-            modifier = Modifier.clip(RoundedCornerShape(50)).background(c.card).padding(horizontal = 8.dp, vertical = 2.dp))
-    }
+    Text(title.uppercase(), fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp,
+        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp, top = 10.dp, bottom = 2.dp))
 }
 
 /**
- * List of a game's presets: the suggested one first (tagged "(suggested)"), then the gyro presets in a
- * "Gyro aiming (experimental)" folder and the rest in an "Other layouts" folder. Used on the game page,
- * the bottom-screen picker and "Change controls" in game.
+ * One preset in a list. Two separate marks: the blue ring is where the D-pad is ([ring]); the tint and
+ * green "✓ Selected" mark the preset in use ([inUse]). An amber dot means it's this game's edited version.
+ */
+@Composable
+fun PresetRow(preset: Preset, inUse: Boolean, ring: Boolean, edited: Boolean, onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 46.dp).clip(shape)
+            .background(if (inUse) c.accentSoft else Color.Transparent)
+            .then(if (ring) Modifier.border(3.dp, c.accent, shape) else Modifier)
+            .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PresetIcon(preset, Modifier.size(width = 44.dp, height = 32.dp).clip(RoundedCornerShape(8.dp)).background(if (c.dark) c.sidebar else c.bg).padding(2.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(
+            androidx.compose.ui.text.buildAnnotatedString {
+                append(withOrangeTags(preset.name, c.orange))
+                if (edited) withStyle(androidx.compose.ui.text.SpanStyle(color = EditedAmber)) { append("  ●") }
+            },
+            fontSize = 14.sp, fontWeight = if (inUse) FontWeight.ExtraBold else FontWeight.Bold, lineHeight = 17.sp,
+            maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        )
+        if (inUse) Text("✓ Selected", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.green, modifier = Modifier.padding(start = 6.dp))
+    }
+}
+
+/** The amber of the "edited" dot. */
+val EditedAmber = Color(0xFFF0B25A)
+
+/**
+ * A game's presets in sections that don't fold (see [PresetGroups]); the list scrolls. Used on the
+ * game page (single screen), the bottom-screen picker and "Change controls" in game.
  */
 @Composable
 fun PresetChooser(
-    question: String,
-    choices: List<Preset>,
-    alternatives: List<Preset>,
+    groups: PresetGroups,
     selected: Preset?,
-    suggestedId: String?,
+    focused: Preset?,
+    gameTitle: String,
+    isEdited: (Preset) -> Boolean,
     modifier: Modifier = Modifier,
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
     onSelect: (Preset) -> Unit,
 ) {
-    val groups = remember(choices, alternatives) { PresetGroups(choices, alternatives) }
-    val open = remember { mutableStateMapOf<String, Boolean>() }
-    fun isOpen(key: String) = open[key] ?: groups.folders.first { it.first == key }.third.any { it.id == selected?.id }
-    // Keep the selected preset visible (it can change from the controller), opening its folder if needed.
-    LaunchedEffect(selected?.id) {
-        val id = selected?.id ?: return@LaunchedEffect
-        var index = 1
-        if (groups.main.any { it.id == id }) { runCatching { listState.animateScrollToItem(index + groups.main.indexOfFirst { it.id == id }) }; return@LaunchedEffect }
-        index += groups.main.size
-        for ((key, _, list) in groups.folders) {
+    // Keep the ring visible (it moves with the D-pad).
+    LaunchedEffect(focused?.id) {
+        val id = focused?.id ?: return@LaunchedEffect
+        var index = 0
+        for ((_, _, list) in groups.sections) {
             val at = list.indexOfFirst { it.id == id }
-            if (at >= 0) { open[key] = true; runCatching { listState.animateScrollToItem(index + 1 + at) }; return@LaunchedEffect }
-            index += 1 + if (isOpen(key)) list.size else 0
+            if (at >= 0) { runCatching { listState.animateScrollToItem((index + at).coerceAtLeast(0)) }; return@LaunchedEffect }
+            index += 1 + list.size
         }
     }
-    @Composable fun card(p: Preset) = PickerCard(p, selected?.id == p.id, suggested = p.id == suggestedId) { onSelect(p) }
-    LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        item { Text(question, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 4.dp)) }
-        items(groups.main, key = { it.id }) { p -> card(p) }
-        for ((key, title, list) in groups.folders) {
-            val shown = isOpen(key)
-            item(key = "$key-folder") { PresetFolder(title, list.size, shown) { open[key] = !shown } }
-            if (shown) items(list, key = { "$key-" + it.id }) { p -> Box(Modifier.padding(start = 14.dp)) { card(p) } }
+    LazyColumn(modifier, state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        for ((key, title, list) in groups.sections) {
+            item(key = "$key-title") { PresetSection(title ?: "Suggested for $gameTitle") }
+            items(list, key = { "$key-" + it.id }) { p ->
+                PresetRow(p, inUse = p.id == selected?.id, ring = p.id == focused?.id, edited = isEdited(p)) { onSelect(p) }
+            }
         }
         item { Spacer(Modifier.height(8.dp)) }
     }

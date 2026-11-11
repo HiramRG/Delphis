@@ -199,14 +199,13 @@ private fun PickerPanel(act: MainActivity, p: GamePicker) {
         }
         return
     }
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(p.game.info.title, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        PresetChooser(p.suggestion.question, p.choices, p.alternatives, p.selected, p.suggestedId, Modifier.weight(1f)) { p.selected = it }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            WiiButton("Ⓧ Edit", onClick = { p.editing = true }, enabled = p.selected != null, modifier = Modifier.weight(1f))
-            WiiButton("Ⓐ Play", onClick = { p.play() }, primary = true, enabled = p.selected != null, modifier = Modifier.weight(2f), fontSize = 18.sp)
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Controls · " + p.game.info.title, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text("✚ move · Ⓐ choose", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1)
         }
-        HintLine("✚ choose · Ⓨ remember choice · Ⓑ back")
+        // Tapping a preset makes it the one in use; the ring follows the D-pad on the top screen.
+        PresetChooser(p.groups, p.selected, p.focused, p.game.info.title, { p.isEdited(it) }, Modifier.weight(1f).fillMaxWidth()) { p.choose(it) }
     }
 }
 

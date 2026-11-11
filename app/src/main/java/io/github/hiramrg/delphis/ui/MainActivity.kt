@@ -258,7 +258,7 @@ class MainActivity : ComponentActivity() {
 
     /** Plays straight away with the remembered controls, otherwise opens the game's page to choose. */
     fun quickPlay(game: GameEntry) {
-        val saved = prefs.presetFor(game.key)?.let { store.byId(it) }
+        val saved = prefs.presetFor(game.key)?.let { store.forGame(game.key, it) }
         if (saved != null) play(game, saved) else openGame(game)
     }
 

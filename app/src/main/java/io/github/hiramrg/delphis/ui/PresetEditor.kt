@@ -76,8 +76,15 @@ fun PresetEditor(
     saveLabel: String,
     modifier: Modifier = Modifier,
     controlForKey: ((AndroidKey) -> ThorControl?)? = null,
+    /** The name "Update …" saves under; with it, Save asks: update this preset or save as a new one. */
+    updateName: String? = null,
+    /** Suggested name for "Save as a new preset". */
+    newName: String = "",
+    /** Set for an edited version: "↺ Reset to default" throws the edit away. */
+    onReset: (() -> Unit)? = null,
     onCancel: () -> Unit,
-    onSave: (Preset) -> Unit,
+    /** The edited preset, and the new preset's name (null = update the preset). */
+    onSave: (Preset, String?) -> Unit,
 ) {
     var maps by remember(base.id) { mutableStateOf(base.mappings) }
     val editable = remember(base.id) { EDIT_ORDER.filter { PresetEdits.sections(base.controller, it).isNotEmpty() } }
@@ -98,8 +105,82 @@ fun PresetEditor(
             undo = { maps = base.mappings },
             changed = changed,
         )
-        if (wide) TopEditor(state, saveLabel, controlForKey, onCancel) { onSave(draft) }
-        else BottomEditor(state, saveLabel, onCancel) { onSave(draft) }
+        var asking by remember { mutableStateOf(false) }
+        var resetting by remember { mutableStateOf(false) }
+        val save = { if (updateName != null) asking = true else onSave(draft, null) }
+        val reset: (() -> Unit)? = onReset?.let { { resetting = true } }
+        if (wide) TopEditor(state, saveLabel, controlForKey, reset, onCancel, save)
+        else BottomEditor(state, saveLabel, reset, onCancel, save)
+        if (asking && updateName != null) SaveChoice(updateName, newName, saveLabel, wide, onBack = { asking = false }) { name -> asking = false; onSave(draft, name) }
+        if (resetting && onReset != null) ResetConfirm(base.name, wide, onKeep = { resetting = false }) { resetting = false; onReset() }
+    }
+}
+
+/** Save: update this preset (this game uses the edited version; the original is kept) or save as a new preset. */
+@Composable
+private fun BoxScope.SaveChoice(updateName: String, newName: String, saveLabel: String, wide: Boolean, onBack: () -> Unit, onSave: (String?) -> Unit) {
+    val c = LocalWii.current
+    var asNew by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf(newName) }
+    Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.5f)).clickable(onClick = onBack))
+    val shape = RoundedCornerShape(18.dp)
+    Column(
+        Modifier.align(Alignment.Center).fillMaxWidth(if (wide) 0.56f else 0.92f).clip(shape)
+            .background(if (c.dark) Color(0xFF1B1F24) else c.card).border(2.dp, SelBorder, shape)
+            .clickable(enabled = false) {}.padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("Save your changes", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+        SaveOption("Update “$updateName”", "This game uses your edited version. The original stays safe: ↺ Reset to default brings it back.", !asNew) { asNew = false }
+        SaveOption("Save as a new preset", "Keeps “$updateName” as it was and adds yours under My presets.", asNew) { asNew = true }
+        if (asNew) androidx.compose.foundation.text.BasicTextField(
+            name, { name = it.take(48) }, singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(color = c.text, fontSize = 13.sp, fontWeight = FontWeight.Bold),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(SelBorder),
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (c.dark) Color(0xFF15191D) else c.bg)
+                .border(2.dp, c.cardBorder, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 8.dp),
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+            Pill("Back to editing", onClick = onBack, big = true)
+            Pill(saveLabel, onClick = { onSave(if (asNew) name.trim() else null) }, primary = true, enabled = !asNew || name.isNotBlank(), big = true)
+        }
+    }
+}
+
+@Composable
+private fun SaveOption(title: String, text: String, on: Boolean, onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(14.dp)
+    Column(
+        Modifier.fillMaxWidth().clip(shape).background(if (on) PressFill else Color.Transparent)
+            .border(if (on) 3.dp else 2.dp, if (on) SelBorder else c.cardBorder, shape).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 9.dp),
+    ) {
+        Text(title, fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(text, fontSize = 11.sp, color = c.textDim, lineHeight = 14.sp)
+    }
+}
+
+/** "Reset to default?" — asked once before an edited version is thrown away. */
+@Composable
+fun BoxScope.ResetConfirm(name: String, wide: Boolean, onKeep: () -> Unit, onReset: () -> Unit) {
+    val c = LocalWii.current
+    Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.5f)).clickable(onClick = onKeep))
+    val shape = RoundedCornerShape(18.dp)
+    Column(
+        Modifier.align(Alignment.Center).fillMaxWidth(if (wide) 0.52f else 0.9f).clip(shape)
+            .background(if (c.dark) Color(0xFF1B1F24) else c.card).border(2.dp, SelBorder, shape)
+            .clickable(enabled = false) {}.padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("Reset to default?", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+        Text("“$name” goes back to its original controls for this game. Your changes to it are removed.", fontSize = 12.5.sp, lineHeight = 16.sp)
+        Text("Presets you saved as new stay in My presets.", fontSize = 11.5.sp, color = c.textDim)
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+            Pill("Keep my changes", onClick = onKeep, big = true)
+            val red = Color(0xFFF0866E)
+            Text("↺ Reset", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF2A0F08), maxLines = 1,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(red).clickable(onClick = onReset).padding(horizontal = 16.dp, vertical = 8.dp))
+        }
     }
 }
 
@@ -130,12 +211,16 @@ private fun controlName(c: ThorControl) = when (c) {
 // ============================================================================ top screen
 
 @Composable
-private fun TopEditor(s: EditorState, saveLabel: String, controlForKey: ((AndroidKey) -> ThorControl?)?, onCancel: () -> Unit, onSave: () -> Unit) {
+private fun TopEditor(s: EditorState, saveLabel: String, controlForKey: ((AndroidKey) -> ThorControl?)?, onReset: (() -> Unit)?, onCancel: () -> Unit, onSave: () -> Unit) {
     val c = LocalWii.current
     var swap by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            Text("Editing: ${s.base.name.removeSuffix(" (Custom)")}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Editing: ${s.base.name.removeSuffix(" (Custom)")}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (onReset != null) Text("↺ Reset to default", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, maxLines = 1,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onReset).padding(horizontal = 6.dp, vertical = 2.dp))
+            }
             Spacer(Modifier.height(6.dp))
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 // Left: the actions, with Cancel · Undo · Save closing the column.
@@ -168,15 +253,18 @@ private fun TopEditor(s: EditorState, saveLabel: String, controlForKey: ((Androi
 // ============================================================================ in-game bottom screen
 
 @Composable
-private fun BottomEditor(s: EditorState, saveLabel: String, onCancel: () -> Unit, onSave: () -> Unit) {
+private fun BottomEditor(s: EditorState, saveLabel: String, onReset: (() -> Unit)?, onCancel: () -> Unit, onSave: () -> Unit) {
     val c = LocalWii.current
     var sheet by remember { mutableStateOf(false) }
     var swap by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             Column(Modifier.fillMaxSize()) {
-                Text("Edit controls · ${s.base.name.removeSuffix(" (Custom)")}", fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 5.dp))
+                Row(Modifier.fillMaxWidth().padding(bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Edit controls · ${s.base.name.removeSuffix(" (Custom)")}", fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    if (onReset != null) Pill("↺ Reset", onClick = onReset)
+                }
                 LazyVerticalGrid(GridCells.Fixed(2), Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(s.used + s.free, key = { it.name }) { control ->
                         ActionRow(control, s.mappingOn(control), false, compact = true, tail = null) { s.select(control); sheet = true }

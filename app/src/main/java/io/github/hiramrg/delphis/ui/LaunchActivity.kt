@@ -55,9 +55,8 @@ class LaunchActivity : Activity() {
             }
             val store = PresetStore(app)
             val suggestion = GameDatabase.suggest(entry.info)
-            val preset = prefs.presetFor(entry.key)?.let { store.byId(it) }
-                ?: store.customFor(entry.key)
-                ?: suggestion.choices.firstOrNull()
+            val preset = prefs.presetFor(entry.key)?.let { store.forGame(entry.key, it) }
+                ?: store.withEdits(entry.key, suggestion.choices).firstOrNull()
                 ?: suggestion.alternatives.firstOrNull()
                 ?: PresetLibrary.GAMECUBE
             prefs.markPlayed(entry.key)

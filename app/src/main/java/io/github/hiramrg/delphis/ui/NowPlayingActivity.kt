@@ -569,12 +569,27 @@ class NowPlayingActivity : ComponentActivity() {
                     Mode.EDIT -> PresetEditor(
                         base = preset, customId = store.customIdFor(s.key), saveLabel = "Save & restart",
                         modifier = Modifier.weight(1f).fillMaxWidth(),
-                        onCancel = { mode = Mode.VIEW },
-                        onSave = { custom ->
+                        updateName = if (store.isMine(preset.id)) null else store.root(preset).name,
+                        newName = store.newName(s.key, preset),
+                        onReset = if (store.isEdited(preset.id)) ({
                             restartAction = {
-                                store.save(custom)
+                                val original = store.root(preset)
+                                store.delete(preset.id)
                                 mode = Mode.VIEW
-                                applyAndRestart(s, custom, remember = true)
+                                applyAndRestart(s, original, remember = true)
+                            }
+                        }) else null,
+                        onCancel = { mode = Mode.VIEW },
+                        onSave = { edited, newName ->
+                            restartAction = {
+                                // One of My presets keeps its id; a built-in becomes this game's version or a new preset.
+                                val saved = when {
+                                    store.isMine(preset.id) -> edited.copy(id = preset.id, name = preset.name).also { store.save(it) }
+                                    newName == null -> store.saveEdited(s.key, preset, edited)
+                                    else -> store.saveNew(s.key, edited, newName)
+                                }
+                                mode = Mode.VIEW
+                                applyAndRestart(s, saved, remember = true)
                             }
                         },
                     )
@@ -815,12 +830,14 @@ class NowPlayingActivity : ComponentActivity() {
     @Composable
     private fun ColumnScope.LayoutSwitcher(s: GameSession, current: Preset, onCancel: () -> Unit, onApply: (Preset) -> Unit) {
         val suggestion = remember(s.key) { GameDatabase.suggest(s.info) }
-        val choices = remember(s.key) { listOfNotNull(store.customFor(s.key)) + suggestion.choices }
+        val groups = remember(s.key) {
+            io.github.hiramrg.delphis.ui.PresetGroups(store.withEdits(s.key, suggestion.choices), store.withEdits(s.key, suggestion.alternatives), store.mine(s.key))
+        }
         var candidate by remember { mutableStateOf(current) }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val wide = maxWidth > maxHeight * 1.05f
             val list: @Composable (Modifier) -> Unit = { m ->
-                PresetChooser(suggestion.question, choices, suggestion.alternatives, candidate, suggestedId = suggestion.choices.firstOrNull()?.id, modifier = m) { candidate = it }
+                PresetChooser(groups, selected = current, focused = candidate, gameTitle = s.info.title, isEdited = { store.isEdited(it.id) }, modifier = m) { candidate = it }
             }
             val preview: @Composable (Modifier) -> Unit = { m ->
                 Column(m) {

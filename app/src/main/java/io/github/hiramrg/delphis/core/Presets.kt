@@ -481,7 +481,7 @@ object PresetLibrary {
      * Wii pointer (relayed to Dolphin's own touch pointer). The right stick and R3 are left free.
      */
     private fun withTrackpad(base: Preset, id: String, summary: String) = base.copy(
-        id = id, name = "Trackpad Aiming (Experimental)", summary = summary,
+        id = id, name = "Trackpad Aiming", summary = summary,
         // The pointer only follows the trackpad (DolphinConfigWriter puts Delphis' DSU touchpad on IR);
         // the right stick and R3 are left free.
         mappings = base.mappings.filter { it.control != ThorControl.RIGHT_STICK && it.control != ThorControl.R3 },

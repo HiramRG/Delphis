@@ -16,6 +16,12 @@ class TrackpadTest {
     }
 
     @Test
+    fun trackpadPresetsAreNoLongerExperimental() {
+        listOf(PresetLibrary.GALAXY_TRACKPAD, PresetLibrary.POINTER_TRACKPAD, PresetLibrary.RED_STEEL_TRACKPAD, PresetLibrary.RED_STEEL_TOUCH)
+            .forEach { assertFalse(it.name, it.name.contains("experimental", ignoreCase = true)) }
+    }
+
+    @Test
     fun speedIdsRoundTrip() {
         Trackpad.Speed.entries.forEach { assertEquals(it, Trackpad.Speed.of(it.id)) }
         assertEquals(Trackpad.Speed.NORMAL, Trackpad.Speed.of(null))
