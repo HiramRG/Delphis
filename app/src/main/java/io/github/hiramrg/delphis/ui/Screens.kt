@@ -854,10 +854,9 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
 
 /** The screen chip's text: "16:9", "16:9 · Stretch", "4:3 · Pattern"… */
 private fun screenChipLabel(sc: io.github.hiramrg.delphis.core.GameScreen.Choice, gameId: String?, useHack: Boolean): String {
-    val G = io.github.hiramrg.delphis.core.GameScreen
-    return when (G.method(sc, gameId, useHack)) {
-        G.Method.STANDARD -> "4:3 · " + sc.sides.label
-        G.Method.STRETCH -> "16:9 · Stretch"
+    return when (io.github.hiramrg.delphis.core.GameScreen.method(sc, gameId, useHack)) {
+        io.github.hiramrg.delphis.core.GameScreen.Method.STANDARD -> "4:3 · " + sc.sides.label
+        io.github.hiramrg.delphis.core.GameScreen.Method.STRETCH -> "16:9 · Stretch"
         else -> "16:9"
     }
 }
