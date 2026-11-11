@@ -254,12 +254,11 @@ class Prefs(context: Context) {
 
     /** This GameCube game's screen choice (its own, else the defaults). */
     fun screenFor(gameId: String): io.github.hiramrg.delphis.core.GameScreen.Choice {
-        val gs = io.github.hiramrg.delphis.core.GameScreen
-        val shape = sp.getString("screen_shape_$gameId", null)?.let { runCatching { gs.Shape.valueOf(it) }.getOrNull() }
-            ?: if (gcDefaultWide) gs.Shape.WIDE else gs.Shape.STANDARD
-        val fill = sp.getString("screen_fill_$gameId", null)?.let { runCatching { gs.Fill.valueOf(it) }.getOrNull() } ?: gcFill
-        val sides = sp.getString("screen_sides_$gameId", null)?.let { runCatching { gs.Sides.valueOf(it) }.getOrNull() } ?: gcSides
-        return gs.Choice(shape, fill, sides)
+        val shape = sp.getString("screen_shape_$gameId", null)?.let { runCatching { io.github.hiramrg.delphis.core.GameScreen.Shape.valueOf(it) }.getOrNull() }
+            ?: if (gcDefaultWide) io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE else io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD
+        val fill = sp.getString("screen_fill_$gameId", null)?.let { runCatching { io.github.hiramrg.delphis.core.GameScreen.Fill.valueOf(it) }.getOrNull() } ?: gcFill
+        val sides = sp.getString("screen_sides_$gameId", null)?.let { runCatching { io.github.hiramrg.delphis.core.GameScreen.Sides.valueOf(it) }.getOrNull() } ?: gcSides
+        return io.github.hiramrg.delphis.core.GameScreen.Choice(shape, fill, sides)
     }
 
     fun setScreenFor(gameId: String, c: io.github.hiramrg.delphis.core.GameScreen.Choice) = sp.edit()
