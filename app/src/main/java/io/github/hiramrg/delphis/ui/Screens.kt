@@ -763,6 +763,8 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     DisposableEffect(Unit) { act.keyListener = { onKey(it) }; onDispose { act.keyListener = null } }
 
     var showList by remember { mutableStateOf(!companion) }
+    // The bottom screen can come and go: the list sits there when it's up, in the card otherwise.
+    LaunchedEffect(companion) { showList = !companion }
     var menu by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf<Preset?>(null) }
     val shown = p.focused ?: p.selected
