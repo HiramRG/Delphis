@@ -437,7 +437,11 @@ class MainActivity : ComponentActivity() {
                 // Multiplayer: P1 is the Thor unless it sits out; players 2-4 are the other controllers connected now.
                 val slots = io.github.hiramrg.delphis.platform.Pads.slots(prefs, gameId, preset)
                 val (p1, profile) = slots.first()
-                if (gameId != null) bridge.applyPreset(gameId, p1, profile).also { bridge.applyPlayers(gameId, slots.drop(1)) }
+                if (gameId != null) bridge.applyPreset(gameId, p1, profile).also {
+                    bridge.applyPlayers(gameId, slots.drop(1))
+                    // GameCube games: how the 4:3 picture fills the 16:9 screen.
+                    if (preset.controller == io.github.hiramrg.delphis.core.EmulatedController.GAMECUBE) bridge.applyScreen(gameId, prefs.screenFor(gameId))
+                }
                 else bridge.applyGlobally(p1, profile)
             }
             if (result is DolphinBridge.ApplyResult.Failed) {

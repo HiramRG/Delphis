@@ -238,6 +238,33 @@ class Prefs(context: Context) {
     fun raGameId(gameKey: String): Int? = if (sp.contains("ra_game_$gameKey")) sp.getInt("ra_game_$gameKey", 0) else null
     fun setRaGameId(gameKey: String, id: Int) = sp.edit().putInt("ra_game_$gameKey", id).apply()
 
+    // ---- GameCube screen (Settings → Display defaults; each game can override on its page)
+    var gcDefaultWide: Boolean
+        get() = sp.getBoolean("gc_default_wide", false)
+        set(v) = sp.edit().putBoolean("gc_default_wide", v).apply()
+    var gcFill: io.github.hiramrg.delphis.core.GameScreen.Fill
+        get() = runCatching { io.github.hiramrg.delphis.core.GameScreen.Fill.valueOf(sp.getString("gc_fill", "WORLD")!!) }.getOrDefault(io.github.hiramrg.delphis.core.GameScreen.Fill.WORLD)
+        set(v) = sp.edit().putString("gc_fill", v.name).apply()
+    var gcSides: io.github.hiramrg.delphis.core.GameScreen.Sides
+        get() = runCatching { io.github.hiramrg.delphis.core.GameScreen.Sides.valueOf(sp.getString("gc_sides", "BLACK")!!) }.getOrDefault(io.github.hiramrg.delphis.core.GameScreen.Sides.BLACK)
+        set(v) = sp.edit().putString("gc_sides", v.name).apply()
+    var gcUseHack: Boolean
+        get() = sp.getBoolean("gc_use_hack", true)
+        set(v) = sp.edit().putBoolean("gc_use_hack", v).apply()
+
+    /** This GameCube game's screen choice (its own, else the defaults). */
+    fun screenFor(gameId: String): io.github.hiramrg.delphis.core.GameScreen.Choice {
+        val gs = io.github.hiramrg.delphis.core.GameScreen
+        val shape = sp.getString("screen_shape_$gameId", null)?.let { runCatching { gs.Shape.valueOf(it) }.getOrNull() }
+            ?: if (gcDefaultWide) gs.Shape.WIDE else gs.Shape.STANDARD
+        val fill = sp.getString("screen_fill_$gameId", null)?.let { runCatching { gs.Fill.valueOf(it) }.getOrNull() } ?: gcFill
+        val sides = sp.getString("screen_sides_$gameId", null)?.let { runCatching { gs.Sides.valueOf(it) }.getOrNull() } ?: gcSides
+        return gs.Choice(shape, fill, sides)
+    }
+
+    fun setScreenFor(gameId: String, c: io.github.hiramrg.delphis.core.GameScreen.Choice) = sp.edit()
+        .putString("screen_shape_$gameId", c.shape.name).putString("screen_fill_$gameId", c.fill.name).putString("screen_sides_$gameId", c.sides.name).apply()
+
     fun presetFor(gameKey: String): String? = sp.getString("preset_$gameKey", null)
     fun setPresetFor(gameKey: String, presetId: String?) = sp.edit().putString("preset_$gameKey", presetId).apply()
 

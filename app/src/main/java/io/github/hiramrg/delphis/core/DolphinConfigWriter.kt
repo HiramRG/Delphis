@@ -329,5 +329,29 @@ class IniEditor(text: String) {
         for (i in range.reversed()) if (keyOf(lines[i]) == key) lines.removeAt(i)
     }
 
+    fun hasLine(section: String, line: String): Boolean {
+        val range = sectionRange(section) ?: return false
+        return range.any { lines[it].trim() == line }
+    }
+
+    /** Adds a bare line (e.g. "$16:9 Widescreen" under [Gecko_Enabled]) if it isn't there yet. */
+    fun addLine(section: String, line: String) {
+        if (hasLine(section, line)) return
+        var range = sectionRange(section)
+        if (range == null) {
+            if (lines.isNotEmpty() && lines.last().isNotBlank()) lines += ""
+            lines += "[$section]"
+            range = sectionRange(section)!!
+        }
+        var insertAt = range.last + 1
+        while (insertAt - 1 > range.first && lines[insertAt - 1].isBlank()) insertAt--
+        lines.add(insertAt, line)
+    }
+
+    fun removeLine(section: String, line: String) {
+        val range = sectionRange(section) ?: return
+        for (i in range.reversed()) if (i != range.first && lines[i].trim() == line) lines.removeAt(i)
+    }
+
     override fun toString() = lines.joinToString("\n", postfix = "\n")
 }

@@ -5,12 +5,12 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 22
+    const val RELEASE = 23
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("Bottom-screen brightness.", "The ☀ button in game now sets the bottom screen's normal brightness (when it isn't dimmed). The dimmed level stays in Settings → Bottom screen."),
+        Item("GameCube widescreen.", "Each GameCube game now has a Screen switch under its cover: 16:9 shows more of the world (with Dolphin's own widescreen code for the game when there is one, otherwise its widescreen hack) or stretches; 4:3 keeps the original picture with black, patterned or cover-coloured sides. Defaults in Settings → Display; change the sides live from the ▭ button in game."),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

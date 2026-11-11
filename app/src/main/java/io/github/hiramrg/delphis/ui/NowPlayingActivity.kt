@@ -234,7 +234,7 @@ class NowPlayingActivity : ComponentActivity() {
 
     override fun onDestroy() {
         removeFocusSink()
-        if (isFinishing) { recordPlayTime(); GameWatch.session = null; GameWatch.onSuspended = null; GameWatch.suspended.value = false }
+        if (isFinishing) { DolphinExitService.hideSides(); recordPlayTime(); GameWatch.session = null; GameWatch.onSuspended = null; GameWatch.suspended.value = false }
         super.onDestroy()
     }
 
@@ -346,6 +346,20 @@ class NowPlayingActivity : ComponentActivity() {
         var recenterCount by remember { mutableIntStateOf(0) }
         val topDisplay = remember { DeviceInfo.screenRoles(this@NowPlayingActivity, prefs.swapScreens).topDisplayId }
         val recenterPointer = { recenterCount++; DolphinExitService.trackpadRecenter(topDisplay) }
+
+        // GameCube: the 4:3 / 16:9 picture. The shape and fill apply when the game starts; the side fills change live.
+        val screenGid = gid?.takeIf { s.info.platform == io.github.hiramrg.delphis.core.Platform.GAMECUBE }
+        var screenChoice by remember { mutableStateOf(screenGid?.let { prefs.screenFor(it) }) }
+        val runningScreen = remember(startedAt) { screenGid?.let { prefs.screenFor(it) } }
+        var showPicture by remember { mutableStateOf(false) }
+        val sideColour by produceState(android.graphics.Color.rgb(75, 58, 143), screenGid) {
+            screenGid?.let { value = io.github.hiramrg.delphis.platform.SideFill.colourOf(io.github.hiramrg.delphis.platform.CoverArt(this@NowPlayingActivity).load(it)) }
+        }
+        LaunchedEffect(startedAt, screenChoice?.sides, sideColour) {
+            val sc = screenChoice
+            if (sc != null && runningScreen?.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD) DolphinExitService.showSides(sc.sides, sideColour, topDisplay)
+            else DolphinExitService.hideSides()
+        }
         LaunchedEffect(startedAt) { DolphinExitService.trackpadReset() }
         val fade by animateFloatAsState(if (padActive) 0.25f else 1f, tween(200), label = "padFade")
 
@@ -396,7 +410,7 @@ class NowPlayingActivity : ComponentActivity() {
         var idle by remember { mutableStateOf(false) }
         var lastTouch by remember { mutableLongStateOf(0L) }
         val overlayOpen = confirmExit || restartAction != null || helperPrompt != null || busy != null
-        val keepBright = mode != Mode.VIEW || overlayOpen || showBrightness
+        val keepBright = mode != Mode.VIEW || overlayOpen || showBrightness || showPicture
         LaunchedEffect(startedAt, lastTouch, autoDim, keepBright) {
             idle = false
             if (!autoDim || keepBright) return@LaunchedEffect
@@ -457,7 +471,7 @@ class NowPlayingActivity : ComponentActivity() {
                         HomePill { if (prefs.skipExitWarning) backToMainMenu() else confirmExit = true }
                     }
                     Column(
-                        Modifier.align(Alignment.Center).padding(horizontal = if (achievements != null) 150.dp else 104.dp),
+                        Modifier.align(Alignment.Center).padding(horizontal = 104.dp + (if (achievements != null) 46.dp else 0.dp) + (if (screenGid != null) 50.dp else 0.dp)),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(s.info.title, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
@@ -471,7 +485,17 @@ class NowPlayingActivity : ComponentActivity() {
                         if (achievements != null && mode == Mode.VIEW) AchievementsChip(
                             achievements, onClick = { showAchievements = !showAchievements }, compact = true, active = showAchievements,
                         )
+                        screenChoice?.let { sc ->
+                            val pill = RoundedCornerShape(50)
+                            Text(
+                                "▭ " + (if (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) "16:9" else "4:3"),
+                                fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = if (showPicture) MaterialTheme.colorScheme.primary else LocalWii.current.text,
+                                modifier = Modifier.clip(pill).border(2.dp, if (showPicture) MaterialTheme.colorScheme.primary else LocalWii.current.cardBorder, pill)
+                                    .clickable { showBrightness = false; showPicture = !showPicture }.padding(horizontal = 9.dp, vertical = 5.dp),
+                            )
+                        }
                         BrightnessPill(brightness, open = showBrightness) {
+                            showPicture = false
                             showBrightness = !showBrightness
                         }
                     }
@@ -595,6 +619,32 @@ class NowPlayingActivity : ComponentActivity() {
                     onScreenOff = { showBrightness = false; screenOff = true },
                     onDismiss = { showBrightness = false },
                 )
+            }
+
+            // Picture (GameCube): 4:3 sides change right away; shape / 16:9 fill need a restart.
+            if (showPicture && screenChoice != null && screenGid != null) {
+                val wc = LocalWii.current
+                Box(Modifier.fillMaxSize().clickable { showPicture = false }) {
+                    val shape = RoundedCornerShape(16.dp)
+                    Column(
+                        Modifier.align(Alignment.TopCenter).padding(top = 74.dp, start = 12.dp, end = 12.dp).fillMaxWidth().clip(shape)
+                            .background(wc.card).border(2.dp, Color(0xFF34BEED), shape).clickable(enabled = false) {}.padding(12.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Picture", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                            ShapeSwitch(screenChoice!!.shape, { sh -> screenChoice = screenChoice!!.copy(shape = sh); prefs.setScreenFor(screenGid, screenChoice!!) })
+                        }
+                        Text(if (screenChoice!!.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD) "SIDES · CHANGES RIGHT AWAY" else "16:9 FILL",
+                            fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, color = wc.textDim, modifier = Modifier.padding(top = 8.dp, bottom = 5.dp))
+                        ScreenChoices(screenChoice!!, screenGid, prefs.gcUseHack, sideColour, 128.dp, showSub = false) { ch -> screenChoice = ch; prefs.setScreenFor(screenGid, ch) }
+                        val needsRestart = runningScreen != null && (screenChoice!!.shape != runningScreen.shape ||
+                            (screenChoice!!.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE && screenChoice!!.fill != runningScreen.fill))
+                        if (needsRestart) Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Dolphin applies this when the game starts.", fontSize = 11.sp, color = wc.textDim, modifier = Modifier.weight(1f))
+                            PrimaryGlowButton("Restart game", null, onClick = { showPicture = false; restartAction = { applyAndRestart(s, preset, remember = false) } }, fontSize = 12.sp)
+                        }
+                    }
+                }
             }
 
             // In-window dialogs (no separate dialog window, so Dolphin keeps gamepad focus).

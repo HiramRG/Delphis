@@ -77,6 +77,16 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         }
     }
 
+    /** Writes a GameCube game's screen choice (aspect ratio, widescreen code or hack) into its Dolphin settings. */
+    fun applyScreen(gameId: String, choice: io.github.hiramrg.delphis.core.GameScreen.Choice) {
+        val tree = prefs.dolphinTreeUri ?: return
+        runCatching {
+            val iniPath = DolphinConfigWriter.gameIniPath(gameId)
+            val existing = readText(tree, iniPath) ?: ""
+            writeText(tree, iniPath, io.github.hiramrg.delphis.core.GameScreen.applyToGameIni(existing, choice, gameId, prefs.gcUseHack))
+        }.onFailure { CrashLog.event("screen settings not written: ${it.message}") }
+    }
+
     /** Creates Config/WiimoteNew.ini and GCPadNew.ini if Dolphin hasn't yet; without them Dolphin ignores per-game profiles. */
     private fun ensureBaseConfig(tree: Uri, controller: ControllerProfile) {
         for (path in DolphinConfigWriter.baseConfigPaths()) {

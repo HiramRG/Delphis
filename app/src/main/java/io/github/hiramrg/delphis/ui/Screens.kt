@@ -708,6 +708,28 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     var showAchievements by remember { mutableStateOf(false) }
     if (showAchievements && achievements != null) AchievementsDialog(achievements) { showAchievements = false }
 
+    // GameCube: how the 4:3 picture fills the 16:9 screen (written to Dolphin when the game starts).
+    val screenGid = game.info.gameId?.takeIf { game.info.platform == io.github.hiramrg.delphis.core.Platform.GAMECUBE }
+    var screen by remember(game.key) { mutableStateOf(screenGid?.let { act.prefs.screenFor(it) }) }
+    var showScreen by remember { mutableStateOf(false) }
+    val coverColour by produceState(android.graphics.Color.rgb(75, 58, 143), screenGid) {
+        screenGid?.let { value = io.github.hiramrg.delphis.platform.SideFill.colourOf(act.covers.load(it)) }
+    }
+    fun setScreen(c: io.github.hiramrg.delphis.core.GameScreen.Choice) { screen = c; screenGid?.let { act.prefs.setScreenFor(it, c) } }
+    if (showScreen && screen != null) androidx.compose.ui.window.Dialog(onDismissRequest = { showScreen = false }) {
+        val shape = RoundedCornerShape(18.dp)
+        Column(Modifier.width(430.dp).clip(shape).background(c.card).border(2.dp, Color(0xFF34BEED), shape).padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(if (screen!!.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) "16:9 · how should it fill the screen?" else "4:3 · what goes in the sides?",
+                    fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                ShapeSwitch(screen!!.shape, { setScreen(screen!!.copy(shape = it)) })
+            }
+            Spacer(Modifier.height(10.dp))
+            ScreenChoices(screen!!, screenGid, act.prefs.gcUseHack, coverColour, 190.dp) { setScreen(it) }
+            Text("Dolphin applies it when the game starts.", fontSize = 10.5.sp, color = c.textDim, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+
     // Physical buttons: A / Start = Play, D-pad or left stick = pick a preset, X = Edit, Y = Remember,
     // L1 = autosave on/off for this game, R1 = remember controls on/off, Y = earlier autosaves. B = Back.
     val onKey by rememberUpdatedState<(KeyEvent) -> Boolean> { e ->
@@ -720,7 +742,10 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             KeyEvent.KEYCODE_DPAD_UP -> { p.move(-1); true }
             KeyEvent.KEYCODE_BUTTON_X -> { if (e.repeatCount == 0 && p.selected != null) p.editing = true; true }
             KeyEvent.KEYCODE_BUTTON_Y -> { if (e.repeatCount == 0 && backups.isNotEmpty()) showBackups = true; true }
-            KeyEvent.KEYCODE_BUTTON_SELECT -> { if (e.repeatCount == 0 && multiplayer) showPlayers = true; multiplayer }
+            KeyEvent.KEYCODE_BUTTON_SELECT -> {
+                if (e.repeatCount == 0) { if (multiplayer) showPlayers = true else if (screen != null) showScreen = true }
+                multiplayer || screen != null
+            }
             KeyEvent.KEYCODE_BUTTON_THUMBR -> { if (e.repeatCount == 0 && achievements != null) showAchievements = true; achievements != null }
             else -> false
         }
@@ -739,6 +764,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             Text(game.info.title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(platformLabel(game.info.platform) + " · " + playSummary(act, game), fontSize = 11.sp, color = c.textDim, maxLines = 2)
             achievements?.let { AchievementsChip(it, onClick = { showAchievements = true }) }
+            screen?.let { sc -> ScreenSection(sc, screenGid, act.prefs.gcUseHack, onShape = { setScreen(sc.copy(shape = it)) }, onOpen = { showScreen = true }) }
             if (rememberHasAutosave(act, game)) Text("▶ Continues from your autosave", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.accentText)
             if (backups.isNotEmpty()) Text(
                 "↺ Earlier autosaves (${backups.size}) · Ⓨ", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.textDim,
@@ -784,7 +810,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                 WiiButton("Ⓧ Edit", onClick = { p.editing = true }, enabled = sel != null)
                 WiiButton(if (sel == null) "Choose a style" else "Ⓐ Play", onClick = { p.play() }, primary = true, enabled = sel != null, fontSize = 17.sp)
             }
-            HintLine("Ⓐ Play · ✚ choose · Ⓧ Edit" + (if (canAutosave) " · L1 Autosave" else "") + " · R1 Remember" + (if (backups.isNotEmpty()) " · Ⓨ Earlier autosaves" else "") + (if (multiplayer) " · ⊖ Players" else "") + (if (achievements != null) " · R3 Achievements" else "") + " · Ⓑ Back")
+            HintLine("Ⓐ Play · ✚ choose · Ⓧ Edit" + (if (canAutosave) " · L1 Autosave" else "") + " · R1 Remember" + (if (backups.isNotEmpty()) " · Ⓨ Earlier autosaves" else "") + (if (multiplayer) " · ⊖ Players" else if (screen != null) " · ⊖ Screen" else "") + (if (achievements != null) " · R3 Achievements" else "") + " · Ⓑ Back")
         }
     }
 }
@@ -954,7 +980,7 @@ fun SetupScreen(act: MainActivity) {
 
 enum class SettingsSection(val label: String) {
     APPEARANCE("Appearance"), SOUND("Sound"), CONTROLS("Controls"), GYRO("Gyro aiming"), CLOSING("Closing games"),
-    BOTTOM("Bottom screen"), ACHIEVEMENTS("Achievements"), LIBRARY("Library & folders"), FRONTENDS("Frontends"), UPDATES("Updates"), HELP("Diagnostics"),
+    DISPLAY("Display"), BOTTOM("Bottom screen"), ACHIEVEMENTS("Achievements"), LIBRARY("Library & folders"), FRONTENDS("Frontends"), UPDATES("Updates"), HELP("Diagnostics"),
 }
 
 @Composable
@@ -980,6 +1006,7 @@ fun SettingsScreen(act: MainActivity) {
                 SettingsSection.CONTROLS -> ControlsSettings(act)
                 SettingsSection.GYRO -> GyroSettings(act)
                 SettingsSection.CLOSING -> ClosingSettings(act)
+                SettingsSection.DISPLAY -> DisplaySettings(act)
                 SettingsSection.BOTTOM -> BottomScreenSettings(act)
                 SettingsSection.ACHIEVEMENTS -> AchievementsSettings(act) { t, sub, on, change -> SwitchRow(t, sub, on, change) }
                 SettingsSection.LIBRARY -> LibrarySettings(act)
@@ -1165,6 +1192,38 @@ private fun ClosingSettings(act: MainActivity) {
         if (autoSave) "Shows a reminder before the game closes." else "Shows a reminder that unsaved progress will be lost.",
         !skipWarn,
     ) { skipWarn = !it; act.prefs.skipExitWarning = !it }
+}
+
+/** Settings → Display: how GameCube games' 4:3 picture fills the 16:9 screen, unless a game picks its own. */
+@Composable
+private fun DisplaySettings(act: MainActivity) {
+    val prefs = act.prefs
+    val c = LocalWii.current
+    var wide by remember { mutableStateOf(prefs.gcDefaultWide) }
+    var fill by remember { mutableStateOf(prefs.gcFill) }
+    var sides by remember { mutableStateOf(prefs.gcSides) }
+    var hack by remember { mutableStateOf(prefs.gcUseHack) }
+    Text("GameCube games", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+    Text("Defaults for new games; each game can change them under its cover (Screen).", fontSize = 12.sp, color = c.textDim)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Start games in", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        ShapeSwitch(if (wide) io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE else io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD,
+            { wide = it == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE; prefs.gcDefaultWide = wide })
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("16:9 fill", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        WiiChip("More of the world", selected = fill == io.github.hiramrg.delphis.core.GameScreen.Fill.WORLD, onClick = { fill = io.github.hiramrg.delphis.core.GameScreen.Fill.WORLD; prefs.gcFill = fill })
+        WiiChip("Stretch", selected = fill == io.github.hiramrg.delphis.core.GameScreen.Fill.STRETCH, onClick = { fill = io.github.hiramrg.delphis.core.GameScreen.Fill.STRETCH; prefs.gcFill = fill })
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("4:3 sides", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        io.github.hiramrg.delphis.core.GameScreen.Sides.entries.forEach { sd ->
+            WiiChip(sd.label, selected = sides == sd, onClick = { sides = sd; prefs.gcSides = sd })
+        }
+    }
+    SwitchRow("Use the widescreen hack when there's no game patch", "More of the world for any 3D game; some menus or edges may glitch. Off = stretch instead.", hack) { hack = it; prefs.gcUseHack = it }
+    Text("Delphis turns on Dolphin's own widescreen code when it ships one for the game (cheats on for that game only). Dolphin applies all of this when a game starts.",
+        fontSize = 11.sp, color = c.textDim)
 }
 
 @Composable

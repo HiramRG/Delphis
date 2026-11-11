@@ -59,6 +59,22 @@ class DolphinExitService : AccessibilityService() {
             return true
         }
 
+        /** Fills the bars beside a 4:3 GameCube picture (pattern / colour); BLACK hides them. False without the service. */
+        fun showSides(sides: io.github.hiramrg.delphis.core.GameScreen.Sides, colour: Int, displayId: Int?): Boolean {
+            val s = instance ?: return false
+            s.handler.post {
+                s.sideFill.show(sides, colour, displayId)
+                s.handler.removeCallbacks(s.sideMenuCheck)
+                if (s.sideFill.showing) s.handler.postDelayed(s.sideMenuCheck, 800)
+            }
+            return true
+        }
+
+        fun hideSides() {
+            val s = instance ?: return
+            s.handler.post { s.handler.removeCallbacks(s.sideMenuCheck); s.sideFill.hide() }
+        }
+
         /** The unlock badge over the game on the top screen. False without the service. */
         fun showAchievement(popup: Achievements.Popup, badge: android.graphics.Bitmap?, displayId: Int?): Boolean {
             val s = instance ?: return false
@@ -105,6 +121,16 @@ class DolphinExitService : AccessibilityService() {
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val loading by lazy { LoadingOverlay(this) }
     private val achievementToast by lazy { AchievementToast(this) }
+    private val sideFill by lazy { SideFill(this) }
+    /** While side fills show: hide them whenever Dolphin's menu (at the screen's edge) is open. */
+    private val sideMenuCheck: Runnable = object : Runnable {
+        override fun run() {
+            if (!sideFill.showing) return
+            val menuOpen = DolphinBridge.KNOWN_PACKAGES.any { pkg -> runCatching { find(pkg, "menu_exit")?.isVisibleToUser == true }.getOrDefault(false) }
+            sideFill.setVisible(!menuOpen)
+            handler.postDelayed(this, 800)
+        }
+    }
     private val checkGame = Runnable {
         if (GameWatch.session == null || GameLauncher.busy) return@Runnable
         val stillShowing = DolphinBridge.KNOWN_PACKAGES.any { find(it, "frame_emulation_fragment") != null }
