@@ -239,9 +239,8 @@ private fun CostTag(text: String, fg: Color, bg: Color) {
 /** A drawn scene (sky, hills, a red car) showing roughly what each look does. Not real shader output. */
 @Composable
 private fun LookPreview(l: io.github.hiramrg.delphis.core.Looks.Look) {
-    val L = io.github.hiramrg.delphis.core.Looks.Look
-    val vivid = l == L.VIVID
-    Canvas(Modifier.fillMaxSize().then(if (l == L.SOFT) Modifier.blur(0.8.dp) else Modifier)) {
+    val vivid = l == io.github.hiramrg.delphis.core.Looks.Look.VIVID
+    Canvas(Modifier.fillMaxSize().then(if (l == io.github.hiramrg.delphis.core.Looks.Look.SOFT) Modifier.blur(0.8.dp) else Modifier)) {
         val w = size.width; val h = size.height
         val sky = if (vivid) listOf(Color(0xFF2E8BFF), Color(0xFF9FDCFF)) else listOf(Color(0xFF5AA9FF), Color(0xFFBFE6FF))
         drawRect(Brush.verticalGradient(sky))
@@ -254,9 +253,9 @@ private fun LookPreview(l: io.github.hiramrg.delphis.core.Looks.Look) {
         drawRect(if (vivid) Color(0xFF2FB52A) else Color(0xFF4F9A3A), Offset(0f, h * 0.78f), Size(w, h * 0.22f))
         val car = Color(if (vivid) 0xFFF03A1E else 0xFFD8442C)
         drawRoundRect(car, Offset(w * 0.44f, h * 0.68f), Size(w * 0.12f, h * 0.14f), CornerRadius(3f))
-        if (l == L.SHARP) drawRoundRect(Color(0xFF3A120A), Offset(w * 0.44f, h * 0.68f), Size(w * 0.12f, h * 0.14f), CornerRadius(3f), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
-        if (l == L.SCANLINES || l == L.CRT) { var y = 0f; while (y < h) { drawRect(Color.Black.copy(alpha = 0.3f), Offset(0f, y), Size(w, 1.2f)); y += 3.5f } }
-        if (l == L.CRT) drawRect(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)), center = Offset(w / 2, h / 2), radius = w * 0.65f))
+        if (l == io.github.hiramrg.delphis.core.Looks.Look.SHARP) drawRoundRect(Color(0xFF3A120A), Offset(w * 0.44f, h * 0.68f), Size(w * 0.12f, h * 0.14f), CornerRadius(3f), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+        if (l == io.github.hiramrg.delphis.core.Looks.Look.SCANLINES || l == io.github.hiramrg.delphis.core.Looks.Look.CRT) { var y = 0f; while (y < h) { drawRect(Color.Black.copy(alpha = 0.3f), Offset(0f, y), Size(w, 1.2f)); y += 3.5f } }
+        if (l == io.github.hiramrg.delphis.core.Looks.Look.CRT) drawRect(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)), center = Offset(w / 2, h / 2), radius = w * 0.65f))
     }
 }
 

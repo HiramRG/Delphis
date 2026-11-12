@@ -392,11 +392,11 @@ class NowPlayingActivity : ComponentActivity() {
         var showPicture by remember { mutableStateOf(false) }
         // Looks: the game's post-processing shader; a change applies when the game starts again.
         val lookGid = gid?.takeIf { prefs.looksEnabled }
-        var look by remember { mutableStateOf(lookGid?.let { prefs.lookFor(it) }) }
+        var gameLook by remember { mutableStateOf(lookGid?.let { prefs.lookFor(it) }) }
         val runningLook = remember(startedAt) { lookGid?.let { prefs.lookFor(it) } }
         var pictureTab by remember { mutableIntStateOf(0) }
         var pictureBefore by remember { mutableStateOf<Pair<io.github.hiramrg.delphis.core.GameScreen.Choice?, io.github.hiramrg.delphis.core.Looks.Look?>?>(null) }
-        fun openPicture(tab: Int) { pictureBefore = screenChoice to look; pictureTab = tab; showBrightness = false; showPicture = true }
+        fun openPicture(tab: Int) { pictureBefore = screenChoice to gameLook; pictureTab = tab; showBrightness = false; showPicture = true }
         val sideColour by produceState(android.graphics.Color.rgb(75, 58, 143), screenGid) {
             screenGid?.let { value = io.github.hiramrg.delphis.platform.SideFill.colourOf(io.github.hiramrg.delphis.platform.CoverArt(this@NowPlayingActivity).load(it)) }
         }
@@ -522,7 +522,7 @@ class NowPlayingActivity : ComponentActivity() {
                             if (showPicture) showPicture = false else openPicture(0)
                         }
                     }
-                    look?.let { l ->
+                    gameLook?.let { l ->
                         TopChip("✦ " + l.label, on = showPicture && (pictureTab == 1 || screenChoice == null)) {
                             if (showPicture) showPicture = false else openPicture(1)
                         }
@@ -678,19 +678,19 @@ class NowPlayingActivity : ComponentActivity() {
 
             // Picture: ▭ Screen (GameCube; the sides change right away, shape / 16:9 fill need a restart)
             // and ✦ Look (needs a restart). Touch only here: in game the Thor's buttons belong to Dolphin.
-            if (showPicture && (screenChoice != null || look != null)) {
+            if (showPicture && (screenChoice != null || gameLook != null)) {
                 val sc = screenChoice
                 val needsRestart = (runningScreen != null && sc != null && (sc.shape != runningScreen.shape ||
                     (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE && sc.fill != runningScreen.fill))) ||
-                    (look != null && look != runningLook)
+                    (gameLook != null && gameLook != runningLook)
                 PicturePanel(
                     s.info.title, pictureTab, { pictureTab = it },
                     sc, screenGid, prefs.gcUseHack, sideColour, { ch -> screenChoice = ch; screenGid?.let { prefs.setScreenFor(it, ch) } },
-                    look, { l -> look = l; lookGid?.let { prefs.setLookFor(it, l) } },
+                    gameLook, { l -> gameLook = l; lookGid?.let { prefs.setLookFor(it, l) } },
                     onCancel = {
                         pictureBefore?.let { (bs, bl) ->
                             if (bs != null) { screenChoice = bs; screenGid?.let { prefs.setScreenFor(it, bs) } }
-                            if (bl != null) { look = bl; lookGid?.let { prefs.setLookFor(it, bl) } }
+                            if (bl != null) { gameLook = bl; lookGid?.let { prefs.setLookFor(it, bl) } }
                         }
                         showPicture = false
                     },
