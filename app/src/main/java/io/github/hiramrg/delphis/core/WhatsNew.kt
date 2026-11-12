@@ -13,6 +13,7 @@ object WhatsNew {
         Item("Wii and GameCube rows.", "Home shows Recently played, Wii, GameCube, Favorites and All games as rows. Covers have a white (Wii) or purple (GameCube) rim. The row you're on grows, the top card previews the game under the ring, and Ⓐ plays it."),
         Item("Sort each row.", "On a row, R1 switches between Last played, A–Z, Most played and Recently added. Each row remembers its own order."),
         Item("Achievements on the continue card.", "R3 opens the list."),
+        Item("Matching button icons.", "Every screen now draws button hints the same way, and the screen picker keeps the same size for 4:3 and 16:9."),
         Item("More accurate play time.", "Time only counts while the screen is on and unlocked and the game is open, not while the Thor sleeps or is locked.", fix = true),
     )
 
