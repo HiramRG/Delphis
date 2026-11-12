@@ -522,7 +522,7 @@ private fun chipText(s: String) = androidx.compose.ui.text.AnnotatedString(s)
 
 /** The pinned card while the ring is on a row: a detailed preview of the game under the ring. */
 @Composable
-private fun PreviewCard(act: MainActivity, g: GameEntry, playMs: Long, last: Long?, favorites: Set<String>) {
+private fun PreviewCard(act: MainActivity, g: GameEntry, playMs: Long, last: Long?, favorites: Set<String>, continueMode: Boolean = false, onAchievements: () -> Unit = {}) {
     val c = LocalWii.current
     val gc = g.info.platform == Platform.GAMECUBE
     val tint = if (gc) Color(0xFF2A2160) else Color(0xFF1F3F57)
@@ -543,19 +543,22 @@ private fun PreviewCard(act: MainActivity, g: GameEntry, playMs: Long, last: Lon
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 PlatformTag(g.info.platform, small = true)
                 val days = last?.let { ((System.currentTimeMillis() - it) / 86_400_000L).toInt() }
-                val whenText = when {
+                val whenText = if (continueMode) "CONTINUE PLAYING · " + when (days) { null, 0 -> "TODAY"; 1 -> "YESTERDAY"; else -> "$days DAYS AGO" } else when {
                     days == null && System.currentTimeMillis() - g.lastModified < 86_400_000L -> "NEW · ADDED TODAY"
                     days == null -> "NOT PLAYED YET"
                     days == 0 -> "LAST PLAYED TODAY"; days == 1 -> "LAST PLAYED YESTERDAY"; else -> "LAST PLAYED $days DAYS AGO"
                 }
-                Text(whenText, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, color = c.textDim, maxLines = 1)
+                Text(whenText, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, color = if (continueMode) c.accentText else c.textDim, maxLines = 1)
                 if (g.key in favorites) Text("★", color = Color(0xFFFFD34D), fontSize = 12.sp)
             }
             Text(g.info.title, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             @OptIn(ExperimentalLayoutApi::class)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp), maxLines = 1) {
                 if (playMs > 60_000) InfoChip(chipText(formatPlayTime(playMs) + " played"))
-                ach?.let { InfoChip(chipText("🏆 ${it.unlocked}/${it.total}")) }
+                ach?.let {
+                    if (continueMode) GameChip("🏆 ${it.unlocked}/${it.total}", "R3", height = 22.dp, onClick = onAchievements)
+                    else InfoChip(chipText("🏆 ${it.unlocked}/${it.total}"))
+                }
                 if (autosave) InfoChip(chipText("▶ Resumes from autosave"))
                 screenGid?.let { InfoChip(chipText("▭ " + screenChipLabel(act.prefs.screenFor(it), it, act.prefs.gcUseHack))) }
                 preset?.let { p ->
@@ -566,6 +569,15 @@ private fun PreviewCard(act: MainActivity, g: GameEntry, playMs: Long, last: Lon
                 }
             }
             Spacer(Modifier.weight(1f))
+            if (continueMode) {
+                // Slim buttons (chip style) so the card keeps one height; the D-pad comes back up to them.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CardButton("▶ Play", "A", Modifier.onFocusChanged { if (it.isFocused) act.homeFocusedTile = false }) { act.quickPlay(g) }
+                    // While Controls has the focus, A presses it instead of Home's "play the hero" shortcut.
+                    CardButton("Controls", "X", Modifier.onFocusChanged { if (it.isFocused) act.homeFocusedTile = true }) { act.openGame(g) }
+                }
+                return@Column
+            }
             val suggestion = act.homeRow == HomeRow.FAVORITES && g.key !in favorites
             HintText(if (suggestion) "Ⓐ Add to favorites · Ⓧ Game page" else "Ⓐ Play · Ⓧ Game page · Ⓨ " + if (g.key in favorites) "Unfavorite" else "Favorite", fontSize = 11.5.sp)
         }
@@ -755,51 +767,21 @@ private fun SortPopup(current: LibSort, modifier: Modifier) {
 
 @Composable
 private fun HeroCard(act: MainActivity, g: GameEntry, achievements: io.github.hiramrg.delphis.core.RetroAchievements.GameProgress? = null, onAchievements: () -> Unit = {}) {
+    // Same fixed layout as the preview of a row's game, so the pinned card never changes size.
+    PreviewCard(act, g, act.prefs.playTime()[g.key] ?: 0L, act.prefs.lastPlayed()[g.key], act.prefs.favorites(), continueMode = true, onAchievements = onAchievements)
+}
+
+/** Play / Controls on the continue card: 32 dp, chip style, button icon after the word. */
+@Composable
+private fun CardButton(label: String, key: String, modifier: Modifier, onClick: () -> Unit) {
     val c = LocalWii.current
-    val preset = act.prefs.presetFor(g.key)?.let { act.store.byId(it) }
-    val fav = act.prefs.isFavorite(g.key)
-    val autosave = rememberHasAutosave(act, g)
-    WiiCard(Modifier.fillMaxSize(), radius = 24.dp, padding = 12.dp) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            // On the Thor's top screen the card is short: one-line title, fewer detail lines.
-            val tight = maxHeight < 190.dp
-            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                // No accent frame here: the only blue ring on Home is the one that follows the D-pad focus.
-                Box(Modifier.fillMaxHeight().aspectRatio(0.72f).clip(RoundedCornerShape(14.dp))) {
-                    Cover(act, g, act.prefs.showCovers, Modifier.fillMaxSize().platformRim(g), titleSize = 14)
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f).fillMaxHeight()) {
-                    // Details take the space that's left and are clipped if needed; the buttons always fit.
-                    Column(Modifier.weight(1f).fillMaxWidth().clipToBounds(), verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically)) {
-                        Text("CONTINUE PLAYING", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, letterSpacing = 1.sp)
-                        Text(
-                            g.info.title, fontSize = if (tight) 21.sp else 26.sp, fontWeight = FontWeight.ExtraBold,
-                            lineHeight = if (tight) 23.sp else 28.sp, maxLines = if (tight) 1 else 2, overflow = TextOverflow.Ellipsis,
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            PlatformTag(g.info.platform, small = true)
-                            Text(playSummary(act, g) + if (fav) "  ★" else "", fontSize = 12.sp, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                            achievements?.let { a -> GameChip("🏆 ${a.unlocked}/${a.total}", "R3", height = 24.dp, onClick = onAchievements) }
-                        }
-                        if (autosave) Text("▶ Continues from your autosave", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.accentText, maxLines = 1)
-                        if (!tight || !autosave) Text(withOrangeTags("Controls: ${preset?.name ?: "choose when you play"}", c.orange), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // Both buttons neutral, so the blue D-pad ring is the only highlight and is easy to see.
-                        val pill = RoundedCornerShape(50)
-                        WiiButton("Ⓐ Play", onClick = { act.quickPlay(g) }, Modifier.onFocusChanged { if (it.isFocused) act.homeFocusedTile = false }.focusRing(pill), fontSize = 16.sp)
-                        WiiButton(
-                            "Ⓧ Controls", onClick = { act.openGame(g) },
-                            // While Controls has the focus, A presses it instead of Home's "play the hero" shortcut.
-                            Modifier.onFocusChanged { if (it.isFocused) act.homeFocusedTile = true }.focusRing(pill),
-                            fontSize = 15.sp,
-                        )
-                    }
-                }
-            }
-        }
+    val shape = RoundedCornerShape(50)
+    Row(
+        modifier.height(32.dp).focusRing(shape).clip(shape).background(c.card).border(2.dp, c.cardBorder, shape).clickable(onClick = onClick).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+        KeyIcon(key, size = 16.dp)
     }
 }
 
