@@ -104,6 +104,8 @@ class DolphinExitService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
+        // After "Restart & update": open the new version (allowed from an accessibility service).
+        relaunchIfUpdated(this)
     }
 
     override fun onUnbind(intent: Intent?): Boolean {

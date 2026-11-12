@@ -57,6 +57,15 @@ class TrackpadTest {
     }
 
     @Test
+    fun dolphinsTouchOverlayIsTurnedOff() {
+        val ini = DolphinConfigWriter.touchOverlayOff("[Android]\nShowInputOverlay = True\nIRMode = 0\n")
+        assertTrue(ini.contains("ShowInputOverlay = False"))
+        assertFalse(ini.contains("ShowInputOverlay = True"))
+        assertTrue(ini.contains("IRMode = 0"))
+        assertTrue(DolphinConfigWriter.touchOverlayOff("").contains("ShowInputOverlay = False"))
+    }
+
+    @Test
     fun redSteelPresetsAreSuggestedAndTouchButtonsReachDolphin() {
         val s = GameDatabase.suggest(GameInfo("REDE41", "Red Steel", Platform.WII))
         assertEquals(listOf(PresetLibrary.RED_STEEL_TRACKPAD, PresetLibrary.RED_STEEL_TOUCH), s.choices)

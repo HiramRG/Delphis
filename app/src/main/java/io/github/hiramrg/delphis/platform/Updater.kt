@@ -143,8 +143,9 @@ class InstallReceiver : BroadcastReceiver() {
                 val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
                 context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
-            PackageInstaller.STATUS_SUCCESS -> Unit // the app restarts as the new version
+            PackageInstaller.STATUS_SUCCESS -> Unit // UpdatedReceiver opens Delphis again
             else -> {
+                Prefs(context).relaunchAfterUpdate = false
                 val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "unknown error"
                 val hint = if (msg.contains("signature", true) || msg.contains("conflict", true))
                     " — uninstall Delphis once and install the new version manually; updates will work from then on."
@@ -153,4 +154,25 @@ class InstallReceiver : BroadcastReceiver() {
             }
         }
     }
+}
+
+
+/**
+ * Android kills Delphis while it updates itself. Once the new version is in place (MY_PACKAGE_REPLACED),
+ * this opens it again if the update came from "Restart & update". If Android won't let a receiver start
+ * an activity, the exit helper (an accessibility service, which Android allows to) does it when it
+ * reconnects; see [relaunchIfUpdated].
+ */
+class UpdatedReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) relaunchIfUpdated(context)
+    }
+}
+
+/** Opens Delphis on the new version after "Restart & update" (once). */
+fun relaunchIfUpdated(context: Context) {
+    val prefs = Prefs(context)
+    if (!prefs.relaunchAfterUpdate) return
+    val open = context.packageManager.getLaunchIntentForPackage(context.packageName)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) ?: return
+    if (runCatching { context.startActivity(open) }.isSuccess) prefs.relaunchAfterUpdate = false
 }

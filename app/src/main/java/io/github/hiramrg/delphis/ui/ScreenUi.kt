@@ -94,7 +94,10 @@ private fun ChoiceCard(title: String, sub: String?, on: Boolean, w: Dp, preview:
             .border(if (on) 3.dp else 2.dp, if (on) Sel else c.cardBorder, shape).clickable(onClick = onClick).padding(6.dp),
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(7.dp))) { preview() }
-        Text(title, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 5.dp))
+        Row(Modifier.fillMaxWidth().padding(top = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f), maxLines = 1)
+            if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF6BCB77))
+        }
         if (sub != null) Text(sub, fontSize = 10.sp, color = c.textDim, lineHeight = 12.sp)
     }
 }
@@ -124,5 +127,88 @@ private fun Preview(kind: Preview, colour: Int) {
         // The block: same size in every view, except Stretch (wider).
         val bw = (h * 4f / 3f) * 0.12f * (if (kind == Preview.STRETCH) 1.33f else 1f)
         drawRoundRect(Color(0xFFC85A3A), Offset(w / 2f - bw / 2f, h * 0.3f), Size(bw, h * 0.28f), CornerRadius(bw * 0.3f))
+    }
+}
+
+
+/** The choices the D-pad steps through for a shape: the sides for 4:3, the fill for 16:9. */
+fun screenOptions(c: Choice): List<Choice> =
+    if (c.shape == Shape.WIDE) Fill.entries.map { c.copy(fill = it) } else Sides.entries.map { c.copy(sides = it) }
+
+/** The next choice to the left (-1) or right (+1) of [c]. */
+fun screenStep(c: Choice, delta: Int): Choice {
+    val all = screenOptions(c)
+    val i = all.indexOfFirst { it == c }.coerceAtLeast(0)
+    return all[(i + delta).coerceIn(0, all.lastIndex)]
+}
+
+/** A small round button badge ("L1", "A"), as in the game page's buttons. */
+@Composable
+fun KeyBadge(key: String, dark: Boolean = false) {
+    val c = LocalWii.current
+    val col = if (dark) Color(0xFF0A2533) else c.textDim
+    Box(Modifier.heightIn(min = 18.dp).widthIn(min = 22.dp).border(1.5.dp, col.copy(alpha = if (dark) 0.55f else 1f), RoundedCornerShape(50)).padding(horizontal = 4.dp),
+        contentAlignment = Alignment.Center) {
+        Text(key, fontSize = 9.5.sp, fontWeight = FontWeight.Black, color = col, maxLines = 1)
+    }
+}
+
+/**
+ * The screen picker, on the page (not a pop-up, so the cards sit side by side and the gamepad keeps
+ * working): L1 / R1 = 4:3 / 16:9, D-pad ◀ ▶ = pick a card, Ⓐ Done, Ⓑ Cancel. Keys are handled by the page.
+ */
+@Composable
+fun BoxScope.ScreenPanel(
+    gameTitle: String, choice: Choice, gameId: String?, useHack: Boolean, colour: Int,
+    onPick: (Choice) -> Unit, onCancel: () -> Unit, onDone: () -> Unit,
+) {
+    val c = LocalWii.current
+    Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.6f)).clickable(onClick = onCancel))
+    val shape = RoundedCornerShape(20.dp)
+    Column(
+        Modifier.align(Alignment.Center).fillMaxWidth(0.9f).clip(shape)
+            .background(if (c.dark) c.sidebar else c.card).border(2.dp, Sel, shape)
+            .clickable(enabled = false) {}.padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("SCREEN · " + gameTitle.uppercase(), fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp, color = c.textDim, maxLines = 1)
+                Text(if (choice.shape == Shape.WIDE) "16:9 · stretch it or show more of the world?" else "4:3 · what goes in the sides?",
+                    fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+            }
+            KeyBadge("L1")
+            ShapeSwitch(choice.shape, { onPick(choice.copy(shape = it)) })
+            KeyBadge("R1")
+        }
+        Spacer(Modifier.height(10.dp))
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val n = screenOptions(choice).size
+            val w = (maxWidth - 10.dp * (n - 1)) / n
+            ScreenChoices(choice, gameId, useHack, colour, w, onPick = onPick)
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            KeyBadge("L1"); KeyBadge("R1")
+            Text("4:3 / 16:9", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = c.textDim)
+            Spacer(Modifier.width(8.dp))
+            KeyBadge("✚")
+            Text("◀ ▶ choose", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = c.textDim)
+            Spacer(Modifier.weight(1f))
+            PanelButton("Cancel", "B", primary = false, onClick = onCancel)
+            PanelButton("Done", "A", primary = true, onClick = onDone)
+        }
+    }
+}
+
+@Composable
+private fun PanelButton(label: String, key: String, primary: Boolean, onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(50)
+    Row(
+        Modifier.height(34.dp).clip(shape).background(if (primary) Sel else c.card).border(2.dp, if (primary) Sel else c.cardBorder, shape)
+            .clickable(onClick = onClick).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        Text(label, fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = if (primary) Color(0xFF0A2533) else c.text, maxLines = 1)
+        KeyBadge(key, dark = primary)
     }
 }

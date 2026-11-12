@@ -57,10 +57,14 @@ class MainActivity : ComponentActivity() {
         data class Available(val release: Updater.Release) : UpdateState
         data class Downloading(val progress: Float) : UpdateState
         data object NeedsPermission : UpdateState
+        /** Downloaded and waiting for "Restart & update". */
+        data class Ready(val release: Updater.Release, val apk: java.io.File) : UpdateState
         data object Installing : UpdateState
         data class Failed(val reason: String) : UpdateState
     }
     var updateState by mutableStateOf<UpdateState>(UpdateState.Idle)
+    /** The "Build N is ready" card; "Later" hides it and leaves the banner. */
+    var updatePrompt by mutableStateOf(false)
 
     var screen by mutableStateOf<Screen>(Screen.Home)
     /** Light (classic Wii, default) or dark menus. The in-game bottom screen is always dark. */
@@ -218,20 +222,32 @@ class MainActivity : ComponentActivity() {
                         prefs.whatsNewSeen = io.github.hiramrg.delphis.core.WhatsNew.RELEASE
                     }
                 }
-                when (val s = screen) {
-                    Screen.Setup -> SetupScreen(this)
-                    Screen.Home -> HomeScreen(this)
-                    is Screen.Game -> GameScreen(this, s.entry)
-                    Screen.Settings -> SettingsScreen(this)
-                    Screen.ControllerCheck -> ControllerCheckScreen(this)
-                    Screen.Diagnostics -> DiagnosticsScreen(this)
-                    Screen.GyroTest -> GyroTestScreen(this)
+                androidx.compose.foundation.layout.Box {
+                    when (val s = screen) {
+                        Screen.Setup -> SetupScreen(this@MainActivity)
+                        Screen.Home -> HomeScreen(this@MainActivity)
+                        is Screen.Game -> GameScreen(this@MainActivity, s.entry)
+                        Screen.Settings -> SettingsScreen(this@MainActivity)
+                        Screen.ControllerCheck -> ControllerCheckScreen(this@MainActivity)
+                        Screen.Diagnostics -> DiagnosticsScreen(this@MainActivity)
+                        Screen.GyroTest -> GyroTestScreen(this@MainActivity)
+                    }
+                    (updateState as? UpdateState.Ready)?.let { r -> if (updatePrompt) UpdateReadyCard(r.release.versionCode, onLater = { updatePrompt = false }) { restartAndUpdate() } }
                 }
             }
         }
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // "Build N is ready": Ⓐ Restart & update, Ⓑ Later.
+        if (updatePrompt && updateState is UpdateState.Ready) when (event.keyCode) {
+            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) restartAndUpdate(); return true
+            }
+            KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) updatePrompt = false; return true
+            }
+        }
         keyListener?.let { if (it(event)) return true }
         return super.dispatchKeyEvent(event)
     }
@@ -321,11 +337,23 @@ class MainActivity : ComponentActivity() {
             try {
                 updateState = UpdateState.Downloading(0f)
                 val apk = updater.download(release) { p -> lifecycleScope.launch { updateState = UpdateState.Downloading(p) } }
-                updateState = UpdateState.Installing
-                updater.install(apk)
+                updateState = UpdateState.Ready(release, apk)
+                updatePrompt = true
             } catch (e: Exception) {
                 updateState = UpdateState.Failed(e.message ?: "Download failed")
             }
+        }
+    }
+
+    /** Closes Delphis, installs the downloaded update and opens Delphis again on the new version. */
+    fun restartAndUpdate() {
+        val s = updateState as? UpdateState.Ready ?: return
+        updatePrompt = false
+        updateState = UpdateState.Installing
+        prefs.relaunchAfterUpdate = true
+        try { updater.install(s.apk) } catch (e: Exception) {
+            prefs.relaunchAfterUpdate = false
+            updateState = UpdateState.Failed(e.message ?: "Install failed")
         }
     }
 
@@ -434,6 +462,7 @@ class MainActivity : ComponentActivity() {
         suspend fun applyPreset(ctx: android.content.Context, bridge: DolphinBridge, prefs: Prefs, gameId: String?, preset: Preset): Boolean {
             val result = withContext(Dispatchers.IO) {
                 if (prefs.autoSaveResume) bridge.ensureSaveStatesEnabled()
+                bridge.ensureTouchOverlayOff()
                 // Multiplayer: P1 is the Thor unless it sits out; players 2-4 are the other controllers connected now.
                 val slots = io.github.hiramrg.delphis.platform.Pads.slots(prefs, gameId, preset)
                 val (p1, profile) = slots.first()

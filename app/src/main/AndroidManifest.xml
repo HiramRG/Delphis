@@ -78,6 +78,12 @@
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
         <receiver android:name=".platform.InstallReceiver" android:exported="false" />
+        <!-- Opens Delphis again once it has updated itself ("Restart & update"). -->
+        <receiver android:name=".platform.UpdatedReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
         <!-- Presses Dolphin's "Exit Emulation" so games close cleanly (see res/xml/dolphin_exit_service.xml). -->
         <service
             android:name=".platform.DolphinExitService"

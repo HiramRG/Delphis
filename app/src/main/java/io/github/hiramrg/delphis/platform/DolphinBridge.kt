@@ -372,6 +372,16 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         }.joinToString("\n").ifEmpty { "  (none)" }
     }
 
+    /** Keeps Dolphin's touch overlay off (see DolphinConfigWriter.touchOverlayOff); Dolphin picks it up when it next starts. */
+    fun ensureTouchOverlayOff() {
+        val tree = prefs.dolphinTreeUri ?: return
+        runCatching {
+            val existing = readText(tree, DolphinConfigWriter.dolphinIniPath) ?: ""
+            val updated = DolphinConfigWriter.touchOverlayOff(existing)
+            if (updated != existing) { writeText(tree, DolphinConfigWriter.dolphinIniPath, updated); CrashLog.event("Dolphin's touch overlay turned off") }
+        }.onFailure { CrashLog.event("couldn't turn Dolphin's touch overlay off: ${it.message}") }
+    }
+
     fun ensureSaveStatesEnabled() {
         val tree = prefs.dolphinTreeUri ?: return
         runCatching {

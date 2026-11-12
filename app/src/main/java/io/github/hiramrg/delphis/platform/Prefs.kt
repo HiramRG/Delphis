@@ -201,6 +201,11 @@ class Prefs(context: Context) {
         set(v) = sp.edit().putString("last_applied", v).apply()
 
     /** Dolphin has been set up to read Delphis' trackpad server, so the server starts with the app. */
+    /** Set just before an update installs: Delphis opens itself again on the new version. */
+    var relaunchAfterUpdate: Boolean
+        get() = sp.getBoolean("relaunch_after_update", false)
+        set(v) = sp.edit().putBoolean("relaunch_after_update", v).commit().let { }
+
     var trackpadServerSetUp: Boolean
         get() = sp.getBoolean("trackpad_dsu", false)
         set(v) = sp.edit().putBoolean("trackpad_dsu", v).apply()

@@ -222,6 +222,15 @@ object DolphinConfigWriter {
         set("Android", mapOf("IRMode" to "0"))
     }.toString()
 
+    /**
+     * Dolphin.ini with Dolphin's touch overlay off (`[Android] ShowInputOverlay = False`): the Thor has
+     * real buttons, and Delphis' touch buttons and trackpad don't use it. An early trackpad build turned
+     * it on and hid only the Wii buttons, which left GameCube games showing Dolphin's buttons.
+     */
+    fun touchOverlayOff(existing: String): String = IniEditor(existing).apply {
+        set("Android", mapOf("ShowInputOverlay" to "False"))
+    }.toString()
+
     /** Config/DSUClient.ini with Delphis' trackpad server added to Dolphin's DSU servers (keeping any others). */
     fun dsuClientIni(existing: String): String = IniEditor(existing).apply {
         val entry = "${Dsu.SERVER_NAME}:127.0.0.1:${Dsu.PORT};"

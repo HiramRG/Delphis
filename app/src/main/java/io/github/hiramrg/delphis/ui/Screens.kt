@@ -724,25 +724,28 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         screenGid?.let { value = io.github.hiramrg.delphis.platform.SideFill.colourOf(act.covers.load(it)) }
     }
     fun setScreen(c: io.github.hiramrg.delphis.core.GameScreen.Choice) { screen = c; screenGid?.let { act.prefs.setScreenFor(it, c) } }
-    if (showScreen && screen != null) androidx.compose.ui.window.Dialog(onDismissRequest = { showScreen = false }) {
-        val shape = RoundedCornerShape(18.dp)
-        Column(Modifier.width(430.dp).clip(shape).background(c.card).border(2.dp, Color(0xFF34BEED), shape).padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (screen!!.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) "16:9 · how should it fill the screen?" else "4:3 · what goes in the sides?",
-                    fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
-                ShapeSwitch(screen!!.shape, { setScreen(screen!!.copy(shape = it)) })
-            }
-            Spacer(Modifier.height(10.dp))
-            ScreenChoices(screen!!, screenGid, act.prefs.gcUseHack, coverColour, 190.dp) { setScreen(it) }
-            Text("Dolphin applies it when the game starts.", fontSize = 10.5.sp, color = c.textDim, modifier = Modifier.padding(top = 8.dp))
-        }
-    }
+    // What was set when the picker opened: Ⓑ / Cancel goes back to it.
+    var screenBefore by remember { mutableStateOf(screen) }
+    fun openScreen() { screenBefore = screen; showScreen = true }
+    fun cancelScreen() { screenBefore?.let { setScreen(it) }; showScreen = false }
 
     // Physical buttons: A = use the preset under the ring, or Play if it's already in use; Start = Play;
     // D-pad = move the ring, X = Edit,
     // L1 = autosave on/off for this game, R1 = remember controls on/off, Y = earlier autosaves. B = Back.
     val onKey by rememberUpdatedState<(KeyEvent) -> Boolean> { e ->
-        if (p.editing || e.action != KeyEvent.ACTION_DOWN) false
+        val sc = screen
+        if (showScreen && sc != null) {
+            // Screen picker open: L1 / R1 = 4:3 / 16:9, ◀ ▶ = card, Ⓐ Done, Ⓑ Cancel; nothing else reaches the page.
+            if (e.action == KeyEvent.ACTION_DOWN) when (e.keyCode) {
+                KeyEvent.KEYCODE_BUTTON_L1 -> setScreen(sc.copy(shape = io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD))
+                KeyEvent.KEYCODE_BUTTON_R1 -> setScreen(sc.copy(shape = io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE))
+                KeyEvent.KEYCODE_DPAD_LEFT -> setScreen(screenStep(sc, -1))
+                KeyEvent.KEYCODE_DPAD_RIGHT -> setScreen(screenStep(sc, 1))
+                KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> if (e.repeatCount == 0) showScreen = false
+                KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_BUTTON_SELECT -> if (e.repeatCount == 0) cancelScreen()
+            }
+            true
+        } else if (p.editing || e.action != KeyEvent.ACTION_DOWN) false
         else when (e.keyCode) {
             KeyEvent.KEYCODE_BUTTON_L1 -> { if (e.repeatCount == 0) toggleGameAutosave(); canAutosave }
             KeyEvent.KEYCODE_BUTTON_R1 -> { if (e.repeatCount == 0) p.rememberChoice = !p.rememberChoice; true }
@@ -753,7 +756,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             KeyEvent.KEYCODE_BUTTON_X -> { if (e.repeatCount == 0 && p.editTarget != null) p.editing = true; true }
             KeyEvent.KEYCODE_BUTTON_Y -> { if (e.repeatCount == 0 && backups.isNotEmpty()) showBackups = true; true }
             KeyEvent.KEYCODE_BUTTON_SELECT -> {
-                if (e.repeatCount == 0) { if (multiplayer) showPlayers = true else if (screen != null) showScreen = true }
+                if (e.repeatCount == 0) { if (multiplayer) showPlayers = true else if (screen != null) openScreen() }
                 multiplayer || screen != null
             }
             KeyEvent.KEYCODE_BUTTON_THUMBR -> { if (e.repeatCount == 0 && achievements != null) showAchievements = true; achievements != null }
@@ -798,7 +801,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                     val newPad = pads.any { !it.builtIn && it.byLabel == null }
                     val n = io.github.hiramrg.delphis.core.Players.assign(pads, playerSetup).size
                     GameChip(if (newPad) "🎮 New controller" else "🎮 $n player" + (if (n == 1) "" else "s"), "⊖", warn = newPad) { showPlayers = true }
-                } else screen?.let { sc -> GameChip("▭ " + screenChipLabel(sc, screenGid, act.prefs.gcUseHack), "⊖") { showScreen = true } }
+                } else screen?.let { sc -> GameChip("▭ " + screenChipLabel(sc, screenGid, act.prefs.gcUseHack), "⊖") { openScreen() } }
                 Spacer(Modifier.weight(1f))
                 if (canAutosave) GameChip((if (gameAutosave) "✓ " else "") + "Autosave", "L1", on = gameAutosave) { toggleGameAutosave() }
                 GameChip((if (p.rememberChoice) "✓ " else "") + "Remember", "R1", on = p.rememberChoice) { p.rememberChoice = !p.rememberChoice }
@@ -851,6 +854,9 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         }
     }
     confirmReset?.let { r -> ResetConfirm(r.name, wide = true, onKeep = { confirmReset = null }) { confirmReset = null; p.resetToDefault(r) } }
+    val sc = screen
+    if (showScreen && sc != null) ScreenPanel(game.info.title, sc, screenGid, act.prefs.gcUseHack, coverColour,
+        onPick = { setScreen(it) }, onCancel = { cancelScreen() }, onDone = { showScreen = false })
     }
 }
 
