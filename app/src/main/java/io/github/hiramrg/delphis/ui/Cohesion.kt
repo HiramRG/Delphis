@@ -330,7 +330,18 @@ private val NoticeOrange = Color(0xFFFF8A5A)
 /** Shows [Notices.current] at the top of the screen. Put once at the top level of each activity. */
 @Composable
 fun NoticeHost(modifier: Modifier = Modifier) {
-    DisposableEffect(Unit) { Notices.hosts++; onDispose { Notices.hosts-- } }
+    // Counts only while the screen is in front; otherwise notices fall back to a toast.
+    val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        var counted = false
+        fun set(on: Boolean) { if (on != counted) { counted = on; if (on) Notices.hosts++ else Notices.hosts-- } }
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) set(true)
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) set(false)
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs); set(false) }
+    }
     val n = Notices.current
     LaunchedEffect(n?.id) {
         if (n != null) { delay(if (n.onAction != null) 7000 else 3500); if (Notices.current?.id == n.id) Notices.dismiss() }
