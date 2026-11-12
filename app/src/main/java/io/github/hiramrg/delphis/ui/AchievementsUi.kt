@@ -103,10 +103,14 @@ fun AchievementList(
             Text("🏆 Achievements", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
             Spacer(Modifier.width(8.dp))
             Text("${p.unlocked} of ${p.total} · ${p.pointsEarned} / ${p.pointsTotal} pts", fontSize = 11.sp, color = Color(0xFFA3ADB8), modifier = Modifier.weight(1f), maxLines = 1)
-            if (onClose != null) Text(
-                closeLabel, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFC9D0D8),
-                modifier = Modifier.clip(RoundedCornerShape(50)).border(2.dp, Color(0xFF4A535E), RoundedCornerShape(50)).clickable(onClick = onClose).padding(horizontal = 10.dp, vertical = 3.dp),
-            )
+            if (onClose != null) Row(
+                Modifier.clip(RoundedCornerShape(50)).border(2.dp, Color(0xFF4A535E), RoundedCornerShape(50)).clickable(onClick = onClose).padding(horizontal = 10.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                val split = splitButtonLabel(closeLabel)
+                Text(split?.first ?: closeLabel, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFC9D0D8))
+                split?.let { KeyIcon(it.second, Color(0xFFA3ADB8), 16.dp) }
+            }
         }
         Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF15181C))) {
             Box(Modifier.fillMaxHeight().fillMaxWidth(p.percent / 100f).background(Brush.horizontalGradient(listOf(AchGold, Color(0xFFF5D27A)))))

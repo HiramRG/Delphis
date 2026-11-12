@@ -140,10 +140,14 @@ fun WiiButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, 
             .padding(horizontal = 18.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text, color = (if (primary) c.onAccent else c.text).copy(alpha = if (enabled) 1f else 0.4f),
-            fontWeight = FontWeight.ExtraBold, fontSize = fontSize, maxLines = 1, textAlign = TextAlign.Center,
-        )
+        val fg = (if (primary) c.onAccent else c.text).copy(alpha = if (enabled) 1f else 0.4f)
+        // "Ⓐ Play" → "Play" followed by the A icon (the shared button-icon style).
+        val split = splitButtonLabel(text)
+        if (split == null) Text(text, color = fg, fontWeight = FontWeight.ExtraBold, fontSize = fontSize, maxLines = 1, textAlign = TextAlign.Center)
+        else androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+            Text(split.first, color = fg, fontWeight = FontWeight.ExtraBold, fontSize = fontSize, maxLines = 1, textAlign = TextAlign.Center)
+            KeyIcon(split.second, if (primary) fg.copy(alpha = 0.75f) else c.textDim)
+        }
     }
 }
 
@@ -164,5 +168,5 @@ fun WiiChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modi
 /** The small "Ⓐ Play · Ⓧ Edit" line at the bottom of screens. */
 @Composable
 fun HintLine(text: String, modifier: Modifier = Modifier) {
-    Text(text, fontSize = 12.sp, color = LocalWii.current.textDim, textAlign = TextAlign.Center, modifier = modifier.fillMaxWidth())
+    HintText(text, modifier.fillMaxWidth(), textAlign = TextAlign.Center)
 }

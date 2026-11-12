@@ -271,7 +271,7 @@ fun HomeScreen(act: MainActivity) {
                 if (shown.isEmpty()) {
                     item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
                         Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
+                            HintText(
                                 when {
                                     act.scanning -> "Looking for GameCube and Wii games…"
                                     act.games.isEmpty() -> "No GameCube or Wii games found."
@@ -365,7 +365,7 @@ private fun SearchBox(act: MainActivity) {
                 Text(act.libraryQuery.ifEmpty { "Search" }, color = if (act.libraryQuery.isEmpty()) c.textDim else c.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        if (!editing && focused) Text("Ⓐ type", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
+        if (!editing && focused) HintText("Ⓐ type", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
     }
     LaunchedEffect(editing) {
         if (editing) {
@@ -470,7 +470,7 @@ private fun PreviewCard(act: MainActivity, g: GameEntry, playMs: Long) {
             Text((if (gc) "GAMECUBE" else "WII") + " · " + when_.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp,
                 color = if (gc) Color(0xFFC8C0F0) else Color(0xFFBFE0F5), maxLines = 1)
             Text(g.info.title, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 23.sp)
-            Text("Ⓐ Play · Ⓧ Game page · Ⓨ " + if (act.prefs.isFavorite(g.key)) "Unfavorite" else "Favorite", fontSize = 12.sp, color = c.textDim, maxLines = 1)
+            HintText("Ⓐ Play · Ⓧ Game page · Ⓨ " + if (act.prefs.isFavorite(g.key)) "Unfavorite" else "Favorite")
         }
     }
 }
@@ -635,7 +635,7 @@ private fun HomeBar(act: MainActivity) {
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.Filled.Settings, "Settings", tint = c.textDim) }
         Text(rememberClock(withDate = true), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.weight(1f))
-        Text(act.homeHint ?: "Ⓐ Play · Ⓧ Controls · Ⓨ Favorite · L1 Library", fontSize = 12.sp, color = c.textDim, maxLines = 1)
+        HintText(act.homeHint ?: "Ⓐ Play · Ⓧ Controls · Ⓨ Favorite · L1 Library")
         // The top screen is full screen, so Android's status icons live here instead.
         Box(Modifier.padding(start = 10.dp).width(2.dp).height(26.dp).background(c.barBorder))
         SystemStatusIcons(Modifier.padding(start = 10.dp))
@@ -708,10 +708,7 @@ private fun LibraryColumn(act: MainActivity, favorites: Set<String>) {
                 horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
             ) {
                 Text(if (open) "◀" else "▶", fontSize = 11.sp, color = c.textDim)
-                if (open) Text(
-                    "L1", fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, color = c.card,
-                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(c.text).padding(horizontal = 4.dp),
-                )
+                if (open) KeyIcon("L1", size = 16.dp)
             }
             if (!open) Spacer(Modifier.weight(1f))
         }
@@ -736,7 +733,7 @@ private fun LibraryColumn(act: MainActivity, favorites: Set<String>) {
             }
         }
         Spacer(Modifier.weight(1f))
-        if (open) Text("L1 hide · R1 sort", fontSize = 11.sp, color = c.textDim, modifier = Modifier.padding(start = 6.dp))
+        if (open) HintText("L1 Hide · R1 Sort", Modifier.padding(start = 6.dp), fontSize = 11.sp)
     }
 }
 
@@ -1000,7 +997,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                     Column(Modifier.weight(1f)) {
                         when {
                             shown == null -> Text("CONTROLS", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
-                            p.browsing -> Text("Ⓐ USE THESE CONTROLS", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, letterSpacing = 1.sp)
+                            p.browsing -> HintText("Ⓐ USE THESE CONTROLS", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, letterSpacing = 1.sp)
                             else -> SelectedControlsTitle(10.sp)
                         }
                         Text(
@@ -1021,7 +1018,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             if (canReset) DropdownMenuItem(text = { Text("↺ Reset to default", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; confirmReset = shown })
                             if (canDelete) DropdownMenuItem(text = { Text("🗑 Delete this preset", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; p.deleteMine(shown!!) })
-                            if (backups.isNotEmpty()) DropdownMenuItem(text = { Text("↺ Earlier autosaves (${backups.size}) · Ⓨ", fontWeight = FontWeight.Bold) }, onClick = { menu = false; showBackups = true })
+                            if (backups.isNotEmpty()) DropdownMenuItem(text = { HintText("↺ Earlier autosaves (${backups.size}) · Ⓨ", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.text) }, onClick = { menu = false; showBackups = true })
                         }
                     }
                 }
@@ -1067,7 +1064,7 @@ private fun GameChip(text: String, key: String?, on: Boolean = false, warn: Bool
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(text, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = if (warn) c.orange else c.text, maxLines = 1)
-        if (key != null) Text(key, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, maxLines = 1)
+        if (key != null) KeyIcon(key)
     }
 }
 
@@ -1091,13 +1088,7 @@ private fun GameButton(icon: String, label: String, key: String, primary: Boolea
         Spacer(Modifier.width(6.dp))
         Text(label, fontSize = 14.5.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1)
         Spacer(Modifier.width(8.dp))
-        Box(
-            Modifier.size(18.dp).border(1.5.dp, if (primary) fg.copy(alpha = 0.55f) else c.textDim, RoundedCornerShape(50)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(key, fontSize = 10.sp, fontWeight = FontWeight.Black, color = if (primary) fg else c.textDim, maxLines = 1,
-                style = TextStyle(platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)))
-        }
+        KeyIcon(key, if (primary) fg.copy(alpha = 0.75f) else c.textDim)
     }
 }
 

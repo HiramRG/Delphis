@@ -158,7 +158,7 @@ fun PlayersDialog(
                         Text("NEW CONTROLLER", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, letterSpacing = 1.sp)
                         Text(p.longName, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("Press the bottom face button on this controller, whatever letter it has.", fontSize = 12.sp, color = c.text)
-                        Text("Once per controller · Ⓑ on the Thor skips (uses the usual layout)", fontSize = 10.5.sp, color = c.textDim, modifier = Modifier.padding(top = 3.dp))
+                        HintText("Once per controller · Ⓑ on the Thor skips (uses the usual layout)", fontSize = 10.5.sp, modifier = Modifier.padding(top = 3.dp))
                     }
                 }
             }

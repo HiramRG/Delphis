@@ -98,7 +98,7 @@ private fun ChoiceCard(title: String, sub: String?, on: Boolean, w: Dp, preview:
             Text(title, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f), maxLines = 1)
             if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF6BCB77))
         }
-        if (sub != null) Text(sub, fontSize = 10.sp, color = c.textDim, lineHeight = 12.sp)
+        if (sub != null) Text(sub, fontSize = 10.sp, color = c.textDim, lineHeight = 12.sp, minLines = 2, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
 }
 
@@ -142,17 +142,6 @@ fun screenStep(c: Choice, delta: Int): Choice {
     return all[(i + delta).coerceIn(0, all.lastIndex)]
 }
 
-/** A small round button badge ("L1", "A"), as in the game page's buttons. */
-@Composable
-fun KeyBadge(key: String, dark: Boolean = false) {
-    val c = LocalWii.current
-    val col = if (dark) Color(0xFF0A2533) else c.textDim
-    Box(Modifier.heightIn(min = 18.dp).widthIn(min = 22.dp).border(1.5.dp, col.copy(alpha = if (dark) 0.55f else 1f), RoundedCornerShape(50)).padding(horizontal = 4.dp),
-        contentAlignment = Alignment.Center) {
-        Text(key, fontSize = 9.5.sp, fontWeight = FontWeight.Black, color = col, maxLines = 1)
-    }
-}
-
 /**
  * The screen picker, on the page (not a pop-up, so the cards sit side by side and the gamepad keeps
  * working): L1 / R1 = 4:3 / 16:9, D-pad ◀ ▶ = pick a card, Ⓐ Done, Ⓑ Cancel. Keys are handled by the page.
@@ -182,16 +171,13 @@ fun BoxScope.ScreenPanel(
         }
         Spacer(Modifier.height(10.dp))
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val n = screenOptions(choice).size
-            val w = (maxWidth - 10.dp * (n - 1)) / n
-            ScreenChoices(choice, gameId, useHack, colour, w, onPick = onPick)
+            // Every card is a third of the width in both views, so the panel keeps its height; 16:9's two sit centred.
+            val w = (maxWidth - 20.dp) / 3
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { ScreenChoices(choice, gameId, useHack, colour, w, onPick = onPick) }
         }
         Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            KeyBadge("L1"); KeyBadge("R1")
-            Text("4:3 / 16:9", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = c.textDim)
-            Spacer(Modifier.width(8.dp))
-            KeyBadge("✚")
-            Text("◀ ▶ choose", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = c.textDim)
+            KeyIcon("DPAD_LR")
+            Text("Choose", fontSize = 12.sp, color = c.textDim)
             Spacer(Modifier.weight(1f))
             PanelButton("Cancel", "B", primary = false, onClick = onCancel)
             PanelButton("Done", "A", primary = true, onClick = onDone)
@@ -204,11 +190,11 @@ private fun PanelButton(label: String, key: String, primary: Boolean, onClick: (
     val c = LocalWii.current
     val shape = RoundedCornerShape(50)
     Row(
-        Modifier.height(34.dp).clip(shape).background(if (primary) Sel else c.card).border(2.dp, if (primary) Sel else c.cardBorder, shape)
-            .clickable(onClick = onClick).padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp),
+        Modifier.height(40.dp).clip(shape).background(if (primary) Sel else c.card).border(2.dp, if (primary) Sel else c.cardBorder, shape)
+            .clickable(onClick = onClick).padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(label, fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = if (primary) Color(0xFF0A2533) else c.text, maxLines = 1)
-        KeyBadge(key, dark = primary)
+        Text(label, fontSize = 14.5.sp, fontWeight = FontWeight.ExtraBold, color = if (primary) Color(0xFF0A2533) else c.text, maxLines = 1)
+        KeyIcon(key, if (primary) Color(0xFF0A2533).copy(alpha = 0.75f) else c.textDim)
     }
 }

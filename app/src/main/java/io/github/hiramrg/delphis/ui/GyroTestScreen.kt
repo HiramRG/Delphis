@@ -147,7 +147,7 @@ fun GyroTestScreen(act: MainActivity) {
                 Text("◀ Gyro test", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText,
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { act.screen = Screen.Settings }.padding(4.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Hold the Thor the way you play and aim. R3 or Ⓐ centers" + if (precision) ", hold R1 to pause." else ".", fontSize = 11.sp, color = c.textDim, maxLines = 2)
+                HintText("Hold the Thor the way you play and aim. R3 or Ⓐ centers" + if (precision) ", hold R1 to pause." else ".", fontSize = 11.sp)
             }
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 val w = minOf(maxWidth, maxHeight * 16f / 9f)

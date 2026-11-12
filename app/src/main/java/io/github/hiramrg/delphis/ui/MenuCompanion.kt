@@ -202,7 +202,7 @@ private fun PickerPanel(act: MainActivity, p: GamePicker) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Controls · " + p.game.info.title, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Text("✚ move · Ⓐ choose", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1)
+            HintText("✚ Move · Ⓐ Choose", fontSize = 11.sp)
         }
         // Tapping a preset makes it the one in use; the ring follows the D-pad on the top screen.
         PresetChooser(p.groups, p.selected, p.focused, p.game.info.title, { p.isEdited(it) }, Modifier.weight(1f).fillMaxWidth()) { p.choose(it) }
