@@ -503,6 +503,8 @@ private fun HomeRows(
         // Pinned: it never scrolls away. It's the Continue row (the ring goes on it like on any game),
         // or a preview of the game under the ring on the rows below.
         val heroFocus = act.rowFocus.getOrPut(HomeRow.CONTINUE) { androidx.compose.ui.focus.FocusRequester() }
+        // Home opens with the ring on Continue.
+        LaunchedEffect(hero?.key) { delay(80); if (hero != null && act.homeRow == null) runCatching { heroFocus.requestFocus() } }
         Box(Modifier.padding(start = 12.dp, end = 14.dp, top = 10.dp).fillMaxWidth().height(HERO_H)) {
             if (hero != null) Box(
                 Modifier.fillMaxSize().focusRequester(heroFocus)
