@@ -69,16 +69,16 @@ fun ShapeSwitch(shape: Shape, onShape: (Shape) -> Unit, modifier: Modifier = Mod
 /** The choices for the current shape, as preview cards. 16:9: More of the world / Stretch; 4:3: the sides. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ScreenChoices(choice: Choice, gameId: String?, useHack: Boolean, colour: Int, cardW: Dp, showSub: Boolean = true, onPick: (Choice) -> Unit) {
+fun ScreenChoices(choice: Choice, gameId: String?, useHack: Boolean, colour: Int, cardW: Dp, showSub: Boolean = true, cardH: Dp? = null, onPick: (Choice) -> Unit) {
     val patch = io.github.hiramrg.delphis.core.WidescreenPatches.forGame(gameId) != null
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (choice.shape == Shape.WIDE) {
             val worldSub = when { patch -> "Game patch for this game. Nothing stretched."; useHack -> "Dolphin's widescreen hack. Edges may glitch."; else -> "No patch for this game: stretches (hack is off in Settings)." }
-            ChoiceCard("More of the world", if (showSub) worldSub else null, choice.fill == Fill.WORLD, cardW, { Preview(Preview.WORLD, colour) }) { onPick(choice.copy(fill = Fill.WORLD)) }
-            ChoiceCard("Stretch", if (showSub) "Everything gets about 33% wider. Works with every game." else null, choice.fill == Fill.STRETCH, cardW, { Preview(Preview.STRETCH, colour) }) { onPick(choice.copy(fill = Fill.STRETCH)) }
+            ChoiceCard("More of the world", if (showSub) worldSub else null, choice.fill == Fill.WORLD, cardW, cardH, { Preview(Preview.WORLD, colour) }) { onPick(choice.copy(fill = Fill.WORLD)) }
+            ChoiceCard("Stretch", if (showSub) "Everything gets about 33% wider. Works with every game." else null, choice.fill == Fill.STRETCH, cardW, cardH, { Preview(Preview.STRETCH, colour) }) { onPick(choice.copy(fill = Fill.STRETCH)) }
         } else {
             listOf(Sides.BLACK to "Like the original.", Sides.PATTERN to "A calm pattern, no logos.", Sides.COLOUR to "A colour taken from the cover.").forEach { (sd, sub) ->
-                ChoiceCard(sd.label, if (showSub) sub else null, choice.sides == sd, cardW, {
+                ChoiceCard(sd.label, if (showSub) sub else null, choice.sides == sd, cardW, cardH, {
                     Preview(when (sd) { Sides.BLACK -> Preview.BLACK; Sides.PATTERN -> Preview.PATTERN; Sides.COLOUR -> Preview.COLOUR }, colour)
                 }) { onPick(choice.copy(sides = sd)) }
             }
@@ -87,14 +87,14 @@ fun ScreenChoices(choice: Choice, gameId: String?, useHack: Boolean, colour: Int
 }
 
 @Composable
-private fun ChoiceCard(title: String, sub: String?, on: Boolean, w: Dp, preview: @Composable () -> Unit, onClick: () -> Unit) {
+private fun ChoiceCard(title: String, sub: String?, on: Boolean, w: Dp, h: Dp?, preview: @Composable () -> Unit, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(12.dp)
     Column(
-        Modifier.width(w).focusRing(shape).clip(shape).background(if (on) (if (c.dark) Color(0xFF173444) else c.accentSoft) else (if (c.dark) Color(0xFF20252B) else c.card))
+        Modifier.width(w).then(if (h != null) Modifier.height(h) else Modifier).focusRing(shape).clip(shape).background(if (on) (if (c.dark) Color(0xFF173444) else c.accentSoft) else (if (c.dark) Color(0xFF20252B) else c.card))
             .border(if (on) 3.dp else 2.dp, if (on) Sel else c.cardBorder, shape).clickable(onClick = onClick).padding(6.dp),
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(7.dp))) { preview() }
+        Box(Modifier.fillMaxWidth().then(if (h != null) Modifier.weight(1f) else Modifier.aspectRatio(16f / 9f)).clip(RoundedCornerShape(7.dp))) { preview() }
         Row(Modifier.fillMaxWidth().padding(top = 5.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(title, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f), maxLines = 1)
             if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF6BCB77))
@@ -185,22 +185,30 @@ fun BoxScope.PicturePanel(
             PanelBtn(doneLabel, if (compact) null else "A", true, onClick = onDone)
         },
     ) {
-        if (!showLook) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // One frame for both tabs: the same sub-line and a content area of fixed height, so switching
+        // tabs doesn't make anything jump. Screen's cards fill it in one row, Look's six in two rows.
+        val area = if (compact) 150.dp else 190.dp
+        Row(Modifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!showLook) {
                 CapsLabel(if (choice!!.shape == Shape.WIDE) "16:9 fill" else "Sides · change right away", Modifier.weight(1f))
                 Segmented(listOf(Shape.STANDARD to "4:3", Shape.WIDE to "16:9"), choice.shape, { onPick(choice.copy(shape = it)) })
                 if (!compact) KeyIcon("Y")
+            } else {
+                CapsLabel("Applies when the game starts", Modifier.weight(1f))
+                if (!compact) Text("Only the final picture: same game speed", fontSize = 11.sp, color = c.textDim, maxLines = 1)
             }
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                // Every card is a third of the width in both views, so the panel keeps its height; 16:9's two sit centred.
-                val w = (maxWidth - 20.dp) / 3
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { ScreenChoices(choice!!, gameId, useHack, colour, w, showSub = !compact, onPick = onPick) }
+        }
+        if (!showLook) {
+            BoxWithConstraints(Modifier.fillMaxWidth().height(area)) {
+                val w = (maxWidth - 16.dp) / 3
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { ScreenChoices(choice!!, gameId, useHack, colour, w, showSub = !compact, cardH = area, onPick = onPick) }
             }
         } else {
-            val looks = io.github.hiramrg.delphis.core.Looks.Look.entries
-            looks.chunked(3).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    row.forEach { l -> LookCard(l, l == look, compact, Modifier.weight(1f)) { onLook(l) } }
+            Column(Modifier.fillMaxWidth().height(area), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                io.github.hiramrg.delphis.core.Looks.Look.entries.chunked(3).forEach { row ->
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { l -> LookCard(l, l == look, Modifier.weight(1f).fillMaxHeight()) { onLook(l) } }
+                    }
                 }
             }
         }
@@ -208,16 +216,16 @@ fun BoxScope.PicturePanel(
 }
 
 @Composable
-private fun LookCard(l: io.github.hiramrg.delphis.core.Looks.Look, on: Boolean, compact: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun LookCard(l: io.github.hiramrg.delphis.core.Looks.Look, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(12.dp)
     Column(
         modifier.focusRing(shape).clip(shape).background(if (on) (if (c.dark) Color(0xFF173444) else c.accentSoft) else (if (c.dark) Color(0xFF20252B) else c.card))
             .border(if (on) 3.dp else 2.dp, if (on) Sel else c.cardBorder, shape).clickable(onClick = onClick).padding(6.dp),
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(if (compact) 2.6f else 2.1f).clip(RoundedCornerShape(7.dp))) { LookPreview(l) }
+        Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(7.dp))) { LookPreview(l) }
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text(l.label, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+            Text(l.label, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
             if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF6BCB77))
             Spacer(Modifier.weight(1f))
             when (l.cost) {
@@ -226,7 +234,6 @@ private fun LookCard(l: io.github.hiramrg.delphis.core.Looks.Look, on: Boolean, 
                 else -> {}
             }
         }
-        if (!compact) Text(l.description, fontSize = 10.5.sp, color = c.textDim, lineHeight = 13.sp, minLines = 2, maxLines = 2)
     }
 }
 

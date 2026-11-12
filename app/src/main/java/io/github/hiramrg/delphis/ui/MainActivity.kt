@@ -305,8 +305,13 @@ class MainActivity : ComponentActivity() {
                 bridge.closeDolphin(DeviceInfo.screenRoles(this@MainActivity, prefs.swapScreens).topDisplayId, "Closing the game…")
             }
             io.github.hiramrg.delphis.platform.DolphinExitService.hideLoading()
-            // Dolphin is in the background now (Delphis is on screen), so Android lets Delphis close it.
-            pkg?.let { p -> runCatching { getSystemService(android.app.ActivityManager::class.java).killBackgroundProcesses(p) } }
+            pkg?.let { p ->
+                // No app may force-stop another, so Dolphin's card is removed from Recent apps (Android then
+                // ends its process); the background-process call is a fallback.
+                val label = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(p, 0)).toString() }.getOrDefault("Dolphin")
+                runCatching { io.github.hiramrg.delphis.platform.DolphinExitService.dismissFromRecents(label) }
+                runCatching { getSystemService(android.app.ActivityManager::class.java).killBackgroundProcesses(p) }
+            }
             runCatching { io.github.hiramrg.delphis.platform.MenuMusic.stop() }
             MenuCompanion.close()
             finishAndRemoveTask()

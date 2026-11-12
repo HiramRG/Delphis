@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.lazy.LazyColumn
@@ -780,7 +781,15 @@ private fun GameRowView(act: MainActivity, row: HomeRow, games: List<GameEntry>,
             }
             Text("${games.size}", fontSize = 12.sp, color = c.textDim, fontWeight = FontWeight.Bold)
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(vertical = 4.dp, horizontal = 3.dp)) {
+        // Coming into a row from above or below always puts the cursor on its first game; a row the
+        // cursor left scrolls back to its start, so that first game is ready.
+        val rowState = androidx.compose.foundation.lazy.rememberLazyListState()
+        LaunchedEffect(focused) { if (!focused) runCatching { rowState.scrollToItem(0) } }
+        @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+        LazyRow(
+            Modifier.focusProperties { enter = { first } }.focusGroup(),
+            state = rowState, horizontalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(vertical = 4.dp, horizontal = 3.dp),
+        ) {
             itemsIndexed(games, key = { _, g -> row.name + g.uri.toString() }) { i, g -> RowTile(act, row, g, coverW, g.key in favorites, focus = if (i == 0) first else null) }
             // Favorites keeps its "+" at the end.
             if (row == HomeRow.FAVORITES) item(key = "add") { AddTile(act, row, onAddFavorites) }
@@ -933,16 +942,17 @@ private fun HomeBar(act: MainActivity, rowsMode: Boolean, lit: Boolean) {
                 .onFocusChanged { if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeRow = null } }
                 .clickable { act.screen = Screen.Settings },
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Filled.Settings, "Settings", tint = c.textDim) }
-        // ⊖ opens Settings too.
+        ) { Icon(Icons.Filled.Settings, "Settings", tint = c.textDim, modifier = Modifier.size(20.dp)) }
+        // ⊖ opens Settings too. Same spacing for each button and its shortcut: ⚙ ⊖ · ⏻ Hold Ⓑ.
         Box(Modifier.padding(start = 8.dp)) { KeyIcon("⊖") }
         // ⏻ exits Delphis (asks first). Holding Ⓑ on Home does the same.
         Box(
-            Modifier.padding(start = 10.dp).size(36.dp).focusRing(RoundedCornerShape(50)).clip(RoundedCornerShape(50)).background(c.card).border(2.dp, c.cardBorder, RoundedCornerShape(50))
+            Modifier.padding(start = 16.dp).size(36.dp).focusRing(RoundedCornerShape(50)).clip(RoundedCornerShape(50)).background(c.card).border(2.dp, c.cardBorder, RoundedCornerShape(50))
                 .onFocusChanged { if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeRow = null } }
                 .clickable { act.exitPrompt = true },
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.Outlined.PowerSettingsNew, "Exit Delphis", tint = c.textDim, modifier = Modifier.size(20.dp)) }
+        HintText("Hold Ⓑ", Modifier.padding(start = 8.dp), fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold)
         Text(rememberClock(withDate = true), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.weight(1f))
         // No button hints here: the pinned card and the rail show them. On a row, its sort (R1 changes it);
         // a hint only when something needs one (the search box).

@@ -46,6 +46,9 @@ class DolphinExitService : AccessibilityService() {
         /** See [exitEmulation]. Null when the service isn't running. */
         suspend fun exit(pkg: String): Result? = instance?.exitEmulation(pkg)
 
+        /** See [dismissFromRecentsImpl]. False when the service isn't running. */
+        suspend fun dismissFromRecents(appLabel: String): Boolean = instance?.dismissFromRecentsImpl(appLabel) ?: false
+
         /** See [pressQuickSave]. Null when the service isn't running. */
         suspend fun quickSave(pkg: String): StateResult? = instance?.pressQuickSave(pkg)
 
@@ -270,6 +273,55 @@ class DolphinExitService : AccessibilityService() {
             return if (ok) StateResult.DONE else StateResult.FAILED
         }
         return StateResult.FAILED
+    }
+
+    /**
+     * Removes an app's card from Recent apps, the way a person would: opens Recents, finds the card by the
+     * app's name, presses its "Close" action (or swipes it up), then goes Home. Android then ends that app's
+     * process. Used by "Exit Delphis" for Dolphin, since no app may force-stop another one.
+     */
+    suspend fun dismissFromRecentsImpl(appLabel: String): Boolean {
+        if (!performGlobalAction(GLOBAL_ACTION_RECENTS)) return false
+        delay(900)
+        var done = false
+        for (attempt in 0 until 3) {
+            val roots = runCatching { windows.mapNotNull { it.root } }.getOrDefault(emptyList()) +
+                listOfNotNull(runCatching { rootInActiveWindow }.getOrNull())
+            val label = roots.filter { it.packageName?.toString() != packageName }.firstNotNullOfOrNull { r -> runCatching { r.findAccessibilityNodeInfosByText(appLabel).firstOrNull() }.getOrNull() }
+            if (label == null) { delay(500); continue }
+            // The card offers a "Close" action (Launcher3 adds it to each task); walk up to find it.
+            var n: AccessibilityNodeInfo? = label
+            while (n != null && !done) {
+                val act = n.actionList.firstOrNull { a ->
+                    a.id == AccessibilityNodeInfo.AccessibilityAction.ACTION_DISMISS.id ||
+                        (a.label?.toString()?.lowercase()?.let { l -> listOf("close", "dismiss", "remove", "cerrar", "descartar", "quitar").any { it in l } } == true)
+                }
+                if (act != null) done = n.performAction(act.id)
+                n = n.parent
+            }
+            if (!done) done = swipeUp(label)
+            if (done) break
+            delay(400)
+        }
+        delay(600)
+        performGlobalAction(GLOBAL_ACTION_HOME)
+        CrashLog.event("dismiss $appLabel from recents: " + if (done) "done" else "not found")
+        return done
+    }
+
+    /** Swipes a Recents card up (from just below its label, where the card's picture is). */
+    private suspend fun swipeUp(label: AccessibilityNodeInfo): Boolean {
+        val r = android.graphics.Rect(); label.getBoundsInScreen(r)
+        val path = android.graphics.Path().apply { moveTo(r.centerX().toFloat(), (r.bottom + 260).toFloat()); lineTo(r.centerX().toFloat(), 20f) }
+        val builder = android.accessibilityservice.GestureDescription.Builder()
+            .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 250))
+        if (android.os.Build.VERSION.SDK_INT >= 30) runCatching { label.window?.displayId?.let { builder.setDisplayId(it) } }
+        val result = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        val sent = dispatchGesture(builder.build(), object : GestureResultCallback() {
+            override fun onCompleted(g: android.accessibilityservice.GestureDescription?) { result.complete(true) }
+            override fun onCancelled(g: android.accessibilityservice.GestureDescription?) { result.complete(false) }
+        }, null)
+        return sent && (kotlinx.coroutines.withTimeoutOrNull(1500) { result.await() } ?: false)
     }
 
     /** Opens Dolphin's menu and presses "Exit Emulation", then waits until the game screen is gone. */
