@@ -390,6 +390,13 @@ class NowPlayingActivity : ComponentActivity() {
         var screenChoice by remember { mutableStateOf(screenGid?.let { prefs.screenFor(it) }) }
         val runningScreen = remember(startedAt) { screenGid?.let { prefs.screenFor(it) } }
         var showPicture by remember { mutableStateOf(false) }
+        // Looks: the game's post-processing shader; a change applies when the game starts again.
+        val lookGid = gid?.takeIf { prefs.looksEnabled }
+        var look by remember { mutableStateOf(lookGid?.let { prefs.lookFor(it) }) }
+        val runningLook = remember(startedAt) { lookGid?.let { prefs.lookFor(it) } }
+        var pictureTab by remember { mutableIntStateOf(0) }
+        var pictureBefore by remember { mutableStateOf<Pair<io.github.hiramrg.delphis.core.GameScreen.Choice?, io.github.hiramrg.delphis.core.Looks.Look?>?>(null) }
+        fun openPicture(tab: Int) { pictureBefore = screenChoice to look; pictureTab = tab; showBrightness = false; showPicture = true }
         val sideColour by produceState(android.graphics.Color.rgb(75, 58, 143), screenGid) {
             screenGid?.let { value = io.github.hiramrg.delphis.platform.SideFill.colourOf(io.github.hiramrg.delphis.platform.CoverArt(this@NowPlayingActivity).load(it)) }
         }
@@ -503,36 +510,35 @@ class NowPlayingActivity : ComponentActivity() {
         ) {
             StatusBanner(Modifier.alpha(contentAlpha * fade))
             Column(Modifier.fillMaxSize().alpha(contentAlpha).padding(start = 10.dp, end = 10.dp, top = 28.dp, bottom = 6.dp)) {
-                // ---------------- top bar: Home | title (centred) | brightness
-                Box(Modifier.fillMaxWidth().alpha(fade)) {
-                    Box(Modifier.align(Alignment.CenterStart)) {
-                        TopChip("⌂ Home") { if (prefs.skipExitWarning) backToMainMenu() else confirmExit = true }
-                    }
-                    Column(
-                        Modifier.align(Alignment.Center).padding(horizontal = 104.dp + (if (achievements != null) 46.dp else 0.dp) + (if (screenGid != null) 50.dp else 0.dp)),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(s.info.title, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        Text(
-                            (if (!s.applied) "⚠ not applied · " else "") + preset.controller.label,
-                            fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            color = if (s.applied) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.tertiary,
-                        )
-                    }
-                    Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (achievements != null && mode == Mode.VIEW) AchievementsChip(
-                            achievements, onClick = { showAchievements = !showAchievements }, compact = true, active = showAchievements,
-                        )
-                        screenChoice?.let { sc ->
-                            TopChip("▭ " + (if (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) "16:9" else "4:3"), on = showPicture) {
-                                showBrightness = false; showPicture = !showPicture
-                            }
-                        }
-                        TopChip("☀", on = showBrightness) {
-                            showPicture = false
-                            showBrightness = !showBrightness
+                // ---------------- top bar: chips only (Home | 🏆 ▭ ✦ ☀), then the game's name on its own line
+                Row(Modifier.fillMaxWidth().alpha(fade), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TopChip("⌂ Home") { if (prefs.skipExitWarning) backToMainMenu() else confirmExit = true }
+                    Spacer(Modifier.weight(1f))
+                    if (achievements != null && mode == Mode.VIEW) AchievementsChip(
+                        achievements, onClick = { showAchievements = !showAchievements }, compact = true, active = showAchievements,
+                    )
+                    screenChoice?.let { sc ->
+                        TopChip("▭ " + (if (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) "16:9" else "4:3"), on = showPicture && pictureTab == 0) {
+                            if (showPicture) showPicture = false else openPicture(0)
                         }
                     }
+                    look?.let { l ->
+                        TopChip("✦ " + l.label, on = showPicture && (pictureTab == 1 || screenChoice == null)) {
+                            if (showPicture) showPicture = false else openPicture(1)
+                        }
+                    }
+                    TopChip("☀", on = showBrightness) {
+                        showPicture = false
+                        showBrightness = !showBrightness
+                    }
+                }
+                Column(Modifier.fillMaxWidth().padding(top = 6.dp).alpha(fade), horizontalAlignment = Alignment.CenterHorizontally) {
+                    ScrollingTitle(s.info.title)
+                    Text(
+                        (if (!s.applied) "⚠ not applied · " else "") + preset.controller.label,
+                        fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        color = if (s.applied) LocalWii.current.textDim else MaterialTheme.colorScheme.tertiary,
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
 
@@ -670,30 +676,32 @@ class NowPlayingActivity : ComponentActivity() {
                 )
             }
 
-            // Picture (GameCube): 4:3 sides change right away; shape / 16:9 fill need a restart.
-            if (showPicture && screenChoice != null && screenGid != null) {
-                val wc = LocalWii.current
-                Box(Modifier.fillMaxSize().clickable { showPicture = false }) {
-                    PopupPanel(
-                        if (screenChoice!!.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD) "Picture · sides change right away" else "Picture · 16:9 fill",
-                        if (screenChoice!!.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD) "4:3 · what goes in the sides?" else "16:9 · how it fills the screen",
-                        Modifier.align(Alignment.TopCenter).padding(top = 74.dp, start = 12.dp, end = 12.dp).fillMaxWidth().clickable(enabled = false) {},
-                        corner = {
-                            Segmented(
-                                listOf(io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD to "4:3", io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE to "16:9"),
-                                screenChoice!!.shape, { sh -> screenChoice = screenChoice!!.copy(shape = sh); prefs.setScreenFor(screenGid, screenChoice!!) },
-                            )
-                        },
-                    ) {
-                        ScreenChoices(screenChoice!!, screenGid, prefs.gcUseHack, sideColour, 128.dp, showSub = false) { ch -> screenChoice = ch; prefs.setScreenFor(screenGid, ch) }
-                        val needsRestart = runningScreen != null && (screenChoice!!.shape != runningScreen.shape ||
-                            (screenChoice!!.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE && screenChoice!!.fill != runningScreen.fill))
-                        if (needsRestart) Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Dolphin applies this when the game starts.", fontSize = 11.sp, color = wc.textDim, modifier = Modifier.weight(1f))
-                            PanelBtn("Restart game", null, true) { showPicture = false; restartAction = { applyAndRestart(s, preset, remember = false) } }
+            // Picture: ▭ Screen (GameCube; the sides change right away, shape / 16:9 fill need a restart)
+            // and ✦ Look (needs a restart). Touch only here: in game the Thor's buttons belong to Dolphin.
+            if (showPicture && (screenChoice != null || look != null)) {
+                val sc = screenChoice
+                val needsRestart = (runningScreen != null && sc != null && (sc.shape != runningScreen.shape ||
+                    (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE && sc.fill != runningScreen.fill))) ||
+                    (look != null && look != runningLook)
+                PicturePanel(
+                    s.info.title, pictureTab, { pictureTab = it },
+                    sc, screenGid, prefs.gcUseHack, sideColour, { ch -> screenChoice = ch; screenGid?.let { prefs.setScreenFor(it, ch) } },
+                    look, { l -> look = l; lookGid?.let { prefs.setLookFor(it, l) } },
+                    onCancel = {
+                        pictureBefore?.let { (bs, bl) ->
+                            if (bs != null) { screenChoice = bs; screenGid?.let { prefs.setScreenFor(it, bs) } }
+                            if (bl != null) { look = bl; lookGid?.let { prefs.setLookFor(it, bl) } }
                         }
-                    }
-                }
+                        showPicture = false
+                    },
+                    onDone = {
+                        showPicture = false
+                        if (needsRestart) restartAction = { applyAndRestart(s, preset, remember = false) }
+                    },
+                    doneLabel = if (needsRestart) "Restart game" else "Done",
+                    note = if (needsRestart) "Dolphin applies this when the game starts." else null,
+                    compact = true,
+                )
             }
 
             // In-window dialogs (no separate dialog window, so Dolphin keeps gamepad focus).

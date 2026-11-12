@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -142,46 +143,120 @@ fun screenStep(c: Choice, delta: Int): Choice {
     return all[(i + delta).coerceIn(0, all.lastIndex)]
 }
 
+/** The look the D-pad lands on from [l]: ◀ ▶ = ±1, ▲ ▼ = ±3 (the grid is 3 wide). */
+fun lookStep(l: io.github.hiramrg.delphis.core.Looks.Look, delta: Int): io.github.hiramrg.delphis.core.Looks.Look {
+    val all = io.github.hiramrg.delphis.core.Looks.Look.entries
+    return all[(l.ordinal + delta).coerceIn(0, all.lastIndex)]
+}
+
 /**
- * The screen picker, on the page (not a pop-up, so the cards sit side by side and the gamepad keeps
- * working): L1 / R1 = 4:3 / 16:9, D-pad ◀ ▶ = pick a card, Ⓐ Done, Ⓑ Cancel. Keys are handled by the page.
+ * The Picture panel, on the page (not a pop-up, so the gamepad keeps working): two tabs, ▭ Screen (GameCube)
+ * and ✦ Look, switched with L1 / R1. Screen: Ⓨ = 4:3 / 16:9, ◀ ▶ = card. Look: the D-pad moves on the grid.
+ * Ⓐ Done, Ⓑ Cancel. Keys are handled by the page. [choice] null = no Screen tab; [look] null = no Look tab.
  */
 @Composable
-fun BoxScope.ScreenPanel(
-    gameTitle: String, choice: Choice, gameId: String?, useHack: Boolean, colour: Int,
-    onPick: (Choice) -> Unit, onCancel: () -> Unit, onDone: () -> Unit,
+fun BoxScope.PicturePanel(
+    gameTitle: String, tab: Int, onTab: (Int) -> Unit,
+    choice: Choice?, gameId: String?, useHack: Boolean, colour: Int, onPick: (Choice) -> Unit,
+    look: io.github.hiramrg.delphis.core.Looks.Look?, onLook: (io.github.hiramrg.delphis.core.Looks.Look) -> Unit,
+    onCancel: () -> Unit, onDone: () -> Unit, doneLabel: String = "Done", note: String? = null, compact: Boolean = false,
 ) {
     val c = LocalWii.current
     Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.6f)).clickable(onClick = onCancel))
-    val shape = RoundedCornerShape(20.dp)
-    Column(
-        Modifier.align(Alignment.Center).fillMaxWidth(0.9f).clip(shape)
-            .background(if (c.dark) c.sidebar else c.card).border(2.dp, Sel, shape)
-            .clickable(enabled = false) {}.padding(horizontal = 16.dp, vertical = 12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("SCREEN · " + gameTitle.uppercase(), fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp, color = c.textDim, maxLines = 1)
-                Text(if (choice.shape == Shape.WIDE) "16:9 · stretch it or show more of the world?" else "4:3 · what goes in the sides?",
-                    fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+    val showLook = look != null && (tab == 1 || choice == null)
+    PopupPanel(
+        "Picture · $gameTitle",
+        if (showLook) "Look · how should the picture look?" else if (choice!!.shape == Shape.WIDE) "Screen · 16:9: stretch it or show more of the world?" else "Screen · 4:3: what goes in the sides?",
+        Modifier.align(if (compact) Alignment.TopCenter else Alignment.Center).padding(top = if (compact) 6.dp else 0.dp)
+            .fillMaxWidth(if (compact) 0.97f else 0.9f).clickable(enabled = false) {},
+        corner = if (choice != null && look != null) ({
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (!compact) KeyIcon("L1")
+                Segmented(listOf(0 to "▭ Screen", 1 to "✦ Look"), if (showLook) 1 else 0, onTab)
+                if (!compact) KeyIcon("R1")
             }
-            KeyBadge("L1")
-            ShapeSwitch(choice.shape, { onPick(choice.copy(shape = it)) })
-            KeyBadge("R1")
+        }) else null,
+        buttons = {
+            if (note != null) Text(note, fontSize = 11.sp, color = c.textDim, modifier = Modifier.weight(1f), lineHeight = 14.sp)
+            else if (!compact) Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                KeyIcon(if (showLook) "DPAD" else "DPAD_LR"); Text("Choose", fontSize = 12.sp, color = c.textDim)
+            }
+            PanelBtn("Cancel", if (compact) null else "B", false, onClick = onCancel)
+            PanelBtn(doneLabel, if (compact) null else "A", true, onClick = onDone)
+        },
+    ) {
+        if (!showLook) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CapsLabel(if (choice!!.shape == Shape.WIDE) "16:9 fill" else "Sides · change right away", Modifier.weight(1f))
+                Segmented(listOf(Shape.STANDARD to "4:3", Shape.WIDE to "16:9"), choice.shape, { onPick(choice.copy(shape = it)) })
+                if (!compact) KeyIcon("Y")
+            }
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                // Every card is a third of the width in both views, so the panel keeps its height; 16:9's two sit centred.
+                val w = (maxWidth - 20.dp) / 3
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { ScreenChoices(choice!!, gameId, useHack, colour, w, showSub = !compact, onPick = onPick) }
+            }
+        } else {
+            val looks = io.github.hiramrg.delphis.core.Looks.Look.entries
+            looks.chunked(3).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { l -> LookCard(l, l == look, compact, Modifier.weight(1f)) { onLook(l) } }
+                }
+            }
         }
-        Spacer(Modifier.height(10.dp))
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            // Every card is a third of the width in both views, so the panel keeps its height; 16:9's two sit centred.
-            val w = (maxWidth - 20.dp) / 3
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { ScreenChoices(choice, gameId, useHack, colour, w, onPick = onPick) }
-        }
-        Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            KeyIcon("DPAD_LR")
-            Text("Choose", fontSize = 12.sp, color = c.textDim)
+    }
+}
+
+@Composable
+private fun LookCard(l: io.github.hiramrg.delphis.core.Looks.Look, on: Boolean, compact: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier.focusRing(shape).clip(shape).background(if (on) (if (c.dark) Color(0xFF173444) else c.accentSoft) else (if (c.dark) Color(0xFF20252B) else c.card))
+            .border(if (on) 3.dp else 2.dp, if (on) Sel else c.cardBorder, shape).clickable(onClick = onClick).padding(6.dp),
+    ) {
+        Box(Modifier.fillMaxWidth().aspectRatio(if (compact) 2.6f else 2.1f).clip(RoundedCornerShape(7.dp))) { LookPreview(l) }
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(l.label, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+            if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF6BCB77))
             Spacer(Modifier.weight(1f))
-            PanelButton("Cancel", "B", primary = false, onClick = onCancel)
-            PanelButton("Done", "A", primary = true, onClick = onDone)
+            when (l.cost) {
+                io.github.hiramrg.delphis.core.Looks.Cost.LIGHT -> CostTag("⚡ Light", Color(0xFF6BCB77), Color(0xFF1F3B2A))
+                io.github.hiramrg.delphis.core.Looks.Cost.MEDIUM -> CostTag("⚡⚡ Medium", Color(0xFFF5C542), Color(0xFF3D331A))
+                else -> {}
+            }
         }
+        if (!compact) Text(l.description, fontSize = 10.5.sp, color = c.textDim, lineHeight = 13.sp, minLines = 2, maxLines = 2)
+    }
+}
+
+@Composable
+private fun CostTag(text: String, fg: Color, bg: Color) {
+    Text(text, fontSize = 9.5.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1, softWrap = false,
+        modifier = Modifier.clip(RoundedCornerShape(7.dp)).background(bg).padding(horizontal = 5.dp, vertical = 1.dp))
+}
+
+/** A drawn scene (sky, hills, a red car) showing roughly what each look does. Not real shader output. */
+@Composable
+private fun LookPreview(l: io.github.hiramrg.delphis.core.Looks.Look) {
+    val L = io.github.hiramrg.delphis.core.Looks.Look
+    val vivid = l == L.VIVID
+    Canvas(Modifier.fillMaxSize().then(if (l == L.SOFT) Modifier.blur(0.8.dp) else Modifier)) {
+        val w = size.width; val h = size.height
+        val sky = if (vivid) listOf(Color(0xFF2E8BFF), Color(0xFF9FDCFF)) else listOf(Color(0xFF5AA9FF), Color(0xFFBFE6FF))
+        drawRect(Brush.verticalGradient(sky))
+        drawCircle(if (vivid) Color(0xFFFFD640) else Color(0xFFFFE27A), h * 0.1f, Offset(w * 0.8f, h * 0.22f))
+        val hill = androidx.compose.ui.graphics.Path().apply {
+            moveTo(0f, h * 0.68f); lineTo(w * 0.2f, h * 0.42f); lineTo(w * 0.34f, h * 0.6f); lineTo(w * 0.5f, h * 0.34f)
+            lineTo(w * 0.7f, h * 0.64f); lineTo(w * 0.85f, h * 0.48f); lineTo(w, h * 0.66f); lineTo(w, h); lineTo(0f, h); close()
+        }
+        drawPath(hill, if (vivid) Color(0xFF4FA03A) else Color(0xFF6B8F5E))
+        drawRect(if (vivid) Color(0xFF2FB52A) else Color(0xFF4F9A3A), Offset(0f, h * 0.78f), Size(w, h * 0.22f))
+        val car = Color(if (vivid) 0xFFF03A1E else 0xFFD8442C)
+        drawRoundRect(car, Offset(w * 0.44f, h * 0.68f), Size(w * 0.12f, h * 0.14f), CornerRadius(3f))
+        if (l == L.SHARP) drawRoundRect(Color(0xFF3A120A), Offset(w * 0.44f, h * 0.68f), Size(w * 0.12f, h * 0.14f), CornerRadius(3f), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+        if (l == L.SCANLINES || l == L.CRT) { var y = 0f; while (y < h) { drawRect(Color.Black.copy(alpha = 0.3f), Offset(0f, y), Size(w, 1.2f)); y += 3.5f } }
+        if (l == L.CRT) drawRect(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)), center = Offset(w / 2, h / 2), radius = w * 0.65f))
     }
 }
 

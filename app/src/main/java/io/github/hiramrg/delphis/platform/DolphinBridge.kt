@@ -87,6 +87,23 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         }.onFailure { CrashLog.event("screen settings not written: ${it.message}") }
     }
 
+    /** Copies the look's shader into Dolphin's Shaders folder (if needed) and picks it in the game's settings file. */
+    fun applyLook(gameId: String, look: io.github.hiramrg.delphis.core.Looks.Look) {
+        val tree = prefs.dolphinTreeUri ?: return
+        runCatching {
+            val file = look.file
+            val src = io.github.hiramrg.delphis.core.Looks.source(look)
+            if (file != null && src != null) {
+                val path = listOf("Shaders", "$file.glsl")
+                if (readText(tree, path) != src) writeText(tree, path, src)
+            }
+            val iniPath = DolphinConfigWriter.gameIniPath(gameId)
+            val existing = readText(tree, iniPath) ?: ""
+            val updated = io.github.hiramrg.delphis.core.Looks.applyToGameIni(existing, look)
+            if (updated != existing) writeText(tree, iniPath, updated)
+        }.onFailure { CrashLog.event("look not written: ${it.message}") }
+    }
+
     /** Creates Config/WiimoteNew.ini and GCPadNew.ini if Dolphin hasn't yet; without them Dolphin ignores per-game profiles. */
     private fun ensureBaseConfig(tree: Uri, controller: ControllerProfile) {
         for (path in DolphinConfigWriter.baseConfigPaths()) {

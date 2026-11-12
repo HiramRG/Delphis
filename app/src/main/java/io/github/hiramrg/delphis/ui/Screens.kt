@@ -214,6 +214,12 @@ fun HomeScreen(act: MainActivity) {
         if (prog != null) AchievementsDialog(prog) { achGame = null }
     }
 
+    var holdingB by remember { mutableStateOf(false) }
+    LaunchedEffect(holdingB) { if (holdingB) { delay(1000); if (holdingB) { holdingB = false; act.exitAll() } } }
+    if (act.exitPrompt) ConfirmDialog(
+        "Delphis", "Exit Delphis?", "Closes Delphis on both screens and closes Dolphin too, so nothing keeps running in the background.",
+        confirm = "⏻ Exit", onCancel = { act.exitPrompt = false },
+    ) { act.exitAll() }
     val onKey by rememberUpdatedState<(KeyEvent) -> Boolean> { e ->
         val target = act.focusedGame ?: hero
         if (act.searchEditing) return@rememberUpdatedState false
@@ -247,8 +253,16 @@ fun HomeScreen(act: MainActivity) {
             KeyEvent.KEYCODE_BUTTON_X -> { if (e.firstPress()) target?.let { act.openGame(it) }; true }
             KeyEvent.KEYCODE_BUTTON_Y -> { if (e.firstPress()) target?.let { act.prefs.toggleFavorite(it.key); act.statsVersion++ }; true }
             KeyEvent.KEYCODE_BUTTON_L1 -> { if (e.firstPress()) act.libraryOpen = !act.libraryOpen; true }
-            // Ⓑ in search goes back to the rows.
-            KeyEvent.KEYCODE_BUTTON_B -> if (act.searchOpen && act.libraryQuery.isBlank()) { if (e.firstPress()) act.searchOpen = false; true } else false
+            // Ⓑ in search goes back to the rows; elsewhere, holding Ⓑ for a second exits Delphis.
+            KeyEvent.KEYCODE_BUTTON_B -> when {
+                act.searchOpen && act.libraryQuery.isBlank() -> { if (e.firstPress()) act.searchOpen = false; true }
+                act.searchOpen -> false
+                else -> {
+                    if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) holdingB = true
+                    else if (e.action == KeyEvent.ACTION_UP) holdingB = false
+                    true
+                }
+            }
             KeyEvent.KEYCODE_BUTTON_R1 -> {
                 if (e.firstPress()) {
                     val row = act.homeRow
@@ -344,6 +358,7 @@ fun HomeScreen(act: MainActivity) {
     val row = act.homeRow
     if (rowsMode && row != null && row.sortable && sortPopup) SortPopup(rowSort(act, row), Modifier.align(Alignment.BottomEnd).padding(end = 150.dp, bottom = 62.dp))
     if (showFavPicker) FavoritesPicker(act, favorites) { showFavPicker = false }
+    if (holdingB) HoldToExit(Modifier.align(Alignment.Center))
     }
 }
 
@@ -921,6 +936,13 @@ private fun HomeBar(act: MainActivity, rowsMode: Boolean, lit: Boolean) {
         ) { Icon(Icons.Filled.Settings, "Settings", tint = c.textDim) }
         // ⊖ opens Settings too.
         Box(Modifier.padding(start = 8.dp)) { KeyIcon("⊖") }
+        // ⏻ exits Delphis (asks first). Holding Ⓑ on Home does the same.
+        Box(
+            Modifier.padding(start = 10.dp).size(36.dp).focusRing(RoundedCornerShape(50)).clip(RoundedCornerShape(50)).background(c.card).border(2.dp, c.cardBorder, RoundedCornerShape(50))
+                .onFocusChanged { if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeRow = null } }
+                .clickable { act.exitPrompt = true },
+            contentAlignment = Alignment.Center,
+        ) { Icon(Icons.Outlined.PowerSettingsNew, "Exit Delphis", tint = c.textDim, modifier = Modifier.size(20.dp)) }
         Text(rememberClock(withDate = true), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.weight(1f))
         // No button hints here: the pinned card and the rail show them. On a row, its sort (R1 changes it);
         // a hint only when something needs one (the search box).
@@ -1287,8 +1309,15 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     fun setScreen(c: io.github.hiramrg.delphis.core.GameScreen.Choice) { screen = c; screenGid?.let { act.prefs.setScreenFor(it, c) } }
     // What was set when the picker opened: Ⓑ / Cancel goes back to it.
     var screenBefore by remember { mutableStateOf(screen) }
-    fun openScreen() { screenBefore = screen; showScreen = true }
-    fun cancelScreen() { screenBefore?.let { setScreen(it) }; showScreen = false }
+    // Looks (post-processing shader), per game: shares the Picture panel with the screen.
+    val lookGid = game.info.gameId?.takeIf { act.prefs.looksEnabled }
+    var look by remember(game.key) { mutableStateOf(lookGid?.let { act.prefs.lookFor(it) }) }
+    var lookBefore by remember { mutableStateOf(look) }
+    var pictureTab by remember { mutableIntStateOf(0) }
+    fun setLook(l: io.github.hiramrg.delphis.core.Looks.Look) { look = l; lookGid?.let { act.prefs.setLookFor(it, l) } }
+    fun openScreen() { screenBefore = screen; lookBefore = look; pictureTab = if (screen == null) 1 else 0; showScreen = true }
+    fun cancelScreen() { screenBefore?.let { setScreen(it) }; lookBefore?.let { setLook(it) }; showScreen = false }
+    val hasPicture = screen != null || look != null
 
     // Physical buttons: A = use the preset under the ring, or Play if it's already in use; Start = Play;
     // D-pad = move the ring, X = Edit,
@@ -1314,13 +1343,19 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             }
             return@rememberUpdatedState true
         }
-        if (showScreen && sc != null) {
-            // Screen picker open: L1 / R1 = 4:3 / 16:9, ◀ ▶ = card, Ⓐ Done, Ⓑ Cancel; nothing else reaches the page.
+        if (showScreen && hasPicture) {
+            // Picture panel open: L1 / R1 = Screen / Look tab; Screen: Ⓨ = 4:3 / 16:9, ◀ ▶ = card;
+            // Look: the D-pad moves on the grid. Ⓐ Done, Ⓑ Cancel; nothing else reaches the page.
+            val onLook = look != null && (pictureTab == 1 || sc == null)
+            val lk = look
             if (e.action == KeyEvent.ACTION_DOWN) when (e.keyCode) {
-                KeyEvent.KEYCODE_BUTTON_L1 -> setScreen(sc.copy(shape = io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD))
-                KeyEvent.KEYCODE_BUTTON_R1 -> setScreen(sc.copy(shape = io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE))
-                KeyEvent.KEYCODE_DPAD_LEFT -> setScreen(screenStep(sc, -1))
-                KeyEvent.KEYCODE_DPAD_RIGHT -> setScreen(screenStep(sc, 1))
+                KeyEvent.KEYCODE_BUTTON_L1 -> if (sc != null) pictureTab = 0
+                KeyEvent.KEYCODE_BUTTON_R1 -> if (look != null) pictureTab = 1
+                KeyEvent.KEYCODE_BUTTON_Y -> if (!onLook && sc != null && e.repeatCount == 0) setScreen(sc.copy(shape = if (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD else io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE))
+                KeyEvent.KEYCODE_DPAD_LEFT -> if (onLook && lk != null) setLook(lookStep(lk, -1)) else if (sc != null) setScreen(screenStep(sc, -1))
+                KeyEvent.KEYCODE_DPAD_RIGHT -> if (onLook && lk != null) setLook(lookStep(lk, 1)) else if (sc != null) setScreen(screenStep(sc, 1))
+                KeyEvent.KEYCODE_DPAD_UP -> if (onLook && lk != null) setLook(lookStep(lk, -3))
+                KeyEvent.KEYCODE_DPAD_DOWN -> if (onLook && lk != null) setLook(lookStep(lk, 3))
                 KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> if (e.repeatCount == 0) showScreen = false
                 KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_BUTTON_SELECT -> if (e.repeatCount == 0) cancelScreen()
             }
@@ -1338,8 +1373,13 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             KeyEvent.KEYCODE_BUTTON_R2 -> { if (e.repeatCount == 0 && backups.isNotEmpty()) showBackups = true; true }
             KeyEvent.KEYCODE_BUTTON_L2 -> { if (e.repeatCount == 0 && !showList) viewToggle++; true }
             KeyEvent.KEYCODE_BUTTON_SELECT -> {
-                if (e.repeatCount == 0) { if (multiplayer) showPlayers = true else if (screen != null) openScreen() }
-                multiplayer || screen != null
+                if (e.repeatCount == 0) { if (multiplayer) showPlayers = true else if (hasPicture) openScreen() }
+                multiplayer || hasPicture
+            }
+            // Multiplayer: ⊖ is Players, so the Picture panel opens with L3.
+            KeyEvent.KEYCODE_BUTTON_THUMBL -> {
+                if (e.repeatCount == 0 && multiplayer && hasPicture) openScreen()
+                multiplayer && hasPicture
             }
             KeyEvent.KEYCODE_BUTTON_THUMBR -> { if (e.repeatCount == 0 && achievements != null) showAchievements = true; achievements != null }
             else -> false
@@ -1351,10 +1391,10 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     val shown = p.focused ?: p.selected
 
     Box(Modifier.fillMaxSize()) {
-    Row(Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(Modifier.fillMaxSize()) {
+    Row(Modifier.weight(1f).fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         // Left: the game, then Edit and Play.
         Column(Modifier.fillMaxHeight().width(160.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            BackLink("Home") { act.screen = Screen.Home }
             // No accent frame: the only blue ring is the one that follows the D-pad focus.
             Box(Modifier.weight(1f, fill = false).aspectRatio(0.72f).clip(RoundedCornerShape(14.dp))) {
                 Cover(act, game, act.prefs.showCovers, Modifier.fillMaxSize(), titleSize = 14)
@@ -1377,7 +1417,12 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                     val newPad = pads.any { !it.builtIn && it.byLabel == null }
                     val n = io.github.hiramrg.delphis.core.Players.assign(pads, playerSetup).size
                     GameChip(if (newPad) "🎮 New controller" else "🎮 $n player" + (if (n == 1) "" else "s"), "⊖", warn = newPad) { showPlayers = true }
-                } else screen?.let { sc -> GameChip("▭ " + screenChipLabel(sc, screenGid, act.prefs.gcUseHack), "⊖") { openScreen() } }
+                }
+                // One Picture chip for the screen (GameCube) and the look: "▭ 16:9 · ✦ CRT".
+                if (hasPicture) {
+                    val parts = listOfNotNull(screen?.let { if (look != null) "▭ " + (if (it.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) "16:9" else "4:3") else "▭ " + screenChipLabel(it, screenGid, act.prefs.gcUseHack) }, look?.let { "✦ " + it.label })
+                    GameChip(parts.joinToString(" · "), if (multiplayer) "L3" else "⊖") { openScreen() }
+                }
                 Spacer(Modifier.weight(1f))
                 if (canAutosave) GameChip((if (gameAutosave) "✓ " else "") + "Autosave", "L1", on = gameAutosave) { toggleGameAutosave() }
                 GameChip((if (p.rememberChoice) "✓ " else "") + "Remember", "R1", on = p.rememberChoice) { p.rememberChoice = !p.rememberChoice }
@@ -1430,6 +1475,9 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             }
         }
     }
+    // The same bottom bar as Home; "◀ Home Ⓑ" lives in it.
+    AppBottomBar(null, leading = { HomeBarPill { act.screen = Screen.Home }; Spacer(Modifier.width(14.dp)) })
+    }
     confirmReset?.let { r -> ResetConfirm(r.name, wide = true, onKeep = { confirmReset = null }) { confirmReset = null; p.resetToDefault(r) } }
     confirmDelete?.let { d ->
         Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.6f)).clickable { confirmDelete = null })
@@ -1440,8 +1488,12 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         )
     }
     val sc = screen
-    if (showScreen && sc != null) ScreenPanel(game.info.title, sc, screenGid, act.prefs.gcUseHack, coverColour,
-        onPick = { setScreen(it) }, onCancel = { cancelScreen() }, onDone = { showScreen = false })
+    if (showScreen && hasPicture) PicturePanel(
+        game.info.title, pictureTab, { pictureTab = it },
+        sc, screenGid, act.prefs.gcUseHack, coverColour, { setScreen(it) },
+        look, { setLook(it) },
+        onCancel = { cancelScreen() }, onDone = { showScreen = false },
+    )
     }
 }
 
@@ -2017,6 +2069,24 @@ private fun DisplaySettings(act: MainActivity) {
     }
     Text("Delphis turns on Dolphin's own widescreen code when it ships one for the game (cheats on for that game only). Dolphin applies all of this when a game starts.",
         fontSize = 12.sp, color = c.textDim)
+    // Looks (post-processing shaders), every game.
+    var looksOn by remember { mutableStateOf(prefs.looksEnabled) }
+    var defLook by remember { mutableStateOf(prefs.defaultLook) }
+    CapsLabel("Looks")
+    GroupCard {
+        ToggleRow("Use Delphis' looks", "Scanlines, CRT, Vivid… per game, from the ✦ chip on the game page. Off: Delphis leaves Dolphin's own Post-Processing setting alone.", looksOn) { looksOn = it; prefs.looksEnabled = it }
+        if (looksOn) {
+            RowDivider()
+            Column(Modifier.padding(vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("New games look", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+                Text("Each game can change it on its page.", fontSize = 12.sp, color = c.textDim)
+                @OptIn(ExperimentalLayoutApi::class)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    io.github.hiramrg.delphis.core.Looks.Look.entries.forEach { l -> WiiChip(l.label, defLook == l, { defLook = l; prefs.defaultLook = l }) }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -2156,6 +2226,30 @@ fun thorControlForKey(prefs: io.github.hiramrg.delphis.platform.Prefs): (KeyEven
             name == null -> null
             name in listOf("Up", "Down", "Left", "Right") -> io.github.hiramrg.delphis.core.ThorControl.DPAD
             else -> buttons.firstOrNull { c -> profile.inputsFor(c).any { it == name || it.endsWith(":$name") } }
+        }
+    }
+}
+
+
+/** "Keep holding Ⓑ to exit": a ring fills over a second; letting go cancels. */
+@Composable
+private fun HoldToExit(modifier: Modifier) {
+    val c = LocalWii.current
+    val progress = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) { progress.animateTo(1f, androidx.compose.animation.core.tween(1000, easing = androidx.compose.animation.core.LinearEasing)) }
+    val shape = RoundedCornerShape(18.dp)
+    Row(
+        modifier.shadow(14.dp, shape).clip(shape).background(if (c.dark) Color(0xFF22272D) else c.card).border(2.dp, c.accent, shape).padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        androidx.compose.foundation.Canvas(Modifier.size(30.dp)) {
+            val st = androidx.compose.ui.graphics.drawscope.Stroke(4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            drawArc(c.cardBorder, 0f, 360f, false, style = st)
+            drawArc(c.accent, -90f, 360f * progress.value, false, style = st)
+        }
+        Column {
+            HintText("Keep holding Ⓑ to exit", fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
+            Text("Closes Delphis and Dolphin", fontSize = 11.5.sp, color = c.textDim)
         }
     }
 }

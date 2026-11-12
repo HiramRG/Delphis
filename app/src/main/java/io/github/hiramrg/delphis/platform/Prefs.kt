@@ -277,6 +277,17 @@ class Prefs(context: Context) {
     fun setScreenFor(gameId: String, c: io.github.hiramrg.delphis.core.GameScreen.Choice) = sp.edit()
         .putString("screen_shape_$gameId", c.shape.name).putString("screen_fill_$gameId", c.fill.name).putString("screen_sides_$gameId", c.sides.name).apply()
 
+    /** Looks (post-processing shaders): on/off for all games, the default for new games, and each game's own. */
+    var looksEnabled: Boolean
+        get() = sp.getBoolean("looks_enabled", true)
+        set(v) = sp.edit().putBoolean("looks_enabled", v).apply()
+    var defaultLook: io.github.hiramrg.delphis.core.Looks.Look
+        get() = io.github.hiramrg.delphis.core.Looks.byName(sp.getString("look_default", null)) ?: io.github.hiramrg.delphis.core.Looks.Look.ORIGINAL
+        set(v) = sp.edit().putString("look_default", v.name).apply()
+    fun lookFor(gameKey: String): io.github.hiramrg.delphis.core.Looks.Look =
+        io.github.hiramrg.delphis.core.Looks.byName(sp.getString("look_$gameKey", null)) ?: defaultLook
+    fun setLookFor(gameKey: String, look: io.github.hiramrg.delphis.core.Looks.Look) = sp.edit().putString("look_$gameKey", look.name).apply()
+
     fun presetFor(gameKey: String): String? = sp.getString("preset_$gameKey", null)
     fun setPresetFor(gameKey: String, presetId: String?) = sp.edit().putString("preset_$gameKey", presetId).apply()
 

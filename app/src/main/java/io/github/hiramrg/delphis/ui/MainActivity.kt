@@ -293,6 +293,26 @@ class MainActivity : ComponentActivity() {
 
     fun setTheme(mode: String) { themeMode = mode; prefs.themeMode = mode }
 
+    /** "Exit Delphis?" panel (⏻ in Home's bar). */
+    var exitPrompt by mutableStateOf(false)
+
+    /** Closes everything: a running game (with its autosave), Dolphin's background process, menu music, both screens. */
+    fun exitAll() {
+        exitPrompt = false
+        lifecycleScope.launch {
+            val pkg = bridge.installedPackage()
+            if (io.github.hiramrg.delphis.platform.GameWatch.session != null) runCatching {
+                bridge.closeDolphin(DeviceInfo.screenRoles(this@MainActivity, prefs.swapScreens).topDisplayId, "Closing the game…")
+            }
+            io.github.hiramrg.delphis.platform.DolphinExitService.hideLoading()
+            // Dolphin is in the background now (Delphis is on screen), so Android lets Delphis close it.
+            pkg?.let { p -> runCatching { getSystemService(android.app.ActivityManager::class.java).killBackgroundProcesses(p) } }
+            runCatching { io.github.hiramrg.delphis.platform.MenuMusic.stop() }
+            MenuCompanion.close()
+            finishAndRemoveTask()
+        }
+    }
+
     /** The most recently played game that's still in the library. */
     fun lastGame(): GameEntry? {
         val last = prefs.lastPlayed()
@@ -504,6 +524,8 @@ class MainActivity : ComponentActivity() {
                     bridge.applyPlayers(gameId, slots.drop(1))
                     // GameCube games: how the 4:3 picture fills the 16:9 screen.
                     if (preset.controller == io.github.hiramrg.delphis.core.EmulatedController.GAMECUBE) bridge.applyScreen(gameId, prefs.screenFor(gameId))
+                    // Looks: the game's post-processing shader (Wii and GameCube).
+                    if (prefs.looksEnabled) bridge.applyLook(gameId, prefs.lookFor(gameId))
                 }
                 else bridge.applyGlobally(p1, profile)
             }

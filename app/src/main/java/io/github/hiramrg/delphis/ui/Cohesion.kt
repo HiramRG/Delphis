@@ -25,6 +25,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.key
@@ -275,10 +278,11 @@ fun AppBottomBar(hints: String?, modifier: Modifier = Modifier, leading: @Compos
     val shape = RoundedCornerShape(50)
     Row(
         modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp).fillMaxWidth().height(48.dp)
-            .clip(shape).background(c.bar).border(2.dp, c.barBorder, shape).padding(start = 16.dp, end = 16.dp),
+            .clip(shape).background(c.bar).border(2.dp, c.barBorder, shape).padding(start = 6.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         leading()
+        Spacer(Modifier.width(10.dp))
         Text(rememberClock(withDate = true), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, maxLines = 1)
         Spacer(Modifier.weight(1f))
         if (hints != null) HintText(hints, fontWeight = FontWeight.ExtraBold)
@@ -398,4 +402,47 @@ fun TopChip(text: String, on: Boolean = false, onClick: () -> Unit) {
         modifier = Modifier.clip(shape).background(if (on) c.accentSoft else c.card).border(2.dp, if (on) c.accent else c.cardBorder, shape)
             .clickable(onClick = onClick).padding(horizontal = 11.dp, vertical = 5.dp),
     )
+}
+
+/** "◀ Home Ⓑ" as a pill in the bottom bar (game page). */
+@Composable
+fun HomeBarPill(onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(50)
+    Row(
+        Modifier.height(34.dp).clip(shape).background(c.card).border(2.dp, c.cardBorder, shape)
+            .focusProperties { canFocus = false }.clickable(onClick = onClick).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        Text("◀ Home", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, maxLines = 1)
+        KeyIcon("B", c.textDim, 16.dp)
+    }
+}
+
+/** A title on its own line: still when it fits, otherwise it scrolls slowly inside its margins with faded edges. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun ScrollingTitle(title: String, fontSize: androidx.compose.ui.unit.TextUnit = 15.5.sp) {
+    val c = LocalWii.current
+    val style = androidx.compose.ui.text.TextStyle(fontSize = fontSize, fontWeight = FontWeight.ExtraBold, color = c.text)
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
+        val maxW = constraints.maxWidth
+        val fits = remember(title, maxW) { measurer.measure(title, style, maxLines = 1).size.width <= maxW }
+        if (fits) Text(title, style = style, maxLines = 1, textAlign = TextAlign.Center)
+        else Text(
+            title, style = style, maxLines = 1, softWrap = false,
+            modifier = Modifier.fillMaxWidth()
+                .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    val fade = 14.dp.toPx() / size.width
+                    drawRect(
+                        androidx.compose.ui.graphics.Brush.horizontalGradient(0f to Color.Transparent, fade to Color.Black, 1f - fade to Color.Black, 1f to Color.Transparent),
+                        blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                    )
+                }
+                .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500, velocity = 36.dp),
+        )
+    }
 }
