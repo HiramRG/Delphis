@@ -768,35 +768,20 @@ class NowPlayingActivity : ComponentActivity() {
     ) {
         val c = LocalWii.current
         Box(Modifier.fillMaxSize().clickable(onClick = onDismiss)) {
-            Column(
-                Modifier.align(Alignment.TopEnd).padding(top = 74.dp, end = 10.dp).width(262.dp)
-                    .clip(RoundedCornerShape(16.dp)).background(c.card)
-                    .border(2.dp, c.cardBorder, RoundedCornerShape(16.dp))
-                    .clickable(enabled = false) {}.padding(horizontal = 16.dp, vertical = 12.dp),
+            PopupPanel(
+                "Bottom screen", "Brightness",
+                Modifier.align(Alignment.TopEnd).padding(top = 74.dp, end = 10.dp).width(280.dp).clickable(enabled = false) {},
+                corner = { Text("$value", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Glow.Yellow) },
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Brightness", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    Text("$value", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Glow.Yellow)
-                }
                 Slider(
                     value = value.toFloat(), onValueChange = { onChange(it.toInt()) }, valueRange = 0f..100f,
-                    colors = SliderDefaults.colors(thumbColor = Glow.Yellow, activeTrackColor = Glow.Yellow, inactiveTrackColor = c.cardBorder),
+                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = c.accent, inactiveTrackColor = c.cardBorder),
                 )
-                Row {
-                    Text("0", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                    Text("100", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SettingRow("Auto-dim", "Just for this game session", onClick = { onAutoDim(!autoDim) }) { ThemedToggle(autoDim) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    PanelBtn("Turn screen off", null, false, onClick = onScreenOff)
                 }
-                Box(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(1.dp).background(c.cardBorder))
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onAutoDim(!autoDim) }) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Auto-dim", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        Text("Just for this game session", fontSize = 11.sp, color = c.textDim)
-                    }
-                    Switch(checked = autoDim, onCheckedChange = onAutoDim)
-                }
-                Spacer(Modifier.height(8.dp))
-                SecondaryGlowButton("Turn screen off", Icons.Filled.PowerSettingsNew, onClick = onScreenOff, modifier = Modifier.fillMaxWidth(), fontSize = 14.sp)
-                Text("Tap anywhere to turn it back on", fontSize = 10.sp, color = c.textDim, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                Text("Tap anywhere to turn it back on", fontSize = 11.sp, color = c.textDim, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
             }
         }
     }
@@ -814,10 +799,7 @@ class NowPlayingActivity : ComponentActivity() {
             onDismiss = { onSkip(dontAsk) }, onConfirm = onOpenSettings,
             onOutside = onDismiss,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { dontAsk = !dontAsk }) {
-                Checkbox(checked = dontAsk, onCheckedChange = { dontAsk = it })
-                Text("Don't ask again", fontSize = 14.sp)
-            }
+            DontAskRow("Don't ask again", dontAsk) { dontAsk = it }
         }
     }
 
@@ -831,35 +813,26 @@ class NowPlayingActivity : ComponentActivity() {
             confirm = "Close game", dismiss = "Keep playing",
             onDismiss = onDismiss, onConfirm = { onConfirm(dontAsk) },
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { dontAsk = !dontAsk }) {
-                Checkbox(checked = dontAsk, onCheckedChange = { dontAsk = it })
-                Text("Don't show this again", fontSize = 14.sp)
-            }
+            DontAskRow("Don't show this again", dontAsk) { dontAsk = it }
         }
     }
 
-    /** A dialog drawn inside this window (a real Dialog window would take focus away from Dolphin). */
+    /** A dialog drawn inside this window (a real Dialog window would take focus away from Dolphin). Uses the shared pop-up panel. */
     @Composable
     private fun OverlayDialog(
         title: String, body: String, confirm: String, dismiss: String,
         onDismiss: () -> Unit, onConfirm: () -> Unit, onOutside: () -> Unit = onDismiss, extra: @Composable () -> Unit = {},
     ) {
-        Box(
-            Modifier.fillMaxSize().background(Color(0xB3000000)).clickable(onClick = onOutside),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(
-                Modifier.widthIn(max = 420.dp).padding(16.dp).clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .clickable(enabled = false) {}.padding(18.dp),
+        OverlayPanel(onOutside) {
+            PopupPanel(
+                listOfNotNull("In game", GameWatch.session?.info?.title).joinToString(" · "), title, Modifier.widthIn(max = 420.dp),
+                buttons = {
+                    PanelBtn(dismiss, null, false, onClick = onDismiss)
+                    PanelBtn(confirm, null, true, onClick = onConfirm)
+                },
             ) {
-                Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text(body, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                Text(body, fontSize = 12.5.sp, lineHeight = 16.sp, color = LocalWii.current.textDim)
                 extra()
-                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                    TextButton(onClick = onDismiss) { Text(dismiss) }
-                    PrimaryGlowButton(confirm, null, onClick = onConfirm, fontSize = 14.sp)
-                }
             }
         }
     }

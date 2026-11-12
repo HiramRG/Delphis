@@ -25,6 +25,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.nativeKeyCode
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 
 /*
  * The shared pieces every screen picks from (one look across the app):
@@ -44,7 +50,7 @@ fun CapsLabel(text: String, modifier: Modifier = Modifier, color: Color = LocalW
 fun PageHeader(back: String, onBack: () -> Unit, caps: String?, title: String, modifier: Modifier = Modifier, backKey: Boolean = true, actions: @Composable RowScope.() -> Unit = {}) {
     val c = LocalWii.current
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        BackLink(back, onBack, backKey)
+        BackLink(back, backKey, onBack)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             if (caps != null) CapsLabel(caps)
@@ -56,7 +62,7 @@ fun PageHeader(back: String, onBack: () -> Unit, caps: String?, title: String, m
 
 /** "◀ Home Ⓑ" link (Ⓑ does the same). */
 @Composable
-fun BackLink(label: String, onClick: () -> Unit, showKey: Boolean = true) {
+fun BackLink(label: String, showKey: Boolean = true, onClick: () -> Unit) {
     val c = LocalWii.current
     Row(
         Modifier.clip(RoundedCornerShape(10.dp)).focusProperties { canFocus = false }.clickable(onClick = onClick).padding(horizontal = 6.dp, vertical = 4.dp),
@@ -190,6 +196,55 @@ fun ConfirmPanel(caps: String?, title: String, sub: String?, confirm: String, mo
         PanelBtn(cancel, "B", false, onClick = onCancel)
         PanelBtn(confirm, "A", true, onClick = onConfirm)
     }) { if (!sub.isNullOrBlank()) Text(sub, fontSize = 12.5.sp, color = LocalWii.current.textDim, lineHeight = 16.sp) }
+}
+
+/** Dimmed backdrop + a centred pop-up panel, drawn inside the current window (no dialog window). */
+@Composable
+fun OverlayPanel(onOutside: () -> Unit, content: @Composable BoxScope.() -> Unit) {
+    Box(Modifier.fillMaxSize().background(Color(0xB3000000)).clickable(onClick = onOutside), contentAlignment = Alignment.Center) {
+        Box(Modifier.padding(16.dp).clickable(enabled = false) {}, content = content)
+    }
+}
+
+/** A "Don't ask again" row with the themed toggle. */
+@Composable
+fun DontAskRow(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.clip(RoundedCornerShape(10.dp)).clickable { onChange(!on) }.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        ThemedToggle(on)
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = LocalWii.current.text)
+    }
+}
+
+/** [ConfirmPanel] in its own dialog window, with Ⓐ / Ⓑ wired (for screens without their own key handling). */
+@Composable
+fun ConfirmDialog(caps: String?, title: String, sub: String?, confirm: String, cancel: String = "Cancel", onCancel: () -> Unit, onConfirm: () -> Unit) {
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onCancel, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        ConfirmPanel(
+            caps, title, sub, confirm,
+            androidx.compose.ui.Modifier.width(440.dp).then(
+                androidx.compose.ui.Modifier.focusRequesterCompat(focus)
+            ).onPreviewKeyEventCompat { code ->
+                when (code) {
+                    android.view.KeyEvent.KEYCODE_BUTTON_A, android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_DPAD_CENTER -> { onConfirm(); true }
+                    android.view.KeyEvent.KEYCODE_BUTTON_B, android.view.KeyEvent.KEYCODE_BACK -> { onCancel(); true }
+                    else -> false
+                }
+            },
+            cancel = cancel, onCancel = onCancel, onConfirm = onConfirm,
+        )
+    }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+}
+
+private fun Modifier.focusRequesterCompat(f: androidx.compose.ui.focus.FocusRequester): Modifier =
+    this.then(androidx.compose.ui.Modifier.focusRequester(f)).then(androidx.compose.ui.Modifier.focusable())
+
+private fun Modifier.onPreviewKeyEventCompat(onDown: (Int) -> Boolean): Modifier = this.onPreviewKeyEvent { e ->
+    if (e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) false else onDown(e.key.nativeKeyCode)
 }
 
 /** "Nothing here yet" card: icon in a ring, title, one sentence, one or two buttons. */

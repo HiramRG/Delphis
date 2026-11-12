@@ -164,24 +164,14 @@ private fun SaveOption(title: String, text: String, on: Boolean, onClick: () -> 
 @Composable
 fun BoxScope.ResetConfirm(name: String, wide: Boolean, onKeep: () -> Unit, onReset: () -> Unit) {
     val c = LocalWii.current
-    Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.5f)).clickable(onClick = onKeep))
-    val shape = RoundedCornerShape(18.dp)
-    Column(
-        Modifier.align(Alignment.Center).fillMaxWidth(if (wide) 0.52f else 0.9f).clip(shape)
-            .background(if (c.dark) Color(0xFF1B1F24) else c.card).border(2.dp, SelBorder, shape)
-            .clickable(enabled = false) {}.padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text("Reset to default?", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
-        Text("“$name” goes back to its original controls for this game. Your changes to it are removed.", fontSize = 12.5.sp, lineHeight = 16.sp)
-        Text("Presets you saved as new stay in My presets.", fontSize = 11.5.sp, color = c.textDim)
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            Pill("Keep my changes", onClick = onKeep, big = true)
-            val red = Color(0xFFF0866E)
-            Text("↺ Reset", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF2A0F08), maxLines = 1,
-                modifier = Modifier.clip(RoundedCornerShape(50)).background(red).clickable(onClick = onReset).padding(horizontal = 16.dp, vertical = 8.dp))
-        }
-    }
+    Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.6f)).clickable(onClick = onKeep))
+    ConfirmPanel(
+        "Preset · $name", "Reset to default?",
+        "\u201C$name\u201D goes back to its original controls for this game. Your changes to it are removed. Presets you saved as new stay in My presets.",
+        confirm = "Reset", cancel = "Keep my changes",
+        modifier = Modifier.align(Alignment.Center).fillMaxWidth(if (wide) 0.56f else 0.92f).clickable(enabled = false) {},
+        onCancel = onKeep, onConfirm = onReset,
+    )
 }
 
 private class EditorState(

@@ -217,6 +217,15 @@ fun HomeScreen(act: MainActivity) {
             else -> false
         }
         val onRow = rowsMode && act.homeRow != null && act.focusedGame != null
+        // No games yet: Ⓐ chooses the games folder, Ⓨ scans again.
+        if (act.games.isEmpty() && !act.scanning) when (e.keyCode) {
+            KeyEvent.KEYCODE_BUTTON_A -> { if (e.firstPress()) act.chooseGamesFolder(); return@rememberUpdatedState true }
+            KeyEvent.KEYCODE_BUTTON_Y -> { if (e.firstPress()) act.rescan(); return@rememberUpdatedState true }
+        }
+        // Search with no matches: Ⓑ clears it.
+        if (e.keyCode == KeyEvent.KEYCODE_BUTTON_B && act.searchOpen && act.libraryQuery.isNotBlank() && shown.isEmpty()) {
+            if (e.firstPress()) act.libraryQuery = ""; return@rememberUpdatedState true
+        }
         when (e.keyCode) {
             // On a row, Ⓐ plays the game under the ring (Ⓧ opens its game page).
             KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_START ->
@@ -295,17 +304,25 @@ fun HomeScreen(act: MainActivity) {
                 item(key = "games-header", span = { GridItemSpan(maxLineSpan) }) { GamesHeader(act, shown.size) }
                 if (shown.isEmpty()) {
                     item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
-                        Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            HintText(
-                                when {
-                                    act.scanning -> "Looking for GameCube and Wii games…"
-                                    act.games.isEmpty() -> "No GameCube or Wii games found."
-                                    act.librarySection == LibSection.FAVORITES -> "Press Ⓨ on a game to add it to your favorites."
-                                    else -> "No games match."
-                                },
-                                fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, color = c.textDim,
+                        // Says why there's nothing to show, with a way forward.
+                        val folder = act.prefs.gamesTreeUri?.lastPathSegment?.substringAfterLast(':')?.ifBlank { null }
+                        when {
+                            act.scanning -> EmptyState("⌕", "Looking for games…", "Delphis is scanning your games folder. ${act.scanCount} found so far.", Modifier.fillMaxWidth().padding(vertical = 8.dp))
+                            act.games.isEmpty() -> EmptyState(
+                                "▤", "No games found yet",
+                                (if (folder != null) "Delphis looked in \u201C$folder\u201D but found nothing it can play." else "Choose the folder with your GameCube and Wii games.") + " Choose another folder or scan again.",
+                                Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            ) {
+                                PanelBtn("Choose folder", "A", true, onClick = act::chooseGamesFolder)
+                                PanelBtn("Scan again", "Y", false, onClick = act::rescan)
+                            }
+                            act.librarySection == LibSection.FAVORITES && act.libraryQuery.isBlank() -> EmptyState(
+                                "★", "No favorites yet", "Press Ⓨ on any game to add it here.", Modifier.fillMaxWidth().padding(vertical = 8.dp),
                             )
-                            if (act.games.isEmpty() && !act.scanning) WiiButton("Choose games folder", onClick = act::chooseGamesFolder, primary = true, modifier = Modifier.padding(top = 10.dp))
+                            act.libraryQuery.isNotBlank() -> EmptyState(
+                                "⌕", "No games match \u201C${act.libraryQuery}\u201D", "Check the spelling, or search by part of the name.", Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            ) { PanelBtn("Clear", "B", false) { act.libraryQuery = "" } }
+                            else -> EmptyState("▤", "Nothing here", "There are no games in this list yet.", Modifier.fillMaxWidth().padding(vertical = 8.dp))
                         }
                     }
                 } else {
@@ -790,7 +807,7 @@ private fun CardButton(label: String, key: String, modifier: Modifier, onClick: 
 private fun WelcomeCard(act: MainActivity) {
     val c = LocalWii.current
     WiiCard(Modifier.fillMaxSize(), radius = 24.dp, padding = 16.dp) {
-        Text("WELCOME", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, letterSpacing = 1.sp)
+        CapsLabel("Welcome", color = c.accentText)
         Text(if (act.games.isEmpty()) "No games found yet" else "Pick a game to start", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
         Text(
             if (act.games.isEmpty()) "Choose the folder with your GameCube and Wii games." else "Your last game will show up here, ready to continue.",
@@ -798,8 +815,8 @@ private fun WelcomeCard(act: MainActivity) {
         )
         Spacer(Modifier.weight(1f))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (act.games.isEmpty()) WiiButton("Choose games folder", onClick = act::chooseGamesFolder, primary = true)
-            else WiiButton("All games ▸", onClick = { act.showAllGames() }, primary = true)
+            if (act.games.isEmpty()) PanelBtn("Choose folder", "A", true, onClick = act::chooseGamesFolder)
+            else PanelBtn("All games", null, true) { act.showAllGames() }
         }
     }
 }
@@ -1197,8 +1214,22 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     // Physical buttons: A = use the preset under the ring, or Play if it's already in use; Start = Play;
     // D-pad = move the ring, X = Edit,
     // L1 = autosave on/off for this game, R1 = remember controls on/off, Y = earlier autosaves. B = Back.
+    var confirmReset by remember { mutableStateOf<Preset?>(null) }
+    var confirmDelete by remember { mutableStateOf<Preset?>(null) }
     val onKey by rememberUpdatedState<(KeyEvent) -> Boolean> { e ->
         val sc = screen
+        // The shared confirm panel: Ⓐ yes, Ⓑ cancel; nothing else reaches the page.
+        val pending = confirmReset ?: confirmDelete
+        if (pending != null) {
+            if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) when (e.keyCode) {
+                KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> {
+                    if (confirmReset != null) p.resetToDefault(pending) else p.deleteMine(pending)
+                    confirmReset = null; confirmDelete = null
+                }
+                KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> { confirmReset = null; confirmDelete = null }
+            }
+            return@rememberUpdatedState true
+        }
         if (showScreen && sc != null) {
             // Screen picker open: L1 / R1 = 4:3 / 16:9, ◀ ▶ = card, Ⓐ Done, Ⓑ Cancel; nothing else reaches the page.
             if (e.action == KeyEvent.ACTION_DOWN) when (e.keyCode) {
@@ -1234,7 +1265,6 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     // The bottom screen can come and go: the list sits there when it's up, in the card otherwise.
     LaunchedEffect(companion) { showList = !companion }
     var menu by remember { mutableStateOf(false) }
-    var confirmReset by remember { mutableStateOf<Preset?>(null) }
     val shown = p.focused ?: p.selected
 
     Box(Modifier.fillMaxSize()) {
@@ -1300,7 +1330,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                         GameChip("⋯", null) { menu = true }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             if (canReset) DropdownMenuItem(text = { Text("↺ Reset to default", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; confirmReset = shown })
-                            if (canDelete) DropdownMenuItem(text = { Text("🗑 Delete this preset", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; p.deleteMine(shown!!) })
+                            if (canDelete) DropdownMenuItem(text = { Text("🗑 Delete this preset", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; confirmDelete = shown })
                             if (backups.isNotEmpty()) DropdownMenuItem(text = { HintText("↺ Earlier autosaves (${backups.size}) · Ⓨ", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.text) }, onClick = { menu = false; showBackups = true })
                         }
                     }
@@ -1319,6 +1349,14 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         }
     }
     confirmReset?.let { r -> ResetConfirm(r.name, wide = true, onKeep = { confirmReset = null }) { confirmReset = null; p.resetToDefault(r) } }
+    confirmDelete?.let { d ->
+        Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.6f)).clickable { confirmDelete = null })
+        ConfirmPanel(
+            "My presets · ${game.info.title}", "Delete this preset?", "\u201C${d.name}\u201D is removed from My presets. Built-in presets aren't affected.",
+            confirm = "Delete", modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.56f).clickable(enabled = false) {},
+            onCancel = { confirmDelete = null }, onConfirm = { confirmDelete = null; p.deleteMine(d) },
+        )
+    }
     val sc = screen
     if (showScreen && sc != null) ScreenPanel(game.info.title, sc, screenGid, act.prefs.gcUseHack, coverColour,
         onPick = { setScreen(it) }, onCancel = { cancelScreen() }, onDone = { showScreen = false })
@@ -1847,16 +1885,19 @@ private fun ClosingSettings(act: MainActivity) {
         if (backupsSize > 0) {
             Spacer(Modifier.width(10.dp))
             var confirm by remember { mutableStateOf(false) }
-            LaunchedEffect(confirm) { if (confirm) { delay(4000); confirm = false } }
-            WiiButton(if (confirm) "Press again to delete" else "Delete all", primary = confirm, onClick = {
-                if (!confirm) { confirm = true; return@WiiButton }
+            PanelBtn("Delete all", null, false) { confirm = true }
+            if (confirm) ConfirmDialog(
+                "Closing games", "Delete all earlier autosaves?", "Your current autosaves stay; only the older copies kept as backups are deleted (${formatSize(backupsSize)}).",
+                confirm = "Delete", onCancel = { confirm = false },
+            ) {
                 confirm = false
                 act.lifecycleScope.launch {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.deleteAllBackups() }
                     backupsVersion++
                     act.statsVersion++
+                    Notices.done(act, "Earlier autosaves deleted")
                 }
-            })
+            }
         }
     }
     SwitchRow(
