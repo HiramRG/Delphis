@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -104,53 +107,51 @@ fun ControllerCheckScreen(act: MainActivity) {
         onDispose { act.keyListener = null; act.motionListener = null }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(16.dp)) {
-        val wide = maxWidth > maxHeight
-        val done = step >= STEPS.size
-        val body: @Composable (Modifier) -> Unit = { m ->
-            Column(m, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Text("Controller check  ${minOf(step + 1, STEPS.size)}/${STEPS.size}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                if (!done) {
-                    Text(STEPS[step].prompt, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(vertical = 8.dp))
-                    Text(if (waitRelease) "Let go of everything…" else "Waiting for input", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    Text("All controls recorded!", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    Text("Device: ${devices.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key}", fontSize = 13.sp)
+    val c = LocalWii.current
+    val done = step >= STEPS.size
+    val leave = { act.screen = if (act.isSetUp()) Screen.Settings else Screen.Setup }
+    val current = if (step < STEPS.size) STEPS[step].control else null
+    Column(Modifier.fillMaxSize()) {
+        // Every button is recorded here (Ⓑ too), so this page is left by touch.
+        PageHeader(if (act.isSetUp()) "Settings" else "Setup", leave, "Settings · Controls", "Controller check", Modifier.padding(start = 10.dp, end = 16.dp, top = 8.dp), backKey = false)
+        Row(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            val shape = RoundedCornerShape(18.dp)
+            Box(Modifier.weight(1f).fillMaxHeight().clip(shape).background(c.card).border(2.dp, c.cardBorder, shape).padding(8.dp)) {
+                ThorDiagram(highlightPreset(current ?: ThorControl.START), Modifier.fillMaxSize(), compact = true, highlight = setOfNotNull(current))
+            }
+            Column(
+                Modifier.weight(1f).fillMaxHeight().clip(shape).background(c.card).border(2.dp, c.cardBorder, shape).padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CapsLabel(if (done) "All ${STEPS.size} recorded" else "Step ${step + 1} of ${STEPS.size}")
+                Box(Modifier.fillMaxWidth(0.7f).height(6.dp).clip(RoundedCornerShape(50)).background(c.cardBorder)) {
+                    Box(Modifier.fillMaxWidth(minOf(step, STEPS.size) / STEPS.size.toFloat()).fillMaxHeight().clip(RoundedCornerShape(50)).background(c.accent))
                 }
-                if (lastSeen.isNotEmpty()) Text("Last input: $lastSeen", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
+                Spacer(Modifier.weight(1f))
+                if (!done) {
+                    Text(STEPS[step].prompt, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = c.text, textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 26.sp)
+                    Text(if (waitRelease) "Let go of everything…" else "Waiting for input", fontSize = 12.sp, color = c.textDim)
+                } else {
+                    Text("All controls recorded!", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
+                    Text("Device: ${devices.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key}", fontSize = 12.sp, color = c.textDim)
+                }
+                if (lastSeen.isNotEmpty()) Text("Last input: $lastSeen", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = c.textDim, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Spacer(Modifier.weight(1f))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (!done) {
-                        OutlinedButton(onClick = { if (step > 0) step-- }, enabled = step > 0) { Text("Back") }
-                        OutlinedButton(onClick = { step++ }) { Text("Skip") }
+                        PanelBtn("Back", null, false, enabled = step > 0) { if (step > 0) step-- }
+                        PanelBtn("Skip", null, false) { step++ }
                     } else {
-                        OutlinedButton(onClick = { step = 0; recorded.clear(); devices.clear() }) { Text("Start over") }
-                        Button(onClick = {
+                        PanelBtn("Start over", null, false) { step = 0; recorded.clear(); devices.clear() }
+                        PanelBtn("Save", null, true) {
                             act.prefs.calibration = recorded.toMap()
                             act.prefs.calibratedDeviceName = devices.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
                             act.screen = if (act.isSetUp()) Screen.Home else Screen.Setup
-                        }) { Text("Save") }
+                        }
                     }
-                    if (!done) TextButton(onClick = { act.screen = if (act.isSetUp()) Screen.Home else Screen.Setup }) { Text("Cancel") }
-                }
-                if (done) {
-                    Text(
-                        recorded.entries.sortedBy { it.key }.joinToString("\n") { "${it.key} = ${it.value.joinToString()}" },
-                        fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp).heightIn(max = 160.dp).verticalScroll(rememberScrollState()),
-                    )
                 }
             }
         }
-        val current = if (step < STEPS.size) STEPS[step].control else null
-        val diagram: @Composable (Modifier) -> Unit = { m ->
-            ThorDiagram(highlightPreset(current ?: ThorControl.START), m, compact = true, highlight = setOfNotNull(current))
-        }
-        if (wide) Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            diagram(Modifier.weight(1f).fillMaxHeight())
-            body(Modifier.weight(1f))
-        } else Column(Modifier.fillMaxSize()) {
-            diagram(Modifier.fillMaxWidth().weight(0.4f))
-            body(Modifier.fillMaxWidth().weight(0.6f))
-        }
+        AppBottomBar("Press each control once · tap to go back")
     }
 }

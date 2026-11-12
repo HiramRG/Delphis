@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -29,9 +33,23 @@ fun DiagnosticsScreen(act: MainActivity) {
     val capture = remember { InputCapture() }
     var report by remember { mutableStateOf("Collecting…") }
 
+    val copyReport = {
+        act.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Delphis report", report))
+        Notices.done(act, "Report copied")
+    }
+    val shareReport = {
+        act.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"; putExtra(Intent.EXTRA_TEXT, report)
+        }, "Share report"))
+    }
     DisposableEffect(Unit) {
         act.keyListener = { e ->
             capture.onKey(e)?.let { c -> live.add(0, "key   ${c.name}   [${c.deviceName}]"); if (live.size > 8) live.removeAt(live.lastIndex) }
+            if (e.action == android.view.KeyEvent.ACTION_DOWN && e.repeatCount == 0) when (e.keyCode) {
+                android.view.KeyEvent.KEYCODE_BUTTON_B -> act.screen = Screen.Settings
+                android.view.KeyEvent.KEYCODE_BUTTON_X -> copyReport()
+                android.view.KeyEvent.KEYCODE_BUTTON_Y -> shareReport()
+            }
             e.keyCode != android.view.KeyEvent.KEYCODE_BACK
         }
         act.motionListener = { e ->
@@ -48,28 +66,51 @@ fun DiagnosticsScreen(act: MainActivity) {
         report = withContext(Dispatchers.IO) { buildReport(act) }
     }
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Header("Diagnostics", onBack = { act.screen = Screen.Settings }) {
-            TextButton(onClick = {
-                act.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Delphis report", report))
-                Notices.done(act, "Report copied")
-            }) { Text("Copy") }
-            TextButton(onClick = {
-                act.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"; putExtra(Intent.EXTRA_TEXT, report)
-                }, "Share report"))
-            }) { Text("Share") }
+    val c = LocalWii.current
+    val dolphin = remember { act.bridge.installedPackage() }
+    val folderOk = remember { act.bridge.hasConfigAccess() && act.bridge.looksLikeDolphinFolder() }
+    val helperOn = remember { io.github.hiramrg.delphis.platform.DolphinExitService.isEnabled(act) }
+    val lastCrash = remember { io.github.hiramrg.delphis.platform.CrashLog.read()?.lineSequence()?.firstOrNull { it.isNotBlank() } }
+    Column(Modifier.fillMaxSize()) {
+        PageHeader("Settings", { act.screen = Screen.Settings }, "Settings · Diagnostics", "Diagnostics", Modifier.padding(start = 10.dp, end = 16.dp, top = 10.dp)) {
+            PanelBtn("Copy report", "X", false, onClick = copyReport)
+            PanelBtn("Share", "Y", true, onClick = shareReport)
         }
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-            Text("Press buttons / move sticks to see what Dolphin receives:", fontSize = 13.sp)
-            Text(
-                if (live.isEmpty()) "(nothing yet)" else live.joinToString("\n"),
-                fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(vertical = 8.dp),
-            )
-            HorizontalDivider()
-            Text(report, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(vertical = 8.dp))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GroupCard(Modifier.weight(1f)) {
+                    StatusRow("Dolphin", listOfNotNull(dolphin ?: "Not installed", if (folderOk) "folder connected" else "folder not connected").joinToString(" · "), dolphin != null && folderOk)
+                    RowDivider()
+                    StatusRow("Close-games helper", if (helperOn) "On" else "Off", helperOn)
+                    RowDivider()
+                    StatusRow("Trackpad server", io.github.hiramrg.delphis.platform.DsuServer.status().lineSequence().firstOrNull() ?: "", null)
+                    RowDivider()
+                    StatusRow("Last crash", lastCrash ?: "None", if (lastCrash == null) true else null)
+                }
+                val shape = RoundedCornerShape(18.dp)
+                Column(Modifier.weight(1f).clip(shape).background(c.card).border(2.dp, c.cardBorder, shape).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CapsLabel("Live input")
+                    Text("Press buttons or move sticks to see what Dolphin receives.", fontSize = 12.sp, color = c.textDim)
+                    Text(if (live.isEmpty()) "(nothing yet)" else live.joinToString("\n"), fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = c.accentText)
+                }
+            }
+            val shape = RoundedCornerShape(18.dp)
+            Column(Modifier.fillMaxWidth().clip(shape).background(c.card).border(2.dp, c.cardBorder, shape).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                CapsLabel("Full report")
+                Text(report, fontFamily = FontFamily.Monospace, fontSize = 10.5.sp, color = c.text)
+            }
         }
+        AppBottomBar("Ⓧ Copy  Ⓨ Share  Ⓑ Back")
+    }
+}
+
+/** A status line with a green ✓ when it's fine ([ok] null = no mark). */
+@Composable
+private fun StatusRow(title: String, sub: String, ok: Boolean?) {
+    val c = LocalWii.current
+    SettingRow(title, sub) {
+        if (ok == true) Text("✓", fontSize = 15.sp, fontWeight = FontWeight.Black, color = c.green)
+        if (ok == false) Text("!", fontSize = 15.sp, fontWeight = FontWeight.Black, color = c.orange)
     }
 }
 

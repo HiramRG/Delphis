@@ -139,22 +139,24 @@ fun GyroTestScreen(act: MainActivity) {
         if (strongest != null && state.peak[strongest] > 0.3) append("\nstrongest recent rotation: around ${axisNames[strongest]}")
     }
 
-    // Two columns so everything fits the Thor's wide top screen without scrolling.
-    Row(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        // Left: the "TV" with the pointer, sized to whatever height is available.
-        Column(Modifier.weight(1.25f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("◀ Gyro test", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { act.screen = Screen.Settings }.padding(4.dp))
-                Spacer(Modifier.width(8.dp))
-                HintText("Hold the Thor the way you play and aim. R3 or Ⓐ centers" + if (precision) ", hold R1 to pause." else ".", fontSize = 11.sp)
-            }
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+    val copy = {
+        act.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Gyro readings", readings))
+        Notices.done(act, "Readings copied")
+    }
+    Column(Modifier.fillMaxSize()) {
+        PageHeader("Settings", { act.screen = Screen.Settings }, "Settings · Gyro", "Gyro test", Modifier.padding(start = 10.dp, end = 16.dp, top = 8.dp)) {
+            PanelBtn("Copy readings", null, false, onClick = copy)
+            PanelBtn("Center", "A", true) { state.center() }
+        }
+        // Two columns so everything fits the Thor's wide top screen without scrolling.
+        Row(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Left: the "TV" with the pointer, sized to whatever height is available.
+            BoxWithConstraints(Modifier.weight(1.25f).fillMaxHeight(), contentAlignment = Alignment.Center) {
                 val w = minOf(maxWidth, maxHeight * 16f / 9f)
                 val f = frame // read so the canvas redraws each frame
                 Box(
-                    Modifier.size(w, w * 9f / 16f).clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF0B1220)).border(2.dp, c.accent, RoundedCornerShape(12.dp)),
+                    Modifier.size(w, w * 9f / 16f).clip(RoundedCornerShape(18.dp))
+                        .background(Color(0xFF0B1220)).border(2.dp, c.cardBorder, RoundedCornerShape(18.dp)),
                 ) {
                     Canvas(Modifier.fillMaxSize()) {
                         f.hashCode()
@@ -162,42 +164,37 @@ fun GyroTestScreen(act: MainActivity) {
                         drawLine(Color(0xFF1E2B44), Offset(mid.x, 0f), Offset(mid.x, size.height), 2f)
                         drawLine(Color(0xFF1E2B44), Offset(0f, mid.y), Offset(size.width, mid.y), 2f)
                         val p = Offset(mid.x + (state.x * size.width / 2).toFloat(), mid.y - (state.y * size.height / 2).toFloat())
-                        drawCircle(Glow.Yellow, 22f, p, style = Stroke(5f))
-                        drawCircle(Glow.Yellow, 5f, p)
+                        drawCircle(c.accent, 22f, p, style = Stroke(5f))
+                        drawCircle(c.accent, 5f, p)
                     }
-                    if (!state.hasGyro) Text("No gyroscope data yet…", Modifier.align(Alignment.Center), color = Color.White)
+                    if (!state.hasGyro) Text("No gyroscope data yet…", Modifier.align(Alignment.Center), color = Color.White, fontSize = 13.sp)
+                    HintText("Aim the way you play · R3 or Ⓐ centers" + if (precision) " · hold R1 to pause" else "", Modifier.align(Alignment.BottomStart).padding(10.dp), fontSize = 11.sp, color = Color(0xFFA3ADB8))
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                WiiButton("Center", onClick = { state.center() }, fontSize = 14.sp)
-                WiiButton("Copy readings", onClick = {
-                    act.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Gyro readings", readings))
-                    Notices.done(act, "Readings copied")
-                }, fontSize = 14.sp)
-            }
-            Text(readings, fontFamily = FontFamily.Monospace, fontSize = 9.sp, lineHeight = 11.sp, color = c.textDim, maxLines = 4)
-        }
-        // Right: settings.
-        WiiCard(Modifier.weight(1f).fillMaxHeight(), radius = 20.dp, padding = 12.dp) {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    "Slow moves aim finely, fast moves go far. Hold R1 to freeze the pointer and re-position. Matches the \"Gyro Aiming\" presets.",
-                    fontSize = 11.sp, color = c.textDim,
-                )
-                Text("Left/right follows", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    GyroHorizontal.entries.forEach { m -> WiiChip(m.label, mode == m, { mode = m; prefs.gyroHorizontal = m }) }
-                }
-                Text(mode.description, fontSize = 11.sp, color = c.textDim, maxLines = 3)
-                Text("Speed: ${speedLevel.toInt()}  (5 ≈ a real Wii Remote)", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 4.dp))
-                Slider(value = speedLevel, onValueChange = { speedLevel = it }, onValueChangeFinished = { prefs.gyroSensitivity = speedLevel.toInt() }, valueRange = 1f..10f, steps = 8)
-                Text("Invert", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    WiiChip("Up/down", invertY, { invertY = !invertY; prefs.gyroInvertY = invertY })
-                    WiiChip("Left/right", invertX, { invertX = !invertX; prefs.gyroInvertX = invertX })
+            // Right: settings, in the shared card rows.
+            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                GroupCard {
+                    SettingRow("Left / right follows", mode.description) {
+                        Segmented(GyroHorizontal.entries.map { it to it.label }, mode, { mode = it; prefs.gyroHorizontal = it })
+                    }
+                    RowDivider()
+                    Column(Modifier.padding(vertical = 8.dp)) {
+                        Text("Speed · ${speedLevel.toInt()}", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("5 ≈ a real Wii Remote. Slow moves aim finely, fast moves go far.", fontSize = 12.sp, color = c.textDim)
+                        Slider(
+                            value = speedLevel, onValueChange = { speedLevel = it }, onValueChangeFinished = { prefs.gyroSensitivity = speedLevel.toInt() }, valueRange = 1f..10f, steps = 8,
+                            colors = SliderDefaults.colors(thumbColor = c.text, activeTrackColor = c.accent, inactiveTrackColor = c.cardBorder, activeTickColor = c.onAccent, inactiveTickColor = c.textDim),
+                        )
+                    }
+                    RowDivider()
+                    ToggleRow("Invert up / down", null, invertY) { invertY = it; prefs.gyroInvertY = it }
+                    RowDivider()
+                    ToggleRow("Invert left / right", null, invertX) { invertX = it; prefs.gyroInvertX = it }
                 }
                 Text("Saved for every gyro preset (also in Settings → Gyro aiming).", fontSize = 11.sp, color = c.textDim)
+                Text(readings, fontFamily = FontFamily.Monospace, fontSize = 10.5.sp, lineHeight = 13.sp, color = c.textDim)
             }
         }
+        AppBottomBar("Ⓐ Center  Ⓑ Back")
     }
 }

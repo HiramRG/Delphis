@@ -1,5 +1,9 @@
 package io.github.hiramrg.delphis.ui
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.outlined.*
 import android.app.ActivityOptions
 import android.content.Intent
 import android.graphics.PixelFormat
@@ -158,35 +162,42 @@ private fun QuickMenu(act: MainActivity) {
     val c = LocalWii.current
     val last = act.lastGame()
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("QUICK MENU", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
+        CapsLabel("Quick menu")
+        class Tile(val icon: androidx.compose.ui.graphics.vector.ImageVector, val title: String, val sub: String, val action: () -> Unit)
         val tiles = listOf(
-            Triple("▶", "Play", last?.info?.title ?: "Pick a game first"),
-            Triple("☰", "All games", "${act.games.size} games · search & sort"),
-            Triple("✚", "Controls", "Change or edit the preset"),
-            Triple("⚙", "Settings", "Theme, gyro, brightness, updates"),
-        )
-        val actions = listOf<() -> Unit>(
-            { last?.let { act.quickPlay(it) } ?: act.showAllGames() },
-            { act.showAllGames() },
-            { last?.let { act.openGame(it) } ?: act.showAllGames() },
-            { act.screen = Screen.Settings },
+            Tile(androidx.compose.material.icons.Icons.Outlined.PlayArrow, if (last != null) "Continue" else "Play", last?.info?.title ?: "Pick a game first") { last?.let { act.quickPlay(it) } ?: act.showAllGames() },
+            Tile(androidx.compose.material.icons.Icons.Outlined.GridView, "All games", "${act.games.size} games") { act.showAllGames() },
+            Tile(androidx.compose.material.icons.Icons.Outlined.SportsEsports, "Controls", "Change or edit the preset") { last?.let { act.openGame(it) } ?: act.showAllGames() },
+            Tile(androidx.compose.material.icons.Icons.Outlined.Settings, "Settings", "Theme, gyro, updates") { act.screen = Screen.Settings },
         )
         for (row in 0..1) Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             for (col in 0..1) {
                 val i = row * 2 + col
-                val (icon, title, sub) = tiles[i]
-                WiiCard(Modifier.weight(1f).fillMaxHeight(), selected = i == 0, radius = 22.dp, padding = 14.dp, onClick = actions[i]) {
-                    Box(
-                        Modifier.size(40.dp).clip(RoundedCornerShape(50)).background(if (i == 0) c.accent else c.accentSoft),
-                        contentAlignment = Alignment.Center,
-                    ) { Text(icon, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = if (i == 0) c.onAccent else c.accentText) }
+                val t = tiles[i]
+                val shape = RoundedCornerShape(18.dp)
+                Column(
+                    Modifier.weight(1f).fillMaxHeight().clip(shape).background(c.card).border(2.dp, c.cardBorder, shape)
+                        .clickable(onClick = t.action).padding(14.dp),
+                ) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                        if (i == 0 && last != null) {
+                            // The game's cover with its platform rim, and a small play badge.
+                            Cover(act, last, act.prefs.showCovers, Modifier.size(width = 40.dp, height = 54.dp).platformRim(last, 2.dp))
+                            Spacer(Modifier.weight(1f))
+                            Box(Modifier.size(30.dp).clip(RoundedCornerShape(50)).background(c.accent), contentAlignment = Alignment.Center) {
+                                androidx.compose.material3.Icon(t.icon, null, tint = c.onAccent, modifier = Modifier.size(18.dp))
+                            }
+                        } else Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(if (c.dark) Color(0xFF1D2127) else c.bg), contentAlignment = Alignment.Center) {
+                            androidx.compose.material3.Icon(t.icon, null, tint = c.accentText, modifier = Modifier.size(20.dp))
+                        }
+                    }
                     Spacer(Modifier.weight(1f))
-                    Text(title, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-                    Text(sub, fontSize = 12.sp, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(t.title, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                    Text(t.sub, fontSize = 12.sp, color = c.textDim, maxLines = 2, lineHeight = 15.sp)
                 }
             }
         }
-        HintLine("Touch a channel, or use the D-pad + Ⓐ on the top screen")
+        HintLine("Tap a tile, or use the D-pad + Ⓐ on the top screen")
     }
 }
 
@@ -244,7 +255,7 @@ private fun FocusedGamePanel(act: MainActivity) {
         }
         WiiCard(Modifier.fillMaxWidth(), padding = 12.dp) {
             if (preset == null) {
-                Text("CONTROLS", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
+                CapsLabel("Controls")
                 Text("Not chosen yet", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
             } else Row(verticalAlignment = Alignment.CenterVertically) {
                 // Same picture as the game page and the preset lists.
@@ -263,8 +274,8 @@ private fun FocusedGamePanel(act: MainActivity) {
         }
         Spacer(Modifier.weight(1f))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            WiiButton(if (act.prefs.isFavorite(g.key)) "★ Favorite" else "☆ Favorite", onClick = { act.prefs.toggleFavorite(g.key); act.statsVersion++ }, modifier = Modifier.weight(1f))
-            WiiButton("Ⓐ Choose controls", onClick = { act.openGame(g) }, primary = true, modifier = Modifier.weight(1.6f))
+            PanelBtn(if (act.prefs.isFavorite(g.key)) "★ Favorite" else "☆ Favorite", null, false, Modifier.weight(1f)) { act.prefs.toggleFavorite(g.key); act.statsVersion++ }
+            PanelBtn("Choose controls", "A", true, Modifier.weight(1.6f)) { act.openGame(g) }
         }
     }
 }

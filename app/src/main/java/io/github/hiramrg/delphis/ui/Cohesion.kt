@@ -41,10 +41,10 @@ fun CapsLabel(text: String, modifier: Modifier = Modifier, color: Color = LocalW
 
 /** "◀ Settings Ⓑ" + caps label + page title + actions on the right. Used by every page below Home. */
 @Composable
-fun PageHeader(back: String, onBack: () -> Unit, caps: String?, title: String, modifier: Modifier = Modifier, actions: @Composable RowScope.() -> Unit = {}) {
+fun PageHeader(back: String, onBack: () -> Unit, caps: String?, title: String, modifier: Modifier = Modifier, backKey: Boolean = true, actions: @Composable RowScope.() -> Unit = {}) {
     val c = LocalWii.current
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        BackLink(back, onBack)
+        BackLink(back, onBack, backKey)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             if (caps != null) CapsLabel(caps)
@@ -56,14 +56,14 @@ fun PageHeader(back: String, onBack: () -> Unit, caps: String?, title: String, m
 
 /** "◀ Home Ⓑ" link (Ⓑ does the same). */
 @Composable
-fun BackLink(label: String, onClick: () -> Unit) {
+fun BackLink(label: String, onClick: () -> Unit, showKey: Boolean = true) {
     val c = LocalWii.current
     Row(
         Modifier.clip(RoundedCornerShape(10.dp)).focusProperties { canFocus = false }.clickable(onClick = onClick).padding(horizontal = 6.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text("◀ $label", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, maxLines = 1)
-        KeyIcon("B", c.textDim)
+        if (showKey) KeyIcon("B", c.textDim)
     }
 }
 

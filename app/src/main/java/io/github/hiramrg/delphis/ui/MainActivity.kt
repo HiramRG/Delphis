@@ -322,8 +322,8 @@ class MainActivity : ComponentActivity() {
 
     fun isSetUp() = bridge.installedPackage() != null && bridge.hasConfigAccess() && prefs.gamesTreeUri != null
 
-    fun connectDolphinFolder() = pickDolphinFolder.launch(bridge.pickerInitialUri())
-    fun chooseGamesFolder() = pickGamesFolder.launch(prefs.gamesTreeUri)
+    fun connectDolphinFolder(): Unit = pickDolphinFolder.launch(bridge.pickerInitialUri())
+    fun chooseGamesFolder(): Unit = pickGamesFolder.launch(prefs.gamesTreeUri)
 
     private fun persist(uri: Uri, write: Boolean) {
         val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or (if (write) Intent.FLAG_GRANT_WRITE_URI_PERMISSION else 0)
