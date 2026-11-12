@@ -25,7 +25,7 @@ import io.github.hiramrg.delphis.ui.MainActivity.UpdateState
 /** "Updates" block for Settings: current version, check button, download progress, install. */
 @Composable
 fun UpdatePanel(act: MainActivity) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(18.dp)
     Column(
         Modifier.fillMaxWidth().clip(shape).background(LocalWii.current.card).border(2.dp, LocalWii.current.cardBorder, shape).padding(12.dp),
     ) {
@@ -33,22 +33,22 @@ fun UpdatePanel(act: MainActivity) {
             Icon(Icons.Filled.SystemUpdate, null, tint = LocalWii.current.accentText)
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
-                Text("Delphis ${act.updater.installedVersionName()}", fontWeight = FontWeight.SemiBold)
+                Text("Delphis ${act.updater.installedVersionName()}", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
                 Text(statusText(act.updateState), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         when (val s = act.updateState) {
-            is UpdateState.Downloading -> LinearProgressIndicator(progress = { s.progress }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+            is UpdateState.Downloading -> LinearProgressIndicator(progress = { s.progress }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(50)), color = LocalWii.current.accent, trackColor = LocalWii.current.cardBorder)
             is UpdateState.Checking, is UpdateState.Installing -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             else -> Unit
         }
         Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             when (val s = act.updateState) {
-                is UpdateState.Available -> PrimaryGlowButton("Download", Icons.Filled.Download, onClick = { act.installUpdate(s.release) }, fontSize = 14.sp)
-                is UpdateState.Ready -> PrimaryGlowButton("Restart & update", Icons.Filled.SystemUpdate, onClick = { act.restartAndUpdate() }, fontSize = 14.sp)
-                is UpdateState.NeedsPermission -> SecondaryGlowButton("Allow & continue", Icons.Filled.Download, onClick = { act.updater.openInstallPermissionSettings() }, fontSize = 14.sp)
+                is UpdateState.Available -> PanelBtn("Download", "A", true) { act.installUpdate(s.release) }
+                is UpdateState.Ready -> PanelBtn("Restart & update", "A", true) { act.restartAndUpdate() }
+                is UpdateState.NeedsPermission -> PanelBtn("Allow & continue", "A", true) { act.updater.openInstallPermissionSettings() }
                 is UpdateState.Downloading, UpdateState.Checking, UpdateState.Installing -> Unit
-                else -> SecondaryGlowButton("Check for updates", Icons.Filled.SystemUpdate, onClick = { act.checkForUpdates() }, fontSize = 14.sp)
+                else -> PanelBtn("Check for updates", "A", false) { act.checkForUpdates() }
             }
         }
     }
@@ -68,8 +68,8 @@ fun UpdateBanner(act: MainActivity) {
         Icon(Icons.Filled.SystemUpdate, null, tint = LocalWii.current.accentText)
         Spacer(Modifier.width(8.dp))
         Text(statusText(s), fontSize = 13.sp, modifier = Modifier.weight(1f))
-        if (s is UpdateState.Available) TextButton(onClick = { act.installUpdate(s.release) }) { Text("Download") }
-        if (s is UpdateState.Ready) TextButton(onClick = { act.restartAndUpdate() }) { Text("↻ Restart & update") }
+        if (s is UpdateState.Available) PanelBtn("Download", null, true) { act.installUpdate(s.release) }
+        if (s is UpdateState.Ready) PanelBtn("Restart & update", null, true) { act.restartAndUpdate() }
     }
 }
 
@@ -89,24 +89,15 @@ private fun statusText(s: UpdateState): String = when (s) {
 /** "Build N is ready": Restart & update (Ⓐ) closes Delphis, installs and reopens it; Later (Ⓑ) leaves the banner. */
 @Composable
 fun androidx.compose.foundation.layout.BoxScope.UpdateReadyCard(build: Int, onLater: () -> Unit, onRestart: () -> Unit) {
-    val c = LocalWii.current
-    val shape = RoundedCornerShape(16.dp)
-    Column(
-        Modifier.align(Alignment.TopEnd).padding(top = 30.dp, end = 16.dp).widthIn(max = 500.dp).fillMaxWidth(0.72f)
-            .clip(shape).background(c.card).border(2.dp, c.accent, shape).padding(horizontal = 14.dp, vertical = 12.dp),
+    PopupPanel(
+        "Update · build $build", "Ready to install",
+        Modifier.align(Alignment.TopEnd).padding(top = 30.dp, end = 16.dp).widthIn(max = 500.dp).fillMaxWidth(0.72f),
+        buttons = {
+            PanelBtn("Later", "B", false, onClick = onLater)
+            PanelBtn("Restart & update", "A", true, onClick = onRestart)
+        },
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("✓", fontSize = 18.sp, fontWeight = FontWeight.Black, color = c.green)
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Build $build is ready", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
-                Text("Delphis closes, updates and opens again by itself (about 10 seconds).", fontSize = 11.5.sp, color = c.textDim)
-            }
-        }
-        Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            UpdateButton("Later", "B", primary = false, onClick = onLater)
-            UpdateButton("↻ Restart & update", "A", primary = true, onClick = onRestart)
-        }
+        Text("Delphis closes, updates and opens again by itself (about 10 seconds).", fontSize = 12.sp, color = LocalWii.current.textDim)
     }
 }
 

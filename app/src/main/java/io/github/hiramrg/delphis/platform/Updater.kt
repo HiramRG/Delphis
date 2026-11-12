@@ -150,7 +150,7 @@ class InstallReceiver : BroadcastReceiver() {
                 val hint = if (msg.contains("signature", true) || msg.contains("conflict", true))
                     " — uninstall Delphis once and install the new version manually; updates will work from then on."
                 else ""
-                Toast.makeText(context, "Update failed: $msg$hint", Toast.LENGTH_LONG).show()
+                io.github.hiramrg.delphis.ui.Notices.problem(context, "Update failed", "$msg$hint")
             }
         }
     }

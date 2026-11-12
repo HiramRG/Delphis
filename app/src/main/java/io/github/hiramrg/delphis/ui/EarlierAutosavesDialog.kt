@@ -64,9 +64,9 @@ fun EarlierAutosavesDialog(backups: List<AutosaveBackup>, onDismiss: () -> Unit,
     val focus = remember { FocusRequester() }
     var index by remember { mutableIntStateOf(0) }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        val shape = RoundedCornerShape(20.dp)
-        Column(
-            Modifier.width(440.dp).clip(shape).background(c.card).border(2.dp, c.cardBorder, shape)
+        PopupPanel(
+            "Earlier autosaves", "Go back to an earlier autosave?",
+            Modifier.width(440.dp)
                 .focusRequester(focus).focusable()
                 .onPreviewKeyEvent { e ->
                     if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -78,22 +78,23 @@ fun EarlierAutosavesDialog(backups: List<AutosaveBackup>, onDismiss: () -> Unit,
                         AndroidKey.KEYCODE_BUTTON_B, AndroidKey.KEYCODE_BACK -> { onDismiss(); true }
                         else -> true
                     }
-                }
-                .padding(horizontal = 20.dp, vertical = 16.dp),
+                },
+            buttons = {
+                PanelBtn("Close", "B", false, onClick = onDismiss)
+                PanelBtn("Restore", "A", true) { backups.getOrNull(index)?.let(onRestore) }
+            },
         ) {
-            Text("Earlier autosaves", fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
             Text(
                 "Pick one to continue from it next time you play. Your current autosave is kept here too, so you can switch back.",
-                fontSize = 12.sp, color = c.textDim, modifier = Modifier.padding(top = 4.dp),
+                fontSize = 12.sp, color = c.textDim, lineHeight = 15.sp,
             )
-            Box(Modifier.padding(vertical = 10.dp).fillMaxWidth().height(2.dp).background(c.cardBorder.copy(alpha = 0.5f)))
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 backups.forEachIndexed { i, b ->
                     val selected = i == index
                     val rowShape = RoundedCornerShape(12.dp)
                     Row(
                         Modifier.fillMaxWidth().clip(rowShape)
-                            .background(if (selected) c.accentSoft else c.card)
+                            .background(if (selected) c.accentSoft else c.card.copy(alpha = 0.6f))
                             .border(if (selected) 3.dp else 1.dp, if (selected) c.accent else c.cardBorder, rowShape)
                             .clickable { index = i; onRestore(b) }
                             .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -105,11 +106,6 @@ fun EarlierAutosavesDialog(backups: List<AutosaveBackup>, onDismiss: () -> Unit,
                         Text(formatSize(b.size), fontSize = 12.sp, color = c.textDim)
                     }
                 }
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                HintLine("✚ choose · Ⓐ Restore · Ⓑ Close", Modifier.weight(1f))
-                WiiButton("Ⓑ Close", onDismiss)
             }
         }
     }

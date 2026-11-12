@@ -9,6 +9,15 @@ import android.view.MotionEvent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.nativeKeyCode
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
@@ -132,7 +141,7 @@ class MainActivity : ComponentActivity() {
             prefs.dolphinTreeUri = uri
             setupVersion++
             if (!bridge.looksLikeDolphinFolder()) {
-                Toast.makeText(this, "That folder doesn't look like Dolphin's user folder (no Config inside). Pick \"Dolphin\" in the picker's side menu.", Toast.LENGTH_LONG).show()
+                Notices.problem(this, "That isn't Dolphin's folder", "There's no Config folder inside. In the picker, open the side menu and pick \"Dolphin\".", "Try again") { connectDolphinFolder() }
             }
         }
     }
@@ -202,31 +211,38 @@ class MainActivity : ComponentActivity() {
                         else -> Screen.Home
                     }
                 }
+                // Ⓑ never closes the app: on Home and Setup it does nothing (no accidental exits).
+                BackHandler(enabled = screen == Screen.Home || screen == Screen.Setup) { }
                 exitHelperPrompt?.let { action ->
-                    androidx.compose.material3.AlertDialog(
-                        onDismissRequest = { exitHelperPrompt = null },
-                        title = { androidx.compose.material3.Text("Turn on \"close games\"?") },
-                        text = {
+                    val notNow = { exitHelperPrompt = null; prefs.skipExitHelperPrompt = true; action() }
+                    val open = { exitHelperPrompt = null; io.github.hiramrg.delphis.platform.DolphinExitService.openSettings(this) }
+                    androidx.compose.ui.window.Dialog(onDismissRequest = { exitHelperPrompt = null }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+                        val focus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+                        PopupPanel(
+                            "Closing games", "Turn on \"close games\"?",
+                            androidx.compose.ui.Modifier.widthIn(max = 480.dp).focusRequester(focus).focusable()
+                                .onPreviewKeyEvent { e ->
+                                    if (e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                    when (e.key.nativeKeyCode) {
+                                        KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> { open(); true }
+                                        KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> { notNow(); true }
+                                        else -> false
+                                    }
+                                },
+                            buttons = {
+                                PanelBtn("Not now", "B", false, onClick = notNow)
+                                PanelBtn("Open settings", "A", true, onClick = open)
+                            },
+                        ) {
                             androidx.compose.material3.Text(
                                 "On the Thor, Android won't let Delphis force-close Dolphin, so a game that's still running in Dolphin " +
                                     "stops the next one from starting. Turn on \"Delphis – close games\" in Accessibility and Delphis " +
-                                    "will press Dolphin's own \"Exit Emulation\" for you. It doesn't touch your controller input."
+                                    "will press Dolphin's own \"Exit Emulation\" for you. It doesn't touch your controller input.",
+                                fontSize = 12.5.sp, color = LocalWii.current.textDim, lineHeight = 16.sp,
                             )
-                        },
-                        confirmButton = {
-                            androidx.compose.material3.TextButton(onClick = {
-                                exitHelperPrompt = null
-                                io.github.hiramrg.delphis.platform.DolphinExitService.openSettings(this)
-                            }) { androidx.compose.material3.Text("Open settings") }
-                        },
-                        dismissButton = {
-                            androidx.compose.material3.TextButton(onClick = {
-                                exitHelperPrompt = null
-                                prefs.skipExitHelperPrompt = true
-                                action()
-                            }) { androidx.compose.material3.Text("Not now") }
-                        },
-                    )
+                        }
+                        androidx.compose.runtime.LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+                    }
                 }
                 whatsNewVersion?.let { v ->
                     WhatsNewDialog(v) {
@@ -245,6 +261,7 @@ class MainActivity : ComponentActivity() {
                         Screen.GyroTest -> GyroTestScreen(this@MainActivity)
                     }
                     (updateState as? UpdateState.Ready)?.let { r -> if (updatePrompt) UpdateReadyCard(r.release.versionCode, onLater = { updatePrompt = false }) { restartAndUpdate() } }
+                    NoticeHost()
                 }
             }
         }
@@ -259,6 +276,11 @@ class MainActivity : ComponentActivity() {
             KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
                 if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) updatePrompt = false; return true
             }
+        }
+        // A notice with a fix ("Fix it Ⓨ"): Ⓨ presses it.
+        if (event.keyCode == KeyEvent.KEYCODE_BUTTON_Y && Notices.current?.onAction != null) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) Notices.pressAction()
+            return true
         }
         keyListener?.let { if (it(event)) return true }
         return super.dispatchKeyEvent(event)
@@ -465,7 +487,7 @@ class MainActivity : ComponentActivity() {
                     prefs.autoSaveFor(it) && withContext(Dispatchers.IO) { bridge.hasAutosave(it) }
                 }
                 if (!bridge.launchFresh(entry.uri, roles.topDisplayId, resumeId, entry.info.title, entry.info.gameId)) {
-                    Toast.makeText(app, "Dolphin isn't installed.", Toast.LENGTH_LONG).show()
+                    Notices.info(app, "Dolphin isn't installed", "Install Dolphin from the Play Store, then come back.")
                 }
             }
         }
@@ -486,7 +508,7 @@ class MainActivity : ComponentActivity() {
                 else bridge.applyGlobally(p1, profile)
             }
             if (result is DolphinBridge.ApplyResult.Failed) {
-                Toast.makeText(ctx.applicationContext, "Couldn't write the preset: ${result.reason}", Toast.LENGTH_LONG).show()
+                Notices.problem(ctx, "Couldn't write the preset", result.reason)
             }
             return result is DolphinBridge.ApplyResult.Ok
         }

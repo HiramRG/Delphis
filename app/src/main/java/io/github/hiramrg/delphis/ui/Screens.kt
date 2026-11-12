@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -1152,11 +1153,8 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             val id = game.info.gameId ?: return@EarlierAutosavesDialog
             act.lifecycleScope.launch {
                 val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.restoreAutosave(id, chosen) }
-                android.widget.Toast.makeText(
-                    act.applicationContext,
-                    if (ok) "Restored. Play continues from the save of ${formatSaveTime(chosen.savedAt)}." else "Couldn't restore that autosave.",
-                    android.widget.Toast.LENGTH_LONG,
-                ).show()
+                if (ok) Notices.done(act, "Autosave restored", "Play continues from the save of ${formatSaveTime(chosen.savedAt)}.")
+                else Notices.problem(act, "Couldn't restore that autosave")
                 backupsVersion++
                 act.statsVersion++
             }
@@ -1510,7 +1508,10 @@ fun SetupScreen(act: MainActivity) {
 
     class Step(val title: String, val sub: String, val done: Boolean, val button: String?, val optional: Boolean = false, val action: () -> Unit = {})
     val steps = listOf(
-        Step("Install Dolphin", if (dolphinPkg != null) "Found $dolphinPkg" else "Install the official Dolphin Emulator, then open it once.", dolphinPkg != null, null),
+        Step("Install Dolphin", if (dolphinPkg != null) "Found $dolphinPkg" else "Install the official Dolphin Emulator, then open it once.", dolphinPkg != null, if (dolphinPkg != null) null else "Open store", action = {
+            runCatching { act.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=org.dolphinemu.dolphinemu"))) }
+                .onFailure { Notices.info(act, "Couldn't open the store", "Search for \"Dolphin Emulator\" in your app store.") }
+        }),
         Step("Connect Dolphin's folder", "In the picker: side menu (☰) → \"Dolphin\" → \"Use this folder\".", folderOk, if (folderOk) "Change" else "Connect", action = act::connectDolphinFolder),
         Step("Choose your games folder", if (hasGames) "${act.games.size} games found" else "The folder with your GameCube and Wii games.", hasGames, if (hasGames) "Change" else "Choose", action = act::chooseGamesFolder),
         Step("Turn on \"close games\"", "Lets Delphis exit a game cleanly (no input delay).", helperOn, if (helperOn) "Settings" else "Turn on", action = { DolphinExitService.openSettings(act) }),
@@ -1518,43 +1519,75 @@ fun SetupScreen(act: MainActivity) {
         Step("Try gyro aiming", "Optional · find the speed you like.", false, "Try", optional = true, action = { act.screen = Screen.GyroTest }),
     )
     val current = steps.indexOfFirst { !it.done }.let { if (it < 0) steps.lastIndex else it }
-
-    Column(Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Welcome! Let's set up Delphis", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
-            Text("Step ${current + 1} of ${steps.size}", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            steps.forEachIndexed { i, s ->
-                Box(Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(if (s.done || i <= current) c.accent else c.cardBorder))
+    // The step on the ring: follows the first unfinished step until the D-pad moves it.
+    var sel by remember { mutableIntStateOf(current) }
+    var moved by remember { mutableStateOf(false) }
+    LaunchedEffect(current) { if (!moved) sel = current }
+    val step = steps[sel.coerceIn(0, steps.lastIndex)]
+    val goHome = { act.screen = Screen.Home; if (act.games.isEmpty()) act.rescan() }
+    fun next() { moved = true; sel = (sel + 1).coerceAtMost(steps.lastIndex) }
+    val onKey: (KeyEvent) -> Boolean = { e ->
+        if (e.action != KeyEvent.ACTION_DOWN) false else when (e.keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP -> { moved = true; sel = (sel - 1).coerceAtLeast(0); true }
+            KeyEvent.KEYCODE_DPAD_DOWN -> { next(); true }
+            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                if (e.repeatCount == 0) { if (step.button != null) step.action() else if (act.isSetUp()) goHome() }; true
             }
+            KeyEvent.KEYCODE_BUTTON_Y -> { if (e.repeatCount == 0) next(); true }
+            KeyEvent.KEYCODE_BUTTON_START -> { if (e.repeatCount == 0 && act.isSetUp()) goHome(); true }
+            else -> false
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            steps.forEachIndexed { i, s ->
-                WiiCard(Modifier.fillMaxWidth(), selected = i == current, radius = 16.dp, padding = 8.dp) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier.size(28.dp).clip(RoundedCornerShape(50)).background(
-                                when { s.done -> Glow.Green; i == current -> c.accent; else -> c.cardBorder.copy(alpha = 0.5f) },
-                            ),
-                            contentAlignment = Alignment.Center,
-                        ) { Text(if (s.done) "✓" else "${i + 1}", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = if (s.done || i == current) Color.White else c.textDim) }
-                        Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
-                            Text(s.title, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
-                            Text(s.sub, fontSize = 11.sp, color = c.textDim, maxLines = 2)
+    }
+    DisposableEffect(Unit) { act.keyListener = onKey; onDispose { act.keyListener = null } }
+
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Welcome! Let's set up Delphis", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+            CapsLabel("Step ${sel + 1} of ${steps.size}", color = c.accentText)
+        }
+        Row(Modifier.weight(1f).fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            // The steps as a rail, like Settings.
+            Column(Modifier.width(230.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                steps.forEachIndexed { i, s ->
+                    val on = i == sel
+                    val shape = RoundedCornerShape(12.dp)
+                    Box(Modifier.fillMaxWidth().padding(start = 8.dp)) {
+                        if (on) Box(Modifier.align(Alignment.CenterStart).offset(x = (-8).dp).width(4.dp).height(18.dp).clip(RoundedCornerShape(2.dp)).background(c.accent))
+                        Row(
+                            Modifier.fillMaxWidth().clip(shape).background(if (on) c.card else Color.Transparent)
+                                .border(if (on) 3.dp else 0.dp, if (on) c.accent else Color.Transparent, shape)
+                                .clickable { moved = true; sel = i }.padding(horizontal = 8.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp),
+                        ) {
+                            Box(
+                                Modifier.size(24.dp).clip(RoundedCornerShape(50)).background(
+                                    when { s.done -> Color(0xFF2E7D4F); on -> c.accent; else -> c.cardBorder.copy(alpha = 0.6f) },
+                                ),
+                                contentAlignment = Alignment.Center,
+                            ) { Text(if (s.done) "✓" else "${i + 1}", fontSize = 11.sp, fontWeight = FontWeight.Black, color = if (on && !s.done) c.onAccent else Color.White) }
+                            Text(s.title, fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = if (on || s.done) c.text else c.textDim, maxLines = 2, lineHeight = 16.sp)
                         }
-                        if (s.button != null) WiiButton(s.button, onClick = s.action, primary = i == current && !s.done, fontSize = 14.sp)
                     }
                 }
             }
+            // The step on the ring, explained in plain words.
+            val shape = RoundedCornerShape(18.dp)
+            Column(
+                Modifier.weight(1f).fillMaxHeight().clip(shape).background(c.card).border(2.dp, c.cardBorder, shape).padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CapsLabel(if (step.done) "Step ${sel + 1} · done" else if (step.optional) "Step ${sel + 1} · optional" else "Step ${sel + 1}", color = if (step.done) c.green else c.accentText)
+                Text(step.title, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 23.sp)
+                Text(step.sub, fontSize = 13.sp, color = c.textDim, lineHeight = 18.sp)
+                Spacer(Modifier.weight(1f))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (step.button != null) PanelBtn(step.button, "A", !step.done, Modifier.weight(1f), onClick = step.action)
+                    if (sel < steps.lastIndex) PanelBtn(if (step.done) "Next step" else "Skip for now", "Y", false) { next() }
+                    else PanelBtn("Go to my games", "Start", act.isSetUp(), enabled = act.isSetUp(), onClick = goHome)
+                }
+            }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                if (DeviceInfo.screenRoles(act, act.prefs.swapScreens).isDualScreen) "✓ Two screens detected" else "Only one screen detected",
-                fontSize = 12.sp, color = c.textDim, modifier = Modifier.weight(1f),
-            )
-            WiiButton("Go to my games ▸", onClick = { act.screen = Screen.Home; if (act.games.isEmpty()) act.rescan() }, primary = true, enabled = act.isSetUp())
-        }
+        AppBottomBar(if (act.isSetUp()) "✚ Steps  Ⓐ Do it  Start My games" else "✚ Steps  Ⓐ Do it  Ⓨ Skip")
     }
 }
 
@@ -1568,48 +1601,109 @@ enum class SettingsSection(val label: String) {
 @Composable
 fun SettingsScreen(act: MainActivity) {
     val c = LocalWii.current
-    Row(Modifier.fillMaxSize()) {
-        Column(
-            // Same rounded card as Home's Library column, so the app looks consistent.
-            Modifier.padding(start = 8.dp, top = 8.dp, bottom = 8.dp).width(190.dp).fillMaxHeight()
-                .clip(RoundedCornerShape(20.dp)).background(c.sidebar).border(2.dp, c.cardBorder, RoundedCornerShape(20.dp))
-                .verticalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text("◀ Settings", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { act.screen = Screen.Home }.padding(horizontal = 8.dp, vertical = 6.dp))
-            SettingsSection.entries.forEach { s -> NavItem(s.label, act.settingsSection == s) { act.settingsSection = s } }
-        }
-        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(act.settingsSection.label, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-            when (act.settingsSection) {
-                SettingsSection.APPEARANCE -> AppearanceSettings(act)
-                SettingsSection.SOUND -> SoundSettings(act)
-                SettingsSection.CONTROLS -> ControlsSettings(act)
-                SettingsSection.GYRO -> GyroSettings(act)
-                SettingsSection.CLOSING -> ClosingSettings(act)
-                SettingsSection.DISPLAY -> DisplaySettings(act)
-                SettingsSection.BOTTOM -> BottomScreenSettings(act)
-                SettingsSection.ACHIEVEMENTS -> AchievementsSettings(act) { t, sub, on, change -> SwitchRow(t, sub, on, change) }
-                SettingsSection.LIBRARY -> LibrarySettings(act)
-                SettingsSection.FRONTENDS -> FrontendSettings(act)
-                SettingsSection.UPDATES -> UpdatePanel(act)
-                SettingsSection.HELP -> {
-                    Text("If presets don't respond or something crashes, open Diagnostics and copy the report.", fontSize = 13.sp, color = c.textDim)
-                    WiiButton("Open diagnostics", onClick = { act.screen = Screen.Diagnostics }, primary = true)
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.weight(1f).fillMaxWidth()) {
+            // Same nav as Home's rail: line icons, a lit bar for the page you're on, the ring only where the D-pad is.
+            Column(
+                Modifier.width(206.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 14.dp, top = 12.dp, end = 6.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                BackLink("Home") { act.screen = Screen.Home }
+                Spacer(Modifier.height(6.dp))
+                SettingsSection.entries.forEach { s -> SettingsNavItem(s, act.settingsSection == s) { act.settingsSection = s } }
+            }
+            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 18.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column {
+                    CapsLabel("Settings")
+                    Text(act.settingsSection.label, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                }
+                when (act.settingsSection) {
+                    SettingsSection.APPEARANCE -> AppearanceSettings(act)
+                    SettingsSection.SOUND -> SoundSettings(act)
+                    SettingsSection.CONTROLS -> ControlsSettings(act)
+                    SettingsSection.GYRO -> GyroSettings(act)
+                    SettingsSection.CLOSING -> ClosingSettings(act)
+                    SettingsSection.DISPLAY -> DisplaySettings(act)
+                    SettingsSection.BOTTOM -> BottomScreenSettings(act)
+                    SettingsSection.ACHIEVEMENTS -> AchievementsSettings(act) { t, sub, on, change -> SwitchRow(t, sub, on, change) }
+                    SettingsSection.LIBRARY -> LibrarySettings(act)
+                    SettingsSection.FRONTENDS -> FrontendSettings(act)
+                    SettingsSection.UPDATES -> UpdatePanel(act)
+                    SettingsSection.HELP -> GroupCard {
+                        SettingRow("Diagnostics", "If presets don't respond or something crashes, open Diagnostics and copy the report.", onClick = { act.screen = Screen.Diagnostics }) {
+                            Text("Open ›", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
+                        }
+                    }
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            HintLine("✚ choose · Ⓐ select · Ⓑ back")
+        }
+        AppBottomBar("✚ Choose  Ⓐ Select  Ⓑ Back")
+    }
+}
+
+/** Line icon for each Settings page. */
+private fun settingsIcon(s: SettingsSection): androidx.compose.ui.graphics.vector.ImageVector = when (s) {
+    SettingsSection.APPEARANCE -> Icons.Outlined.Palette
+    SettingsSection.SOUND -> Icons.Outlined.VolumeUp
+    SettingsSection.CONTROLS -> Icons.Outlined.SportsEsports
+    SettingsSection.GYRO -> Icons.Outlined.ScreenRotation
+    SettingsSection.CLOSING -> Icons.Outlined.ExitToApp
+    SettingsSection.DISPLAY -> Icons.Outlined.Tv
+    SettingsSection.BOTTOM -> Icons.Outlined.StayCurrentLandscape
+    SettingsSection.ACHIEVEMENTS -> Icons.Outlined.EmojiEvents
+    SettingsSection.LIBRARY -> Icons.Outlined.Folder
+    SettingsSection.FRONTENDS -> Icons.Outlined.Launch
+    SettingsSection.UPDATES -> Icons.Outlined.Download
+    SettingsSection.HELP -> Icons.Outlined.HelpOutline
+}
+
+@Composable
+private fun SettingsNavItem(s: SettingsSection, lit: Boolean, onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(12.dp)
+    Box(Modifier.fillMaxWidth().padding(start = 8.dp)) {
+        if (lit) Box(Modifier.align(Alignment.CenterStart).offset(x = (-8).dp).width(4.dp).height(18.dp).clip(RoundedCornerShape(2.dp)).background(c.accent))
+        Row(
+            Modifier.fillMaxWidth().focusRing(shape).clip(shape).background(if (lit) c.card else Color.Transparent)
+                .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(settingsIcon(s), null, tint = if (lit) c.accentText else c.textDim, modifier = Modifier.size(18.dp))
+            Text(s.label, fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = if (lit) c.text else c.textDim, maxLines = 2, lineHeight = 16.sp)
         }
     }
+}
+
+/** Themed slider (accent thumb and track). */
+@Composable
+private fun WiiSlider(
+    value: Float, onValueChange: (Float) -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, onValueChangeFinished: (() -> Unit)? = null,
+) {
+    val c = LocalWii.current
+    Slider(
+        value = value, onValueChange = onValueChange, modifier = modifier, enabled = enabled, valueRange = valueRange, steps = steps,
+        onValueChangeFinished = onValueChangeFinished,
+        colors = SliderDefaults.colors(thumbColor = c.text, activeTrackColor = c.accent, inactiveTrackColor = c.cardBorder, activeTickColor = c.onAccent, inactiveTickColor = c.textDim),
+    )
+}
+
+/** Filled dot with ✓ for the picked card (replaces Android's radio button). */
+@Composable
+private fun SelectDot(selected: Boolean) {
+    val c = LocalWii.current
+    Box(
+        Modifier.padding(end = 8.dp).size(20.dp).clip(RoundedCornerShape(50)).background(if (selected) c.accent else Color.Transparent)
+            .border(2.dp, if (selected) c.accent else c.cardBorder, RoundedCornerShape(50)),
+        contentAlignment = Alignment.Center,
+    ) { if (selected) Text("✓", fontSize = 11.sp, fontWeight = FontWeight.Black, color = c.onAccent) }
 }
 
 @Composable
 private fun AppearanceSettings(act: MainActivity) {
     val c = LocalWii.current
     var covers by remember { mutableStateOf(act.prefs.showCovers) }
-    Text("Theme", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+    CapsLabel("Theme")
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         ThemeCard("Light", "Classic Wii look", listOf(LightWii), act.themeMode == "light") { act.setTheme("light") }
         ThemeCard("Dark", "Easier on battery", listOf(DarkWii), act.themeMode == "dark") { act.setTheme("dark") }
@@ -1644,7 +1738,7 @@ private fun ThemeCard(title: String, sub: String, previews: List<WiiColors>, sel
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-            RadioButton(selected = selected, onClick = onClick)
+            SelectDot(selected)
             Column {
                 Text(title, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
                 Text(sub, fontSize = 11.sp, color = c.textDim, maxLines = 1)
@@ -1665,11 +1759,11 @@ private fun SoundSettings(act: MainActivity) {
         on = it; act.prefs.menuMusicOn = it; music.refresh(act, act.prefs)
     }
     Text("Volume: ${volume.toInt()}%  (relative to your device's media volume)", fontSize = 14.sp, color = if (on) c.text else c.textDim)
-    Slider(
+    WiiSlider(
         value = volume, enabled = on, valueRange = 0f..100f,
         onValueChange = { volume = it; act.prefs.menuMusicVolume = it.toInt(); music.refresh(act, act.prefs) },
     )
-    Text("Music", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+    CapsLabel("Music")
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         WiiChip("Built-in tune", custom == null, { act.prefs.menuMusicUri = null; music.refresh(act, act.prefs); act.setupVersion++ })
         WiiChip(if (custom != null) "✓ Your file" else "Your own file…", custom != null, { act.chooseMenuMusic() })
@@ -1688,9 +1782,10 @@ private fun ControlsSettings(act: MainActivity) {
     var invert by remember { mutableStateOf(prefs.invertMotion) }
     val detected = remember { prefs.calibratedDeviceName ?: DeviceInfo.builtInGamepadName() }
     val pads = remember { DeviceInfo.allGamepadNames() }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(if (prefs.calibratedDeviceName == null) "Controller check not done yet" else "Controller checked: ${prefs.calibratedDeviceName}", fontSize = 14.sp, modifier = Modifier.weight(1f))
-        WiiButton(if (prefs.calibratedDeviceName == null) "Start" else "Redo", onClick = { act.screen = Screen.ControllerCheck })
+    GroupCard {
+        SettingRow(
+            "Controller check", if (prefs.calibratedDeviceName == null) "Not done yet · press each button once (about a minute)." else "Checked: ${prefs.calibratedDeviceName}",
+        ) { PanelBtn(if (prefs.calibratedDeviceName == null) "Start" else "Redo", null, prefs.calibratedDeviceName == null) { act.screen = Screen.ControllerCheck } }
     }
     SwitchRow("Invert motion steering", "For the Mario Kart \"tilt the Thor\" layout, if turning left steers right.", invert) { invert = it; prefs.invertMotion = it }
     Text("Gamepad name override (leave empty to use the checked/detected one)", fontSize = 13.sp)
@@ -1708,26 +1803,21 @@ private fun GyroSettings(act: MainActivity) {
     var invertX by remember { mutableStateOf(prefs.gyroInvertX) }
     var invertY by remember { mutableStateOf(prefs.gyroInvertY) }
     Text("Left/right follows: ${prefs.gyroHorizontal.label}. Speed: ${gyroSpeed.toInt()} (5 ≈ a real Wii Remote). Changes apply the next time a game starts.", fontSize = 13.sp)
-    Slider(value = gyroSpeed, onValueChange = { gyroSpeed = it }, onValueChangeFinished = { prefs.gyroSensitivity = gyroSpeed.toInt() }, valueRange = 1f..10f, steps = 8)
+    WiiSlider(value = gyroSpeed, onValueChange = { gyroSpeed = it }, onValueChangeFinished = { prefs.gyroSensitivity = gyroSpeed.toInt() }, valueRange = 1f..10f, steps = 8)
     SwitchRow("Invert up/down", "Tilting the Thor up moves the pointer down.", invertY) { invertY = it; prefs.gyroInvertY = it }
     SwitchRow("Invert left/right", "Turning the Thor left moves the pointer right.", invertX) { invertX = it; prefs.gyroInvertX = it }
-    WiiButton("Test gyro aiming", onClick = { act.screen = Screen.GyroTest }, primary = true)
+    PanelBtn("Test gyro aiming", null, true) { act.screen = Screen.GyroTest }
 }
 
 @Composable
 private fun ClosingSettings(act: MainActivity) {
     val helperOn = remember(act.setupVersion) { DolphinExitService.isEnabled(act) }
     var skipWarn by remember { mutableStateOf(act.prefs.skipExitWarning) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(if (helperOn) "Close-games helper is on" else "Close-games helper is off", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Text(
-                "Presses Dolphin's own \"Exit Emulation\" when you leave or restart a game. Needed on the Thor, where Android won't let Delphis force-close Dolphin. Doesn't touch controller input.",
-                fontSize = 12.sp, color = LocalWii.current.textDim,
-            )
-        }
-        Spacer(Modifier.width(10.dp))
-        WiiButton(if (helperOn) "Settings" else "Turn on", onClick = { DolphinExitService.openSettings(act) }, primary = !helperOn)
+    GroupCard {
+        SettingRow(
+            if (helperOn) "Close-games helper is on" else "Close-games helper is off",
+            "Presses Dolphin's own \"Exit Emulation\" when you leave or restart a game. Needed on the Thor, where Android won't let Delphis force-close Dolphin. Doesn't touch controller input.",
+        ) { PanelBtn(if (helperOn) "Settings" else "Turn on", null, !helperOn) { DolphinExitService.openSettings(act) } }
     }
     var autoSave by remember { mutableStateOf(act.prefs.autoSaveResume) }
     SwitchRow(
@@ -1785,27 +1875,25 @@ private fun DisplaySettings(act: MainActivity) {
     var fill by remember { mutableStateOf(prefs.gcFill) }
     var sides by remember { mutableStateOf(prefs.gcSides) }
     var hack by remember { mutableStateOf(prefs.gcUseHack) }
-    Text("GameCube games", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
-    Text("Defaults for new games; each game can change them under its cover (Screen).", fontSize = 12.sp, color = c.textDim)
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("Start games in", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        ShapeSwitch(if (wide) io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE else io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD,
-            { wide = it == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE; prefs.gcDefaultWide = wide })
-    }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("16:9 fill", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        WiiChip("More of the world", selected = fill == io.github.hiramrg.delphis.core.GameScreen.Fill.WORLD, onClick = { fill = io.github.hiramrg.delphis.core.GameScreen.Fill.WORLD; prefs.gcFill = fill })
-        WiiChip("Stretch", selected = fill == io.github.hiramrg.delphis.core.GameScreen.Fill.STRETCH, onClick = { fill = io.github.hiramrg.delphis.core.GameScreen.Fill.STRETCH; prefs.gcFill = fill })
-    }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("4:3 sides", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        io.github.hiramrg.delphis.core.GameScreen.Sides.entries.forEach { sd ->
-            WiiChip(sd.label, selected = sides == sd, onClick = { sides = sd; prefs.gcSides = sd })
+    CapsLabel("GameCube games")
+    GroupCard {
+        SettingRow("New games start in", "Each game can change it on its page (▭).") {
+            Segmented(listOf(io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD to "4:3", io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE to "16:9"), if (wide) io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE else io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD,
+                { wide = it == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE; prefs.gcDefaultWide = wide })
         }
+        RowDivider()
+        SettingRow("16:9 fill", "How a 4:3 game fills the wide screen.") {
+            Segmented(listOf(io.github.hiramrg.delphis.core.GameScreen.Fill.WORLD to "More world", io.github.hiramrg.delphis.core.GameScreen.Fill.STRETCH to "Stretch"), fill, { fill = it; prefs.gcFill = it })
+        }
+        RowDivider()
+        SettingRow("4:3 sides", "What fills the space next to a 4:3 picture.") {
+            Segmented(io.github.hiramrg.delphis.core.GameScreen.Sides.entries.map { it to it.label }, sides, { sides = it; prefs.gcSides = it })
+        }
+        RowDivider()
+        ToggleRow("Use the widescreen hack", "When a game has no widescreen patch. More of the world for any 3D game; some menus or edges may glitch. Off = stretch instead.", hack) { hack = it; prefs.gcUseHack = it }
     }
-    SwitchRow("Use the widescreen hack when there's no game patch", "More of the world for any 3D game; some menus or edges may glitch. Off = stretch instead.", hack) { hack = it; prefs.gcUseHack = it }
     Text("Delphis turns on Dolphin's own widescreen code when it ships one for the game (cheats on for that game only). Dolphin applies all of this when a game starts.",
-        fontSize = 11.sp, color = c.textDim)
+        fontSize = 12.sp, color = c.textDim)
 }
 
 @Composable
@@ -1817,7 +1905,7 @@ private fun BottomScreenSettings(act: MainActivity) {
     var brightness by remember { mutableFloatStateOf(prefs.brightnessPercent.toFloat()) }
     var swap by remember { mutableStateOf(prefs.swapScreens) }
     val pick: (BottomScreen.Mode) -> Unit = { screenMode = it; prefs.bottomScreenMode = it }
-    Text("While you play", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+    CapsLabel("While you play")
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         ScreenModeCard("Always on", "Never dims", BottomScreen.Mode.ON, screenMode, pick, Modifier.weight(1f))
         ScreenModeCard("Dim", "Lowers brightness", BottomScreen.Mode.DIM, screenMode, pick, Modifier.weight(1f))
@@ -1834,7 +1922,7 @@ private fun BottomScreenSettings(act: MainActivity) {
     if (screenMode == BottomScreen.Mode.DIM) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Dimmed level", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(104.dp))
-            Slider(
+            WiiSlider(
                 value = brightness, onValueChange = { brightness = it }, onValueChangeFinished = { prefs.brightnessPercent = brightness.toInt() },
                 valueRange = 0f..100f, modifier = Modifier.weight(1f),
             )
@@ -1873,7 +1961,7 @@ private fun ScreenModeCard(
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-            RadioButton(selected = selected, onClick = { onPick(value) })
+            SelectDot(selected)
             Column {
                 Text(title, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
                 Text(sub, fontSize = 10.sp, color = c.textDim, maxLines = 1)
@@ -1884,12 +1972,20 @@ private fun ScreenModeCard(
 
 @Composable
 private fun LibrarySettings(act: MainActivity) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        WiiButton("Dolphin folder", onClick = act::connectDolphinFolder)
-        WiiButton("Games folder", onClick = act::chooseGamesFolder)
-        WiiButton("Rescan", onClick = act::rescan)
+    val c = LocalWii.current
+    GroupCard {
+        SettingRow("Dolphin folder", if (act.bridge.hasConfigAccess()) "Connected · ${act.bridge.installedPackage() ?: "Dolphin not installed"}" else "Not connected", onClick = act::connectDolphinFolder) {
+            Text("Change ›", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
+        }
+        RowDivider()
+        SettingRow("Games folder", "${act.games.size} games", onClick = act::chooseGamesFolder) {
+            Text("Change ›", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
+        }
+        RowDivider()
+        SettingRow("Scan again", "Looks for games you added or removed.", onClick = act::rescan) {
+            Text(if (act.scanning) "Scanning…" else "Scan ›", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
+        }
     }
-    Text("Dolphin: ${act.bridge.installedPackage() ?: "not installed"} · ${act.games.size} games", fontSize = 12.sp, color = LocalWii.current.textDim)
 }
 
 /** The launch command for frontends such as RetroHrai! (see LaunchActivity). */
@@ -1924,13 +2020,7 @@ private fun FrontendSettings(act: MainActivity) {
 
 @Composable
 private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Text(subtitle, fontSize = 12.sp, color = LocalWii.current.textDim)
-        }
-        Switch(checked = checked, onCheckedChange = onChange)
-    }
+    GroupCard { ToggleRow(title, subtitle, checked, onChange) }
 }
 
 /** Which Thor control a key press came from (for "press the button" in the editor), using the Controller Check's mapping. */

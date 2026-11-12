@@ -52,7 +52,7 @@ fun DiagnosticsScreen(act: MainActivity) {
         Header("Diagnostics", onBack = { act.screen = Screen.Settings }) {
             TextButton(onClick = {
                 act.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Delphis report", report))
-                Toast.makeText(act, "Report copied", Toast.LENGTH_SHORT).show()
+                Notices.done(act, "Report copied")
             }) { Text("Copy") }
             TextButton(onClick = {
                 act.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {

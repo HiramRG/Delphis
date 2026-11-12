@@ -48,9 +48,9 @@ fun WhatsNewDialog(version: String, onDismiss: () -> Unit) {
     val focus = remember { FocusRequester() }
     val scroll = rememberScrollState()
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        val shape = RoundedCornerShape(20.dp)
-        Column(
-            Modifier.width(480.dp).heightIn(max = 350.dp).clip(shape).background(c.card).border(2.dp, c.cardBorder, shape)
+        PopupPanel(
+            "What's new" + if (version.isNotBlank()) " · version $version" else "", "What's new in Delphis",
+            Modifier.width(480.dp).heightIn(max = 350.dp)
                 .focusRequester(focus).focusable()
                 .onPreviewKeyEvent { e ->
                     if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -59,14 +59,9 @@ fun WhatsNewDialog(version: String, onDismiss: () -> Unit) {
                         AndroidKey.KEYCODE_DPAD_CENTER, AndroidKey.KEYCODE_ENTER -> { onDismiss(); true }
                         else -> false // the D-pad scrolls the list
                     }
-                }
-                .padding(horizontal = 20.dp, vertical = 16.dp),
+                },
+            buttons = { PanelBtn("Got it", "A", true, onClick = onDismiss) },
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                Text("What's new in Delphis", fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, modifier = Modifier.weight(1f))
-                if (version.isNotBlank()) Text("Version $version", fontSize = 12.sp, color = c.textDim)
-            }
-            Box(Modifier.padding(top = 10.dp, bottom = 8.dp).fillMaxWidth().height(2.dp).background(c.cardBorder.copy(alpha = 0.5f)))
             Column(Modifier.weight(1f, fill = false).verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 for (item in WhatsNew.items) {
                     Row {
@@ -81,10 +76,6 @@ fun WhatsNewDialog(version: String, onDismiss: () -> Unit) {
                         )
                     }
                 }
-            }
-            Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                WiiButton("Ⓐ Got it", onDismiss, primary = true)
             }
         }
     }

@@ -175,7 +175,7 @@ object GameLauncher {
     private val errors = CoroutineExceptionHandler { _, e ->
         CrashLog.record("game launch failed", e)
         if (::appContext.isInitialized) {
-            Toast.makeText(appContext, "Something went wrong: ${e.message ?: e.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+            io.github.hiramrg.delphis.ui.Notices.problem(appContext, "Something went wrong", e.message ?: e.javaClass.simpleName)
         }
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + errors)

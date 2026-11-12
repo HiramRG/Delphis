@@ -172,7 +172,7 @@ fun GyroTestScreen(act: MainActivity) {
                 WiiButton("Center", onClick = { state.center() }, fontSize = 14.sp)
                 WiiButton("Copy readings", onClick = {
                     act.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Gyro readings", readings))
-                    Toast.makeText(act, "Readings copied", Toast.LENGTH_SHORT).show()
+                    Notices.done(act, "Readings copied")
                 }, fontSize = 14.sp)
             }
             Text(readings, fontFamily = FontFamily.Monospace, fontSize = 9.sp, lineHeight = 11.sp, color = c.textDim, maxLines = 4)
