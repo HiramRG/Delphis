@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -111,7 +112,7 @@ fun PlayersDialog(
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         val shape = RoundedCornerShape(20.dp)
         Column(
-            Modifier.width(470.dp).clip(shape).background(c.card).border(2.dp, c.cardBorder, shape)
+            Modifier.width(470.dp).shadow(18.dp, shape).clip(shape).background(if (c.dark) Color(0xFF22272D) else c.card).border(2.dp, c.accent, shape)
                 .focusRequester(focus).focusable()
                 .onPreviewKeyEvent { e ->
                     if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false

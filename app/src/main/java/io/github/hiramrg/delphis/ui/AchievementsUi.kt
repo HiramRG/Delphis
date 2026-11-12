@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -148,7 +149,7 @@ fun AchievementsDialog(p: GameProgress, onDismiss: () -> Unit) {
         val shape = RoundedCornerShape(20.dp)
         AchievementList(
             p,
-            Modifier.width(440.dp).heightIn(max = 340.dp).clip(shape).background(Color(0xFF1F242A)).border(2.dp, AchGoldBorder, shape)
+            Modifier.width(440.dp).heightIn(max = 340.dp).shadow(18.dp, shape).clip(shape).background(Color(0xFF22272D)).border(2.dp, Color(0xFF34BEED), shape)
                 .focusRequester(focus).focusable()
                 .onPreviewKeyEvent { e ->
                     if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
