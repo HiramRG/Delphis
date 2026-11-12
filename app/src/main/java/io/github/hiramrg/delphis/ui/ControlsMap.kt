@@ -348,15 +348,19 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
  * opens on the list when the diagram's text would get too small to read. The switch is remembered per game.
  */
 @Composable
-fun ControlsSwitchable(preset: Preset, prefs: io.github.hiramrg.delphis.platform.Prefs, gameKey: String?, modifier: Modifier = Modifier) {
+fun ControlsSwitchable(preset: Preset, prefs: io.github.hiramrg.delphis.platform.Prefs, gameKey: String?, modifier: Modifier = Modifier, toggle: Int = 0, toggleKey: String? = null) {
     val saved = androidx.compose.runtime.remember(gameKey) { androidx.compose.runtime.mutableStateOf(gameKey?.let { prefs.controlsView(it) }) }
     var tooSmall by androidx.compose.runtime.remember(preset.id) { androidx.compose.runtime.mutableStateOf(false) }
     val list = when (saved.value) { "list" -> true; "thor" -> false; else -> tooSmall }
+    fun set(v: Boolean) { saved.value = if (v) "list" else "thor"; gameKey?.let { prefs.setControlsView(it, saved.value!!) } }
+    // A button (L2 on the game page) flips it too.
+    var lastToggle by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(toggle) }
+    androidx.compose.runtime.LaunchedEffect(toggle) { if (toggle != lastToggle) { lastToggle = toggle; set(!list) } }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Segmented(listOf(false to "Thor", true to "List"), list, { v ->
-            saved.value = if (v) "list" else "thor"
-            gameKey?.let { prefs.setControlsView(it, saved.value!!) }
-        }, height = 28.dp)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Segmented(listOf(false to "Thor", true to "List"), list, { v -> set(v) }, height = 28.dp)
+            if (toggleKey != null) KeyIcon(toggleKey)
+        }
         if (list) ControlsList(preset, Modifier.weight(1f).fillMaxWidth())
         else ControlsMap(preset, Modifier.weight(1f).fillMaxWidth(), onFit = { fs -> if (saved.value == null && fs < MIN_MAP_FONT && !tooSmall) tooSmall = true })
     }
