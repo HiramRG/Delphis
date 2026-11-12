@@ -13,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
@@ -92,7 +93,16 @@ class MainActivity : ComponentActivity() {
     /** Home's scroll position (kept while visiting a game page). */
     val homeGrid = androidx.compose.foundation.lazy.grid.LazyGridState()
     /** Library column on Home: open (labels) or retracted (icons only). */
-    var libraryOpen by mutableStateOf(true)
+    var libraryOpen by mutableStateOf(false)
+    /** Search shown over Home's rows (the rail's 🔍): the grid with its search box. */
+    var searchOpen by mutableStateOf(false)
+    /** The rail asks Home to jump to a row: [railTarget], bumped [railJump]. */
+    var railTarget by mutableStateOf<HomeRow?>(null)
+    var railJump by mutableIntStateOf(0)
+    /** The first tile of each Home row, so the rail can put the ring on it. */
+    val rowFocus = mutableMapOf<HomeRow, androidx.compose.ui.focus.FocusRequester>()
+    /** Until when the sort options pop up above the bar's sort pill (after R1). */
+    var sortPopupUntil by mutableLongStateOf(0L)
     /** Bumped to scroll Home down to the game list. */
     var scrollToGamesRequest by mutableIntStateOf(0)
 
