@@ -5,7 +5,7 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 25
+    const val RELEASE = 26
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
