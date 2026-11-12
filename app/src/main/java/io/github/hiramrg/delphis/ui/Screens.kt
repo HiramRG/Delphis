@@ -33,6 +33,8 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.onFocusChanged
@@ -194,26 +196,49 @@ fun HomeScreen(act: MainActivity) {
         if (act.scrollToGamesRequest > 0) runCatching { grid.animateScrollToItem(gamesHeaderIndex) }
     }
 
+    // "All games" with no search: Netflix-style rows (Recently played, Wii, GameCube, Favorites, All games).
+    val rowsMode = act.librarySection == LibSection.ALL && act.libraryQuery.isBlank() && act.games.isNotEmpty()
+    val heroAchievements = hero?.let { rememberAchievements(act.prefs, it.key, it.info) }
+    var showHeroAchievements by remember { mutableStateOf(false) }
+    if (showHeroAchievements && heroAchievements != null) AchievementsDialog(heroAchievements) { showHeroAchievements = false }
+
     val onKey by rememberUpdatedState<(KeyEvent) -> Boolean> { e ->
         val target = act.focusedGame ?: hero
         if (act.searchEditing) return@rememberUpdatedState false
+        val onRow = rowsMode && act.homeRow != null && act.focusedGame != null
         when (e.keyCode) {
+            // On a row, Ⓐ plays the game under the ring (Ⓧ opens its game page).
             KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_START ->
-                if (act.homeFocusedTile || hero == null) false else { if (e.firstPress()) act.quickPlay(hero); true }
+                if (onRow) { if (e.firstPress()) act.focusedGame?.let { act.quickPlay(it) }; true }
+                else if (act.homeFocusedTile || hero == null) false else { if (e.firstPress()) act.quickPlay(hero); true }
             KeyEvent.KEYCODE_BUTTON_X -> { if (e.firstPress()) target?.let { act.openGame(it) }; true }
             KeyEvent.KEYCODE_BUTTON_Y -> { if (e.firstPress()) target?.let { act.prefs.toggleFavorite(it.key); act.statsVersion++ }; true }
             KeyEvent.KEYCODE_BUTTON_L1 -> { if (e.firstPress()) act.libraryOpen = !act.libraryOpen; true }
-            KeyEvent.KEYCODE_BUTTON_R1 -> { if (e.firstPress()) act.librarySort = LibSort.entries[(act.librarySort.ordinal + 1) % LibSort.entries.size]; true }
+            KeyEvent.KEYCODE_BUTTON_R1 -> {
+                if (e.firstPress()) {
+                    val row = act.homeRow
+                    if (rowsMode && row != null && row.sortable) {
+                        val cur = rowSort(act, row)
+                        act.prefs.setRowSort(row.name, LibSort.entries[(cur.ordinal + 1) % LibSort.entries.size].name); act.statsVersion++
+                    } else act.librarySort = LibSort.entries[(act.librarySort.ordinal + 1) % LibSort.entries.size]
+                }
+                true
+            }
+            KeyEvent.KEYCODE_BUTTON_THUMBR -> {
+                if (e.firstPress() && heroAchievements != null && act.homeRow == null) showHeroAchievements = true
+                heroAchievements != null && act.homeRow == null
+            }
             else -> false
         }
     }
-    DisposableEffect(Unit) { act.keyListener = { onKey(it) }; onDispose { act.keyListener = null; act.homeFocusedTile = false; act.homeHint = null; act.searchEditing = false } }
+    DisposableEffect(Unit) { act.keyListener = { onKey(it) }; onDispose { act.keyListener = null; act.homeFocusedTile = false; act.homeHint = null; act.searchEditing = false; act.homeRow = null } }
 
     Column(Modifier.fillMaxSize()) {
         UpdateBanner(act)
         Row(Modifier.weight(1f).fillMaxWidth()) {
             LibraryColumn(act, favorites)
-            LazyVerticalGrid(
+            if (rowsMode) HomeRows(act, hero, recent, favorites, lastPlayed, playTime, heroAchievements) { showHeroAchievements = true }
+            else LazyVerticalGrid(
                 columns = GridCells.Adaptive(96.dp), state = grid,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 contentPadding = PaddingValues(start = 12.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
@@ -230,7 +255,7 @@ fun HomeScreen(act: MainActivity) {
                                     act.focusedGame = null
                                 }
                             },
-                    ) { if (hero != null) HeroCard(act, hero) else WelcomeCard(act) }
+                    ) { if (hero != null) HeroCard(act, hero, heroAchievements) { showHeroAchievements = true } else WelcomeCard(act) }
                 }
                 if (recent.size > 1) {
                     item(key = "recent-title", span = { GridItemSpan(maxLineSpan) }) {
@@ -358,8 +383,160 @@ private fun SearchBox(act: MainActivity) {
     }
 }
 
+// ============================================================================ home rows
+
+/** Home's rows in "All games": Recently played and Favorites mix both platforms; Wii and GameCube have their own. */
+enum class HomeRow(val title: String, val sortable: Boolean) {
+    RECENT("Recently played", false), WII("Wii", true), GAMECUBE("GameCube", true), FAVORITES("Favorites", true), ALL("All games", true)
+}
+
+private fun rowSort(act: MainActivity, row: HomeRow): LibSort =
+    act.prefs.rowSort(row.name)?.let { n -> LibSort.entries.firstOrNull { it.name == n } } ?: LibSort.RECENT
+
+/** White for Wii, purple for GameCube: the rim around covers and the row tags. */
+val WiiWhite = Color(0xFFF4F7FA)
+val CubePurple = Color(0xFF5B4BC4)
+fun platformColour(p: Platform) = if (p == Platform.GAMECUBE) CubePurple else WiiWhite
+
+/** A thin rim in the game's platform colour, so mixed rows stay easy to read. */
+fun Modifier.platformRim(g: GameEntry, width: androidx.compose.ui.unit.Dp = 2.5.dp): Modifier =
+    this.border(width, platformColour(g.info.platform), RoundedCornerShape(10.dp))
+
+/** "Wii" (white) or "▢ GameCube" (purple) tag. */
 @Composable
-private fun HeroCard(act: MainActivity, g: GameEntry) {
+fun PlatformTag(p: Platform, small: Boolean = false) {
+    val gc = p == Platform.GAMECUBE
+    Row(
+        Modifier.height(if (small) 17.dp else 22.dp).clip(RoundedCornerShape(50)).background(if (gc) CubePurple else WiiWhite).padding(horizontal = if (small) 6.dp else 9.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        if (gc) Box(Modifier.size(if (small) 7.dp else 9.dp).rotate(45f).border(2.dp, Color.White, RoundedCornerShape(2.dp)))
+        Text(if (gc) "GameCube" else "Wii", fontSize = if (small) 10.sp else 12.sp, fontWeight = FontWeight.Black, color = if (gc) Color.White else Color(0xFF1A6FB5), maxLines = 1)
+    }
+}
+
+@Composable
+private fun HomeRows(
+    act: MainActivity, hero: GameEntry?, recent: List<GameEntry>, favorites: Set<String>,
+    lastPlayed: Map<String, Long>, playTime: Map<String, Long>,
+    heroAchievements: io.github.hiramrg.delphis.core.RetroAchievements.GameProgress?, onHeroAchievements: () -> Unit,
+) {
+    val state = rememberLazyListState()
+    @Suppress("UNUSED_VARIABLE") val v = act.statsVersion
+    val rows = buildList {
+        recent.drop(1).take(12).takeIf { it.isNotEmpty() }?.let { add(HomeRow.RECENT to it) }
+        act.games.filter { it.info.platform == Platform.WII }.takeIf { it.isNotEmpty() }?.let { add(HomeRow.WII to sortGames(it, rowSort(act, HomeRow.WII), lastPlayed, playTime)) }
+        act.games.filter { it.info.platform == Platform.GAMECUBE }.takeIf { it.isNotEmpty() }?.let { add(HomeRow.GAMECUBE to sortGames(it, rowSort(act, HomeRow.GAMECUBE), lastPlayed, playTime)) }
+        act.games.filter { it.key in favorites }.takeIf { it.isNotEmpty() }?.let { add(HomeRow.FAVORITES to sortGames(it, rowSort(act, HomeRow.FAVORITES), lastPlayed, playTime)) }
+        add(HomeRow.ALL to sortGames(act.games, rowSort(act, HomeRow.ALL), lastPlayed, playTime))
+    }
+    // The top card: back at the top, show all of it.
+    LaunchedEffect(act.homeRow) { if (act.homeRow == null && state.firstVisibleItemIndex <= 1) runCatching { state.animateScrollToItem(0) } }
+    // Sidebar "All games" jumps to the All games row.
+    LaunchedEffect(act.scrollToGamesRequest) { if (act.scrollToGamesRequest > 0) runCatching { state.animateScrollToItem(rows.size) } }
+    LazyColumn(
+        Modifier.fillMaxHeight().fillMaxWidth(), state = state,
+        contentPadding = PaddingValues(start = 12.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        item(key = "top") {
+            Box(Modifier.fillMaxWidth().height(150.dp).onFocusChanged { if (it.hasFocus) { act.homeRow = null; act.focusedGame = null; if (hero == null) act.homeFocusedTile = false } }) {
+                // The continue card stays underneath (so the D-pad can always go back up to its buttons);
+                // while the ring is on a row, the preview of that game covers it.
+                if (hero != null) HeroCard(act, hero, heroAchievements, onHeroAchievements) else WelcomeCard(act)
+                act.focusedGame?.takeIf { act.homeRow != null }?.let { PreviewCard(act, it, playTime[it.key] ?: 0L) }
+            }
+        }
+        rows.forEach { (row, games) -> item(key = "row-" + row.name) { GameRowView(act, row, games, favorites) } }
+    }
+}
+
+/** The top card while the ring is on a row: the game under the ring, tinted in its platform's colour. */
+@Composable
+private fun PreviewCard(act: MainActivity, g: GameEntry, playMs: Long) {
+    val c = LocalWii.current
+    val gc = g.info.platform == Platform.GAMECUBE
+    val tint = if (gc) Color(0xFF2A2160) else Color(0xFF1F3F57)
+    val shape = RoundedCornerShape(24.dp)
+    Row(
+        Modifier.fillMaxSize().clip(shape).background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(tint, c.card)))
+            .border(2.dp, if (gc) CubePurple else Color(0xFF9FD3F2), shape).padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.fillMaxHeight().aspectRatio(0.72f)) { Cover(act, g, act.prefs.showCovers, Modifier.fillMaxSize().platformRim(g), titleSize = 14) }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            val when_ = if (playMs > 60_000) formatPlayTime(playMs) + " played" else "New"
+            Text((if (gc) "GAMECUBE" else "WII") + " · " + when_.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp,
+                color = if (gc) Color(0xFFC8C0F0) else Color(0xFFBFE0F5), maxLines = 1)
+            Text(g.info.title, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 23.sp)
+            Text("Ⓐ Play · Ⓧ Game page · Ⓨ " + if (act.prefs.isFavorite(g.key)) "Unfavorite" else "Favorite", fontSize = 12.sp, color = c.textDim, maxLines = 1)
+        }
+    }
+}
+
+/**
+ * One Home row. The row the ring is on grows and shows its sort chips (R1 steps through them); the
+ * others shrink and fade. Each row remembers its own sort.
+ */
+@Composable
+private fun GameRowView(act: MainActivity, row: HomeRow, games: List<GameEntry>, favorites: Set<String>) {
+    val c = LocalWii.current
+    val focused = act.homeRow == row
+    val quiet = act.homeRow != null && !focused
+    val coverW by androidx.compose.animation.core.animateDpAsState(when { focused -> 76.dp; quiet -> 46.dp; else -> 64.dp }, label = "row size")
+    val alpha by androidx.compose.animation.core.animateFloatAsState(if (quiet) 0.5f else 1f, label = "row fade")
+    Column(Modifier.fillMaxWidth().alpha(alpha)) {
+        Row(Modifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            when (row) {
+                HomeRow.WII -> PlatformTag(Platform.WII)
+                HomeRow.GAMECUBE -> PlatformTag(Platform.GAMECUBE)
+                HomeRow.FAVORITES -> Text("★ Favorites", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                else -> Text(row.title, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+            }
+            Text("${games.size}", fontSize = 12.sp, color = c.textDim, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            if (focused && row.sortable) {
+                KeyBadge("R1")
+                val cur = rowSort(act, row)
+                LibSort.entries.forEach { s ->
+                    val on = s == cur
+                    Text(s.label, fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, color = if (on) Color(0xFF0A2533) else c.text,
+                        modifier = Modifier.focusProperties { canFocus = false }.clip(RoundedCornerShape(50)).background(if (on) c.accent else c.card)
+                            .border(2.dp, if (on) c.accent else c.cardBorder, RoundedCornerShape(50))
+                            .clickable { act.prefs.setRowSort(row.name, s.name); act.statsVersion++ }.padding(horizontal = 10.dp, vertical = 4.dp))
+                }
+            }
+        }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(vertical = 4.dp, horizontal = 3.dp)) {
+            items(games, key = { row.name + it.uri.toString() }) { g -> RowTile(act, row, g, coverW, g.key in favorites) }
+        }
+    }
+}
+
+@Composable
+private fun RowTile(act: MainActivity, row: HomeRow, g: GameEntry, coverW: androidx.compose.ui.unit.Dp, favorite: Boolean) {
+    val c = LocalWii.current
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(13.dp)
+    Column(
+        Modifier.width(coverW + 6.dp)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = g; act.homeRow = row; act.homeHint = "Ⓐ Play · Ⓧ Game page · Ⓨ Favorite · R1 Sort" }
+            }
+            .clickable { act.focusedGame = g; act.openGame(g) },
+    ) {
+        Box(Modifier.size(coverW + 6.dp, coverW / 0.72f + 6.dp).border(3.dp, if (focused) c.accent else Color.Transparent, shape).padding(3.dp)) {
+            Cover(act, g, act.prefs.showCovers, Modifier.fillMaxSize().platformRim(g), titleSize = 10)
+            if (favorite) Text("★", color = Color(0xFFFFD34D), fontSize = 13.sp, modifier = Modifier.align(Alignment.TopStart).padding(4.dp))
+        }
+        if (coverW > 50.dp) Text(g.info.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 3.dp, top = 1.dp))
+    }
+}
+
+@Composable
+private fun HeroCard(act: MainActivity, g: GameEntry, achievements: io.github.hiramrg.delphis.core.RetroAchievements.GameProgress? = null, onAchievements: () -> Unit = {}) {
     val c = LocalWii.current
     val preset = act.prefs.presetFor(g.key)?.let { act.store.byId(it) }
     val fav = act.prefs.isFavorite(g.key)
@@ -371,7 +548,7 @@ private fun HeroCard(act: MainActivity, g: GameEntry) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                 // No accent frame here: the only blue ring on Home is the one that follows the D-pad focus.
                 Box(Modifier.fillMaxHeight().aspectRatio(0.72f).clip(RoundedCornerShape(14.dp))) {
-                    Cover(act, g, act.prefs.showCovers, Modifier.fillMaxSize(), titleSize = 14)
+                    Cover(act, g, act.prefs.showCovers, Modifier.fillMaxSize().platformRim(g), titleSize = 14)
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -382,7 +559,11 @@ private fun HeroCard(act: MainActivity, g: GameEntry) {
                             g.info.title, fontSize = if (tight) 21.sp else 26.sp, fontWeight = FontWeight.ExtraBold,
                             lineHeight = if (tight) 23.sp else 28.sp, maxLines = if (tight) 1 else 2, overflow = TextOverflow.Ellipsis,
                         )
-                        Text(playSummary(act, g) + if (fav) "  ★" else "", fontSize = 12.sp, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            PlatformTag(g.info.platform, small = true)
+                            Text(playSummary(act, g) + if (fav) "  ★" else "", fontSize = 12.sp, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            achievements?.let { a -> GameChip("🏆 ${a.unlocked}/${a.total}", "R3", height = 24.dp, onClick = onAchievements) }
+                        }
                         if (autosave) Text("▶ Continues from your autosave", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.accentText, maxLines = 1)
                         if (!tight || !autosave) Text(withOrangeTags("Controls: ${preset?.name ?: "choose when you play"}", c.orange), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
@@ -449,7 +630,7 @@ private fun HomeBar(act: MainActivity) {
     ) {
         Box(
             Modifier.size(36.dp).focusRing(RoundedCornerShape(50)).clip(RoundedCornerShape(50)).background(c.card).border(2.dp, c.cardBorder, RoundedCornerShape(50))
-                .onFocusChanged { if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null } }
+                .onFocusChanged { if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeRow = null } }
                 .clickable { act.screen = Screen.Settings },
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.Filled.Settings, "Settings", tint = c.textDim) }
@@ -471,7 +652,15 @@ fun Modifier.focusRing(shape: androidx.compose.ui.graphics.Shape, width: android
 // ============================================================================ library (column + list on Home)
 
 enum class LibSection(val label: String) { ALL("All games"), FAVORITES("Favorites"), WII("Wii"), GAMECUBE("GameCube") }
-enum class LibSort(val label: String) { RECENT("Recent"), AZ("A–Z"), MOST("Most played") }
+enum class LibSort(val label: String) { RECENT("Last played"), AZ("A–Z"), MOST("Most played"), ADDED("Recently added") }
+
+/** Sorts games: last played, A–Z, most played or recently added (newest file first). */
+fun sortGames(list: List<GameEntry>, sort: LibSort, lastPlayed: Map<String, Long>, playTime: Map<String, Long>): List<GameEntry> = when (sort) {
+    LibSort.RECENT -> list.sortedWith(compareByDescending<GameEntry> { lastPlayed[it.key] ?: 0L }.thenBy { it.info.title.lowercase() })
+    LibSort.AZ -> list.sortedBy { it.info.title.lowercase() }
+    LibSort.MOST -> list.sortedWith(compareByDescending<GameEntry> { playTime[it.key] ?: 0L }.thenBy { it.info.title.lowercase() })
+    LibSort.ADDED -> list.sortedWith(compareByDescending<GameEntry> { it.lastModified }.thenBy { it.info.title.lowercase() })
+}
 
 private fun inSection(g: GameEntry, s: LibSection, favorites: Set<String>) = when (s) {
     LibSection.ALL -> true
@@ -484,11 +673,7 @@ private fun inSection(g: GameEntry, s: LibSection, favorites: Set<String>) = whe
 private fun libraryList(act: MainActivity, favorites: Set<String>, lastPlayed: Map<String, Long>, playTime: Map<String, Long>): List<GameEntry> {
     val q = act.libraryQuery.trim().lowercase()
     val list = act.games.filter { inSection(it, act.librarySection, favorites) && (q.isEmpty() || it.info.title.lowercase().contains(q)) }
-    return when (act.librarySort) {
-        LibSort.RECENT -> list.sortedWith(compareByDescending<GameEntry> { lastPlayed[it.key] ?: 0L }.thenBy { it.info.title.lowercase() })
-        LibSort.AZ -> list.sortedBy { it.info.title.lowercase() }
-        LibSort.MOST -> list.sortedWith(compareByDescending<GameEntry> { playTime[it.key] ?: 0L }.thenBy { it.info.title.lowercase() })
-    }
+    return sortGames(list, act.librarySort, lastPlayed, playTime)
 }
 
 /** Retractable column on the left of Home: All games, Favorites, Wii, GameCube. L1 or the arrow opens/closes it. */
@@ -500,7 +685,7 @@ private fun LibraryColumn(act: MainActivity, favorites: Set<String>) {
     val shape = RoundedCornerShape(20.dp)
     // Rows tell Home that A belongs to them (not "play the hero") while they have the focus.
     fun Modifier.claimsA(hint: String? = null) = onFocusChanged {
-        if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeHint = hint }
+        if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeRow = null; act.homeHint = hint }
         else if (act.homeHint == hint) act.homeHint = null
     }
     Column(
@@ -619,7 +804,7 @@ private fun GameCard(act: MainActivity, g: GameEntry, favorite: Boolean, playMs:
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(0.72f)) {
-            Cover(act, g, act.prefs.showCovers, Modifier.fillMaxSize())
+            Cover(act, g, act.prefs.showCovers, Modifier.fillMaxSize().platformRim(g))
             if (favorite) Text("★", color = Color(0xFFFFD34D), fontSize = 16.sp, modifier = Modifier.align(Alignment.TopStart).padding(4.dp))
             Text(
                 if (g.info.platform == Platform.GAMECUBE) "GC" else platformLabel(g.info.platform), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF3A3F45),
@@ -871,11 +1056,11 @@ private fun screenChipLabel(sc: io.github.hiramrg.delphis.core.GameScreen.Choice
 
 /** A chip in the game page's top row: text, then the button that toggles it in small grey type ("L1"). */
 @Composable
-private fun GameChip(text: String, key: String?, on: Boolean = false, warn: Boolean = false, outline: Boolean = false, onClick: () -> Unit) {
+private fun GameChip(text: String, key: String?, on: Boolean = false, warn: Boolean = false, outline: Boolean = false, height: androidx.compose.ui.unit.Dp = 32.dp, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(50)
     Row(
-        Modifier.height(32.dp).clip(shape)
+        Modifier.height(height).clip(shape)
             .background(if (on) c.accentSoft else c.card)
             .border(2.dp, when { warn -> c.orange; on || outline -> c.accent; else -> c.cardBorder }, shape)
             .clickable(onClick = onClick).padding(horizontal = 12.dp),

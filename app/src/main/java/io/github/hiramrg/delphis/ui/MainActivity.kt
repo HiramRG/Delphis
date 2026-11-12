@@ -75,6 +75,8 @@ class MainActivity : ComponentActivity() {
     var statsVersion by mutableIntStateOf(0)
     /** Game highlighted in All games (shown in detail on the bottom screen). */
     var focusedGame by mutableStateOf<GameEntry?>(null)
+    /** The Home row the D-pad is on (null = the top card, sidebar or bar). */
+    var homeRow by mutableStateOf<HomeRow?>(null)
     /** Preset choice for the open game page, shared with the bottom-screen picker. */
     var picker by mutableStateOf<GamePicker?>(null)
     var librarySection by mutableStateOf(LibSection.ALL)

@@ -78,6 +78,10 @@ class Prefs(context: Context) {
     private fun writeMap(key: String, m: Map<String, Long>) =
         sp.edit().putString(key, m.entries.joinToString("\n") { "${it.key}=${it.value}" }).apply()
 
+    /** How a Home row is sorted (LibSort name), per row. */
+    fun rowSort(row: String): String? = sp.getString("row_sort_$row", null)
+    fun setRowSort(row: String, sort: String) = sp.edit().putString("row_sort_$row", sort).apply()
+
     fun favorites(): Set<String> = sp.getStringSet("favorites", emptySet()) ?: emptySet()
     fun isFavorite(gameKey: String) = gameKey in favorites()
     fun toggleFavorite(gameKey: String) {

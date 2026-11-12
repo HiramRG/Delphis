@@ -93,14 +93,45 @@ class NowPlayingActivity : ComponentActivity() {
     private var session by mutableStateOf<GameSession?>(null)
     private var startedAt by mutableLongStateOf(SystemClock.elapsedRealtime())
     private var busy by mutableStateOf<String?>(null)
-    /** When the current game started on this screen, for the play-time stat. */
+    /**
+     * Play time only counts while someone can actually be playing: the screen is on and unlocked, and
+     * the game isn't in the background. (It used to count from start to finish, so a game left open
+     * with the Thor asleep or locked piled up hours.)
+     */
     private var playStart = SystemClock.elapsedRealtime()
+    private var screenAwake = true
+    private var counting = true
+    /** Time counted since the last time it was saved; saved once it passes 30 s. */
+    private var unsaved = 0L
 
     private fun recordPlayTime() {
         val s = session ?: return
-        val ms = SystemClock.elapsedRealtime() - playStart
-        if (ms > 30_000) prefs.addPlayTime(s.key, ms)
+        val now = SystemClock.elapsedRealtime()
+        if (counting) unsaved += now - playStart
+        playStart = now
+        if (unsaved > 30_000) { prefs.addPlayTime(s.key, unsaved); unsaved = 0L }
+    }
+
+    /** Starts or stops the play-time clock (screen off / locked, game in the background). */
+    private fun updateCounting() {
+        val should = screenAwake && !GameWatch.suspended.value
+        if (should == counting) return
+        recordPlayTime()
+        counting = should
         playStart = SystemClock.elapsedRealtime()
+    }
+
+    private val screenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: Intent) {
+            screenAwake = when (intent.action) {
+                Intent.ACTION_SCREEN_OFF -> false
+                Intent.ACTION_USER_PRESENT -> true
+                // Screen on but still locked: wait for USER_PRESENT.
+                Intent.ACTION_SCREEN_ON -> !(getSystemService(KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked
+                else -> screenAwake
+            }
+            updateCounting()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -108,6 +139,9 @@ class NowPlayingActivity : ComponentActivity() {
         prefs = Prefs(this)
         bridge = DolphinBridge(this, prefs)
         store = PresetStore(this)
+        registerReceiver(screenReceiver, android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_USER_PRESENT)
+        })
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
@@ -215,7 +249,10 @@ class NowPlayingActivity : ComponentActivity() {
             }, 300)
             return
         }
-        GameSession.from(intent)?.let { recordPlayTime(); prefs.markPlayed(it.key); session = it; startedAt = SystemClock.elapsedRealtime(); watch(it) }
+        GameSession.from(intent)?.let {
+            recordPlayTime(); session?.let { old -> if (unsaved > 0) prefs.addPlayTime(old.key, unsaved) }; unsaved = 0L
+            prefs.markPlayed(it.key); session = it; startedAt = SystemClock.elapsedRealtime(); playStart = startedAt; watch(it)
+        }
     }
 
     /** Lets the rest of the app know which game is running, to spot it stopping unexpectedly. */
@@ -224,7 +261,7 @@ class NowPlayingActivity : ComponentActivity() {
         GameWatch.unexpectedStop.value = false
         GameWatch.suspended.value = false
         // The player went to the home screen / another app: hide with the game (it comes back with it).
-        GameWatch.onSuspended = { gone -> if (gone) runOnUiThread { moveTaskToBack(true) } }
+        GameWatch.onSuspended = { gone -> runOnUiThread { updateCounting(); if (gone) moveTaskToBack(true) } }
     }
 
     override fun onPause() {
@@ -234,7 +271,8 @@ class NowPlayingActivity : ComponentActivity() {
 
     override fun onDestroy() {
         removeFocusSink()
-        if (isFinishing) { DolphinExitService.hideSides(); recordPlayTime(); GameWatch.session = null; GameWatch.onSuspended = null; GameWatch.suspended.value = false }
+        runCatching { unregisterReceiver(screenReceiver) }
+        if (isFinishing) { DolphinExitService.hideSides(); recordPlayTime(); session?.let { if (unsaved > 0) prefs.addPlayTime(it.key, unsaved) }; unsaved = 0L; GameWatch.session = null; GameWatch.onSuspended = null; GameWatch.suspended.value = false }
         super.onDestroy()
     }
 
