@@ -1271,8 +1271,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     Row(Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         // Left: the game, then Edit and Play.
         Column(Modifier.fillMaxHeight().width(160.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text("◀ Back", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { act.screen = Screen.Home }.padding(4.dp))
+            BackLink("Home") { act.screen = Screen.Home }
             // No accent frame: the only blue ring is the one that follows the D-pad focus.
             Box(Modifier.weight(1f, fill = false).aspectRatio(0.72f).clip(RoundedCornerShape(14.dp))) {
                 Cover(act, game, act.prefs.showCovers, Modifier.fillMaxSize(), titleSize = 14)
@@ -1339,7 +1338,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                 if (showList) {
                     PresetChooser(p.groups, p.selected, p.focused, game.info.title, { p.isEdited(it) }, Modifier.weight(1f).fillMaxWidth()) { p.choose(it) }
                 } else if (shown != null) {
-                    ControlsMap(shown, Modifier.weight(1f).fillMaxWidth())
+                    ControlsSwitchable(shown, act.prefs, game.key, Modifier.weight(1f).fillMaxWidth())
                 } else {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text(if (companion) "Pick a control style on the bottom screen (or with the D-pad)." else "Press Change › to pick a control style.", color = c.textDim, textAlign = TextAlign.Center)

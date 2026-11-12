@@ -506,7 +506,7 @@ class NowPlayingActivity : ComponentActivity() {
                 // ---------------- top bar: Home | title (centred) | brightness
                 Box(Modifier.fillMaxWidth().alpha(fade)) {
                     Box(Modifier.align(Alignment.CenterStart)) {
-                        HomePill { if (prefs.skipExitWarning) backToMainMenu() else confirmExit = true }
+                        TopChip("⌂ Home") { if (prefs.skipExitWarning) backToMainMenu() else confirmExit = true }
                     }
                     Column(
                         Modifier.align(Alignment.Center).padding(horizontal = 104.dp + (if (achievements != null) 46.dp else 0.dp) + (if (screenGid != null) 50.dp else 0.dp)),
@@ -524,15 +524,11 @@ class NowPlayingActivity : ComponentActivity() {
                             achievements, onClick = { showAchievements = !showAchievements }, compact = true, active = showAchievements,
                         )
                         screenChoice?.let { sc ->
-                            val pill = RoundedCornerShape(50)
-                            Text(
-                                "▭ " + (if (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) "16:9" else "4:3"),
-                                fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = if (showPicture) MaterialTheme.colorScheme.primary else LocalWii.current.text,
-                                modifier = Modifier.clip(pill).border(2.dp, if (showPicture) MaterialTheme.colorScheme.primary else LocalWii.current.cardBorder, pill)
-                                    .clickable { showBrightness = false; showPicture = !showPicture }.padding(horizontal = 9.dp, vertical = 5.dp),
-                            )
+                            TopChip("▭ " + (if (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) "16:9" else "4:3"), on = showPicture) {
+                                showBrightness = false; showPicture = !showPicture
+                            }
                         }
-                        BrightnessPill(brightness, open = showBrightness) {
+                        TopChip("☀", on = showBrightness) {
                             showPicture = false
                             showBrightness = !showBrightness
                         }
@@ -565,9 +561,9 @@ class NowPlayingActivity : ComponentActivity() {
                             onClose = { showAchievements = false },
                         )
                     } else if (!preset.isTrackpad) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
-                        ControlsMap(preset, Modifier.fillMaxSize())
+                        ControlsSwitchable(preset, prefs, s.key, Modifier.fillMaxSize())
                     } else Column(Modifier.weight(1f).fillMaxWidth()) {
-                        SegmentedPill(
+                        Segmented(
                             listOf(false to "▦ Map", true to "◎ Trackpad"), padView, { padView = it },
                             Modifier.align(Alignment.CenterHorizontally).padding(bottom = 6.dp).alpha(fade),
                         )
@@ -598,7 +594,7 @@ class NowPlayingActivity : ComponentActivity() {
                                 onPress = { i, pressed -> io.github.hiramrg.delphis.platform.DsuServer.setTouchButton(i, pressed) },
                             )
                         } else WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
-                            ControlsMap(preset, Modifier.fillMaxSize())
+                            ControlsSwitchable(preset, prefs, s.key, Modifier.fillMaxSize())
                         }
                     }
                     Mode.CHANGE -> LayoutSwitcher(s, preset, onCancel = { mode = Mode.VIEW }) { chosen ->
@@ -640,18 +636,18 @@ class NowPlayingActivity : ComponentActivity() {
                 }
                 if (mode == Mode.VIEW && preset.isTrackpad && padView) {
                     Row(Modifier.fillMaxWidth().padding(top = 6.dp).alpha(fade), verticalAlignment = Alignment.CenterVertically) {
-                        SecondaryGlowButton("◎ Recenter", null, onClick = { recenterPointer() }, fontSize = 13.sp)
+                        PanelBtn("◎ Recenter", null, false) { recenterPointer() }
                         Spacer(Modifier.weight(1f))
-                        Text("Speed", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 6.dp))
-                        SegmentedPill(
+                        Text("Speed", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LocalWii.current.textDim, modifier = Modifier.padding(end = 6.dp))
+                        Segmented(
                             io.github.hiramrg.delphis.core.Trackpad.Speed.entries.map { it to it.label }, padSpeed,
                             { padSpeed = it; prefs.setTrackpadSpeed(s.key, it) },
                         )
                     }
                 } else if (mode == Mode.VIEW) {
                     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PrimaryGlowButton("Change preset", null, onClick = { showBrightness = false; mode = Mode.CHANGE }, modifier = Modifier.weight(1f))
-                        SecondaryGlowButton("Edit preset", null, onClick = { showBrightness = false; mode = Mode.EDIT }, modifier = Modifier.weight(1f))
+                        PanelBtn("Change preset", null, true, Modifier.weight(1f)) { showBrightness = false; mode = Mode.CHANGE }
+                        PanelBtn("✎ Edit preset", null, false, Modifier.weight(1f)) { showBrightness = false; mode = Mode.EDIT }
                     }
                 }
             }
@@ -678,23 +674,23 @@ class NowPlayingActivity : ComponentActivity() {
             if (showPicture && screenChoice != null && screenGid != null) {
                 val wc = LocalWii.current
                 Box(Modifier.fillMaxSize().clickable { showPicture = false }) {
-                    val shape = RoundedCornerShape(16.dp)
-                    Column(
-                        Modifier.align(Alignment.TopCenter).padding(top = 74.dp, start = 12.dp, end = 12.dp).fillMaxWidth().clip(shape)
-                            .background(wc.card).border(2.dp, Color(0xFF34BEED), shape).clickable(enabled = false) {}.padding(12.dp),
+                    PopupPanel(
+                        if (screenChoice!!.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD) "Picture · sides change right away" else "Picture · 16:9 fill",
+                        if (screenChoice!!.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD) "4:3 · what goes in the sides?" else "16:9 · how it fills the screen",
+                        Modifier.align(Alignment.TopCenter).padding(top = 74.dp, start = 12.dp, end = 12.dp).fillMaxWidth().clickable(enabled = false) {},
+                        corner = {
+                            Segmented(
+                                listOf(io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD to "4:3", io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE to "16:9"),
+                                screenChoice!!.shape, { sh -> screenChoice = screenChoice!!.copy(shape = sh); prefs.setScreenFor(screenGid, screenChoice!!) },
+                            )
+                        },
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Picture", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
-                            ShapeSwitch(screenChoice!!.shape, { sh -> screenChoice = screenChoice!!.copy(shape = sh); prefs.setScreenFor(screenGid, screenChoice!!) })
-                        }
-                        Text(if (screenChoice!!.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD) "SIDES · CHANGES RIGHT AWAY" else "16:9 FILL",
-                            fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, color = wc.textDim, modifier = Modifier.padding(top = 8.dp, bottom = 5.dp))
                         ScreenChoices(screenChoice!!, screenGid, prefs.gcUseHack, sideColour, 128.dp, showSub = false) { ch -> screenChoice = ch; prefs.setScreenFor(screenGid, ch) }
                         val needsRestart = runningScreen != null && (screenChoice!!.shape != runningScreen.shape ||
                             (screenChoice!!.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE && screenChoice!!.fill != runningScreen.fill))
                         if (needsRestart) Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("Dolphin applies this when the game starts.", fontSize = 11.sp, color = wc.textDim, modifier = Modifier.weight(1f))
-                            PrimaryGlowButton("Restart game", null, onClick = { showPicture = false; restartAction = { applyAndRestart(s, preset, remember = false) } }, fontSize = 12.sp)
+                            PanelBtn("Restart game", null, true) { showPicture = false; restartAction = { applyAndRestart(s, preset, remember = false) } }
                         }
                     }
                 }

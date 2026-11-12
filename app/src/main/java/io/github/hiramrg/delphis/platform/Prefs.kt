@@ -82,6 +82,10 @@ class Prefs(context: Context) {
     fun rowSort(row: String): String? = sp.getString("row_sort_$row", null)
     fun setRowSort(row: String, sort: String) = sp.edit().putString("row_sort_$row", sort).apply()
 
+    /** The controls card's view for a game: "thor", "list", or null = not picked yet (diagram unless it's too small). */
+    fun controlsView(game: String): String? = sp.getString("controls_view_$game", null)
+    fun setControlsView(game: String, view: String) = sp.edit().putString("controls_view_$game", view).apply()
+
     fun favorites(): Set<String> = sp.getStringSet("favorites", emptySet()) ?: emptySet()
     fun isFavorite(gameKey: String) = gameKey in favorites()
     fun toggleFavorite(gameKey: String) {

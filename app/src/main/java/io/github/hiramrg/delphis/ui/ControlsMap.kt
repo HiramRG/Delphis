@@ -2,6 +2,14 @@ package io.github.hiramrg.delphis.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,12 +94,91 @@ private fun mapLabel(action: String): String {
 private val ChipBlue = Color(0xFF5C8DF6)
 private val White = Color.White
 
+/** [onFit] gets the label font size (dp) the diagram ended up using, so callers can switch to the list when it gets small. */
 @Composable
-fun ControlsMap(preset: Preset, modifier: Modifier = Modifier) {
+fun ControlsMap(preset: Preset, modifier: Modifier = Modifier, onFit: ((Float) -> Unit)? = null) {
     val c = LocalWii.current
     val measurer = rememberTextMeasurer()
     val actions = preset.mappings.groupBy { it.control }.mapValues { (_, ms) -> mapLabel(ms.first().action) }
-    Canvas(modifier) { drawMap(actions, measurer, c) }
+    Canvas(modifier) { val fs = drawMap(actions, measurer, c); onFit?.invoke(fs) }
+}
+
+/** Below this label size (dp ≈ pt) the diagram is hard to read, so the card opens on the list. */
+const val MIN_MAP_FONT = 10f
+
+/** Order of the list: the Thor's left side top to bottom, then the right side. */
+private val LIST_ORDER = listOf(L2, L1, LEFT_STICK, L3, DPAD, SELECT, GYRO, MOTION, R2, R1, FACE_EAST, FACE_SOUTH, FACE_NORTH, FACE_WEST, RIGHT_STICK, R3, START)
+
+/**
+ * The controls as a list: two balanced columns filled top to bottom in the Thor's order. Every control is
+ * its own row on a soft background, all rows the same height (as tall as fits, max 34 dp), the same 4 dp
+ * gap between rows and 8 dp between columns, badges in a fixed-width column so every label starts at the
+ * same place. Labels wrap to two lines; nothing is cut (it scrolls in the extreme case instead).
+ */
+@Composable
+fun ControlsList(preset: Preset, modifier: Modifier = Modifier) {
+    val c = LocalWii.current
+    val actions = preset.mappings.groupBy { it.control }.mapValues { (_, ms) -> mapLabel(ms.first().action) }
+    val all = LIST_ORDER.filter { actions[it] != null }
+    if (all.isEmpty()) return
+    val n = (all.size + 1) / 2
+    val gap = 4.dp
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
+        val rowH = minOf(34.dp, (maxHeight - gap * (n - 1)) / n).coerceAtLeast(22.dp)
+        val fs = if (rowH >= 27.dp) 11.sp else 10.5.sp
+        val rowBg = if (c.dark) Color(0xFF22272D) else c.bg
+        Row(
+            Modifier.fillMaxWidth().androidxVerticalScroll(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf(all.take(n), all.drop(n)).forEach { col ->
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(gap)) {
+                    col.forEach { k ->
+                        Row(
+                            Modifier.fillMaxWidth().heightIn(min = rowH).clip(RoundedCornerShape(9.dp)).background(rowBg).padding(horizontal = 8.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(Modifier.width(40.dp), contentAlignment = Alignment.Center) { ControlBadge(k) }
+                            androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
+                            Text(actions[k]!!, fontSize = fs, fontWeight = FontWeight.Bold, lineHeight = (fs.value * 1.15f).sp, color = c.text, maxLines = 2, overflow = TextOverflow.Visible)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Modifier.androidxVerticalScroll(): Modifier = this.then(Modifier.verticalScroll(rememberScrollState()))
+
+/** The same badge as on the diagram: coloured face buttons, blue chips, stick rings, the D-pad cross. */
+@Composable
+fun ControlBadge(k: ThorControl) {
+    when {
+        k == FACE_EAST || k == FACE_SOUTH || k == FACE_NORTH || k == FACE_WEST ->
+            Box(Modifier.size(20.dp).clip(RoundedCornerShape(50)).background(controlColor(k)), contentAlignment = Alignment.Center) {
+                Text(k.shortLabel, fontSize = 10.5.sp, fontWeight = FontWeight.Black, color = White)
+            }
+        k == LEFT_STICK || k == RIGHT_STICK ->
+            Box(
+                Modifier.size(20.dp).clip(RoundedCornerShape(50)).background(Color(0xFF3A4250))
+                    .border(2.dp, if (k == RIGHT_STICK) controlColor(k) else ChipBlue, RoundedCornerShape(50)),
+                contentAlignment = Alignment.Center,
+            ) { Text(if (k == LEFT_STICK) "L" else "R", fontSize = 10.sp, fontWeight = FontWeight.Black, color = White) }
+        k == DPAD -> Canvas(Modifier.size(18.dp)) {
+            val a = size.minDimension / 2f; val b = a * 0.34f
+            drawRoundRect(ChipBlue, Offset(a - b, 0f), Size(2 * b, 2 * a), CornerRadius(2f))
+            drawRoundRect(ChipBlue, Offset(0f, a - b), Size(2 * a, 2 * b), CornerRadius(2f))
+        }
+        else -> {
+            val name = when (k) { GYRO -> "Gyro"; MOTION -> "Tilt"; SELECT -> "Select"; START -> "Start"; else -> k.shortLabel }
+            val col = if (k == GYRO || k == R3) controlColor(k) else ChipBlue
+            Box(Modifier.height(18.dp).clip(RoundedCornerShape(50)).background(col).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
+                Text(name, fontSize = 9.5.sp, fontWeight = FontWeight.Black, color = White, maxLines = 1)
+            }
+        }
+    }
 }
 
 /**
@@ -113,7 +202,7 @@ private val EXTRA = listOf(GYRO, MOTION)
  * controls get a row. Labels wrap, then shrink together, until both columns fit; never cut, so the
  * Wii-button hints in brackets always show.
  */
-private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasurer, c: WiiColors) {
+private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasurer, c: WiiColors): Float {
     val s = density // 1 unit = 1 dp
     val W = size.width / s
     val H = size.height / s
@@ -250,4 +339,25 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
 
     column(left, leftL, onLeft = true)
     column(right, rightL, onLeft = false)
+    return fs
+}
+
+
+/**
+ * The controls card's body with the "Thor | List" switch on top, on every game. Starts on the diagram;
+ * opens on the list when the diagram's text would get too small to read. The switch is remembered per game.
+ */
+@Composable
+fun ControlsSwitchable(preset: Preset, prefs: io.github.hiramrg.delphis.platform.Prefs, gameKey: String?, modifier: Modifier = Modifier) {
+    val saved = androidx.compose.runtime.remember(gameKey) { androidx.compose.runtime.mutableStateOf(gameKey?.let { prefs.controlsView(it) }) }
+    var tooSmall by androidx.compose.runtime.remember(preset.id) { androidx.compose.runtime.mutableStateOf(false) }
+    val list = when (saved.value) { "list" -> true; "thor" -> false; else -> tooSmall }
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Segmented(listOf(false to "Thor", true to "List"), list, { v ->
+            saved.value = if (v) "list" else "thor"
+            gameKey?.let { prefs.setControlsView(it, saved.value!!) }
+        }, height = 28.dp)
+        if (list) ControlsList(preset, Modifier.weight(1f).fillMaxWidth())
+        else ControlsMap(preset, Modifier.weight(1f).fillMaxWidth(), onFit = { fs -> if (saved.value == null && fs < MIN_MAP_FONT && !tooSmall) tooSmall = true })
+    }
 }

@@ -375,3 +375,16 @@ private fun NoticeCard(n: Notices.Notice) {
         }
     }
 }
+
+/** The in-game top row's chip (Home, ▭ 4:3, ☀): same size as the 🏆 chip, lit while its panel is open. */
+@Composable
+fun TopChip(text: String, on: Boolean = false, onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(50)
+    Text(
+        text, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
+        color = if (on) c.accentText else c.text,
+        modifier = Modifier.clip(shape).background(if (on) c.accentSoft else c.card).border(2.dp, if (on) c.accent else c.cardBorder, shape)
+            .clickable(onClick = onClick).padding(horizontal = 11.dp, vertical = 5.dp),
+    )
+}
