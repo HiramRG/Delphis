@@ -390,7 +390,7 @@ fun TopChip(text: String, on: Boolean = false, onClick: () -> Unit) {
     val shape = ChipShape
     Text(
         text, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
-        color = if (on) c.btnPrimaryText else c.btnText,
+        color = if (on) c.accentText else c.text,
         onTextLayout = { TextFit.check(text, it) },
         modifier = Modifier.channel(shape, lit = on)
             .clickable(onClick = onClick).padding(horizontal = 11.dp, vertical = 5.dp),
@@ -417,7 +417,7 @@ fun HomeBarPill(label: String = "Home", onClick: () -> Unit) {
 @Composable
 fun ScrollingTitle(title: String, fontSize: androidx.compose.ui.unit.TextUnit = 15.5.sp) {
     val c = LocalWii.current
-    val style = androidx.compose.ui.text.TextStyle(fontFamily = AppFont, fontSize = fontSize, fontWeight = FontWeight.ExtraBold, color = c.text)
+    val style = androidx.compose.ui.text.TextStyle(fontSize = fontSize, fontWeight = FontWeight.ExtraBold, color = c.text)
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
         val maxW = constraints.maxWidth

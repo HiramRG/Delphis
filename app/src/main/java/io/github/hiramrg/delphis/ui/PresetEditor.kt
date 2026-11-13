@@ -158,7 +158,7 @@ private fun BoxScope.SaveChoice(updateName: String, newName: String, saveLabel: 
         SaveOption("Save as a new preset", "Keeps “$updateName” as it was and adds yours under My presets.", asNew) { asNew = true }
         if (asNew) androidx.compose.foundation.text.BasicTextField(
             name, { name = it.take(48) }, singleLine = true,
-            textStyle = androidx.compose.ui.text.TextStyle(fontFamily = AppFont, color = c.text, fontSize = 13.sp, fontWeight = FontWeight.Bold),
+            textStyle = androidx.compose.ui.text.TextStyle(color = c.text, fontSize = 13.sp, fontWeight = FontWeight.Bold),
             cursorBrush = androidx.compose.ui.graphics.SolidColor(SelBorder),
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (c.dark) Color(0xFF15191D) else c.bg)
                 .border(2.dp, c.cardBorder, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 8.dp),

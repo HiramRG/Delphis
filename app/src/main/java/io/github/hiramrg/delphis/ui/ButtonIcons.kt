@@ -55,7 +55,7 @@ fun KeyIcon(key: String, color: Color = LocalWii.current.textDim, size: Dp = 18.
                 Text(
                     key, color = color, maxLines = 1, fontWeight = FontWeight.Black,
                     fontSize = (size.value * if (key == "⊖") 0.62f else 0.53f).sp,
-                    style = TextStyle(fontFamily = AppFont, platformStyle = PlatformTextStyle(includeFontPadding = false)),
+                    style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
                 )
             }
         }

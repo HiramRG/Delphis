@@ -51,7 +51,7 @@ data class WiiColors(
     val green: Color = Color(0xFF2E7D32),
     // Channel buttons (soft white gradient, thin grey rim; primary = blue word + blue rim).
     val btnTop: Color = Color(0xFFFFFFFF), val btnMid: Color = Color(0xFFF4F6F8), val btnBottom: Color = Color(0xFFE6EAEE),
-    val btnBorder: Color = Color(0xFFC3CCD5), val btnText: Color = Color(0xFF4A535E),
+    val btnBorder: Color = Color(0xFFC3CCD5), val btnText: Color = Color(0xFF3A3F45),
     val btnPrimaryText: Color = Color(0xFF0F7FB8), val btnPrimaryBorder: Color = Color(0xFF8CD3EF),
     val btnShine: Color = Color(0xFFFFFFFF),
 )
@@ -85,38 +85,12 @@ val DarkWii = WiiColors(
     btnShine = Color(0x12FFFFFF),
 )
 
-/** M PLUS 1p, the rounded Japanese-style face closest to the Wii Menu's lettering (OFL, bundled). */
-val AppFont = androidx.compose.ui.text.font.FontFamily(
-    androidx.compose.ui.text.font.Font(io.github.hiramrg.delphis.R.font.mplus1p_regular, FontWeight.Normal),
-    androidx.compose.ui.text.font.Font(io.github.hiramrg.delphis.R.font.mplus1p_medium, FontWeight.Medium),
-    androidx.compose.ui.text.font.Font(io.github.hiramrg.delphis.R.font.mplus1p_bold, FontWeight.SemiBold),
-    androidx.compose.ui.text.font.Font(io.github.hiramrg.delphis.R.font.mplus1p_bold, FontWeight.Bold),
-    androidx.compose.ui.text.font.Font(io.github.hiramrg.delphis.R.font.mplus1p_extrabold, FontWeight.ExtraBold),
-    androidx.compose.ui.text.font.Font(io.github.hiramrg.delphis.R.font.mplus1p_black, FontWeight.Black),
-)
+/** Text is drawn at the normal size (kept as one switch in case the font ever changes again). */
+const val TEXT_SCALE = 1f
 
-/**
- * M PLUS 1p is ~11% wider than Roboto at the same size, so all text is drawn 10% smaller: every label
- * takes the same width it did before and no layout moves. (The controls map keeps its own sizing.)
- */
-const val TEXT_SCALE = 0.9f
-
-private fun appTypography(): androidx.compose.material3.Typography {
-    val t = androidx.compose.material3.Typography()
-    fun f(s: androidx.compose.ui.text.TextStyle) = s.copy(fontFamily = AppFont)
-    return t.copy(
-        displayLarge = f(t.displayLarge), displayMedium = f(t.displayMedium), displaySmall = f(t.displaySmall),
-        headlineLarge = f(t.headlineLarge), headlineMedium = f(t.headlineMedium), headlineSmall = f(t.headlineSmall),
-        titleLarge = f(t.titleLarge), titleMedium = f(t.titleMedium), titleSmall = f(t.titleSmall),
-        bodyLarge = f(t.bodyLarge), bodyMedium = f(t.bodyMedium), bodySmall = f(t.bodySmall),
-        labelLarge = f(t.labelLarge), labelMedium = f(t.labelMedium), labelSmall = f(t.labelSmall),
-    )
-}
-private val AppTypography by lazy { appTypography() }
-
-/** Option A "channel" button corners: 12 dp for buttons, 10 dp for chips. */
-val ButtonShape = RoundedCornerShape(12.dp)
-val ChipShape = RoundedCornerShape(10.dp)
+/** Button and chip corners: the classic Delphis pill. */
+val ButtonShape = RoundedCornerShape(50)
+val ChipShape = RoundedCornerShape(50)
 
 /**
  * The Wii channel button look: soft top-to-bottom gradient, a thin rim, a white shine along the top
@@ -124,23 +98,18 @@ val ChipShape = RoundedCornerShape(10.dp)
  * ([channelText]).
  */
 fun Modifier.channel(shape: androidx.compose.ui.graphics.Shape, primary: Boolean = false, lit: Boolean = false): Modifier = composed {
+    // The classic Delphis pill: card colour with a grey rim; primary = Wii blue; lit = soft blue with a blue rim.
     val c = LocalWii.current
-    this.shadow(1.5.dp, shape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f))
-        .clip(shape)
-        .background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to c.btnTop, 0.55f to c.btnMid, 1f to c.btnBottom))
-        .drawBehind {
-            val y = 1.5.dp.toPx() + 0.5.dp.toPx()
-            val inset = size.height * 0.3f
-            drawLine(c.btnShine, Offset(inset, y), Offset(size.width - inset, y), strokeWidth = 1.dp.toPx())
-        }
-        .border(1.5.dp, if (primary || lit) c.btnPrimaryBorder else c.btnBorder, shape)
+    this.clip(shape)
+        .background(when { primary -> c.accent; lit -> c.accentSoft; else -> c.card })
+        .border(2.dp, if (primary || lit) c.accent else c.cardBorder, shape)
 }
 
 /** The word colour on a channel button. */
 @Composable
 fun channelText(primary: Boolean, enabled: Boolean = true): Color {
     val c = LocalWii.current
-    return (if (primary) c.btnPrimaryText else c.btnText).copy(alpha = if (enabled) 1f else 0.4f)
+    return (if (primary) c.onAccent else c.text).copy(alpha = if (enabled) 1f else 0.4f)
 }
 
 /** The cursor colour: Wii blue that slowly breathes between deep and bright (1.6 s). */
@@ -176,7 +145,7 @@ fun WiiTheme(dark: Boolean, content: @Composable () -> Unit) {
     )
     val d = androidx.compose.ui.platform.LocalDensity.current
     CompositionLocalProvider(LocalWii provides c, androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, d.fontScale * TEXT_SCALE)) {
-        MaterialTheme(colorScheme = scheme, typography = AppTypography) {
+        MaterialTheme(colorScheme = scheme) {
             Surface(Modifier.fillMaxSize().wiiStripes(c), color = Color.Transparent, contentColor = c.text, content = content)
         }
     }

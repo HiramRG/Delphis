@@ -457,7 +457,7 @@ private fun SearchBox(act: MainActivity) {
             if (editing) {
                 BasicTextField(
                     act.libraryQuery, { act.libraryQuery = it }, singleLine = true,
-                    textStyle = TextStyle(fontFamily = AppFont, color = c.text, fontSize = 13.sp), cursorBrush = SolidColor(c.accent),
+                    textStyle = TextStyle(color = c.text, fontSize = 13.sp), cursorBrush = SolidColor(c.accent),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
                     keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { stop() }),
                     modifier = Modifier.fillMaxWidth().focusRequester(fieldFocus)
@@ -713,7 +713,7 @@ private fun ReadyRow(icon: androidx.compose.ui.graphics.vector.ImageVector, labe
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun CardTitle(title: String) {
-    val style = TextStyle(fontFamily = AppFont, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 22.sp, color = LocalWii.current.text)
+    val style = TextStyle(fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 22.sp, color = LocalWii.current.text)
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     BoxWithConstraints(Modifier.fillMaxWidth().height(46.dp)) {
         val maxW = constraints.maxWidth
@@ -981,20 +981,20 @@ private fun HomeBar(act: MainActivity, rowsMode: Boolean, lit: Boolean) {
     WiiBar(
         left = {
             Box(
-                Modifier.size(34.dp).focusRing(round).channel(round, primary = true)
+                Modifier.size(36.dp).focusRing(round).channel(round)
                     .onFocusChanged { if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeRow = null } }
                     .clickable { act.screen = Screen.Settings },
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Filled.Settings, "Settings", tint = c.btnText, modifier = Modifier.size(19.dp)) }
+            ) { Icon(Icons.Filled.Settings, "Settings", tint = c.textDim, modifier = Modifier.size(20.dp)) }
             // ⊖ opens Settings too. Same spacing for each button and its shortcut: ⚙ ⊖ · ⏻ Hold Ⓑ.
             Box(Modifier.padding(start = 8.dp)) { KeyIcon("⊖") }
             // ⏻ exits Delphis (asks first). Holding Ⓑ on Home does the same.
             Box(
-                Modifier.padding(start = 16.dp).size(34.dp).focusRing(round).channel(round, primary = true)
+                Modifier.padding(start = 16.dp).size(36.dp).focusRing(round).channel(round)
                     .onFocusChanged { if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeRow = null } }
                     .clickable { act.exitPrompt = true },
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Outlined.PowerSettingsNew, "Exit Delphis", tint = c.btnText, modifier = Modifier.size(19.dp)) }
+            ) { Icon(Icons.Outlined.PowerSettingsNew, "Exit Delphis", tint = c.textDim, modifier = Modifier.size(20.dp)) }
             HintText("Hold Ⓑ", Modifier.padding(start = 8.dp), fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold)
         },
         right = {
@@ -1007,14 +1007,14 @@ private fun HomeBar(act: MainActivity, rowsMode: Boolean, lit: Boolean) {
                 rowsMode && row != null && row.sortable -> {
                     val sort = rowSort(act, row)
                     Row(
-                        Modifier.weight(1f, fill = false).height(30.dp).channel(ChipShape, lit = lit)
+                        Modifier.weight(1f, fill = false).height(32.dp).channel(ChipShape, lit = lit)
                             .focusProperties { canFocus = false }
                             .clickable { act.prefs.setRowSort(row.name, LibSort.entries[(sort.ordinal + 1) % LibSort.entries.size].name); act.statsVersion++; act.sortPopupUntil = System.currentTimeMillis() + 2000 }
-                            .padding(horizontal = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp),
                     ) {
-                        SortIcon(c.btnText)
-                        Text(sort.label, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = if (lit) c.btnPrimaryText else c.btnText, maxLines = 1, onTextLayout = { TextFit.check(sort.label, it) })
+                        SortIcon(c.text)
+                        Text(sort.label, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 1, onTextLayout = { TextFit.check(sort.label, it) })
                         KeyIcon("R1")
                     }
                 }
@@ -1149,7 +1149,7 @@ private fun RailItem(act: MainActivity, key: String, label: String, count: Strin
             Box {
                 RailIcon(key, tint, Modifier.size(22.dp))
                 if (badge) Box(Modifier.align(Alignment.TopEnd).offset(x = 5.dp, y = (-4).dp).size(13.dp).clip(RoundedCornerShape(50)).background(c.accent), contentAlignment = Alignment.Center) {
-                    Text("+", fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color(0xFF0A2533), style = TextStyle(fontFamily = AppFont, platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)))
+                    Text("+", fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color(0xFF0A2533), style = TextStyle(platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)))
                 }
             }
             if (open) {
@@ -1575,11 +1575,11 @@ private fun GameChip(text: String, key: String?, on: Boolean = false, warn: Bool
     val shape = ChipShape
     Row(
         Modifier.height(height).channel(shape, lit = on || outline)
-            .then(if (warn) Modifier.border(1.5.dp, c.orange, shape) else Modifier)
+            .then(if (warn) Modifier.border(2.dp, c.orange, shape) else Modifier)
             .clickable(onClick = onClick).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(text, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = when { warn -> c.orange; on -> c.btnPrimaryText; else -> c.btnText }, maxLines = 1, onTextLayout = { TextFit.check(text, it) })
+        Text(text, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = if (warn) c.orange else c.text, maxLines = 1, onTextLayout = { TextFit.check(text, it) })
         if (key != null) KeyIcon(key)
     }
 }
@@ -1592,7 +1592,7 @@ private fun GameChip(text: String, key: String?, on: Boolean = false, warn: Bool
 private fun GameButton(icon: String, label: String, key: String, primary: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = ButtonShape
-    val fg = channelText(primary)
+    val fg = if (primary) Color(0xFF0A2533) else c.text
     Row(
         Modifier.fillMaxWidth().height(40.dp).alpha(if (enabled) 1f else 0.45f).focusRing(shape).channel(shape, primary)
             .clickable(enabled = enabled, onClick = onClick),
