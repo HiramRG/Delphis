@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.composed
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
@@ -121,7 +123,7 @@ val ChipShape = RoundedCornerShape(10.dp)
  * edge and a small shadow. [primary] (or [lit]) gives the blue rim; the word colour is up to the caller
  * ([channelText]).
  */
-fun Modifier.channel(shape: androidx.compose.ui.graphics.Shape, primary: Boolean = false, lit: Boolean = false): Modifier = androidx.compose.ui.composed {
+fun Modifier.channel(shape: androidx.compose.ui.graphics.Shape, primary: Boolean = false, lit: Boolean = false): Modifier = composed {
     val c = LocalWii.current
     this.shadow(1.5.dp, shape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f))
         .clip(shape)
