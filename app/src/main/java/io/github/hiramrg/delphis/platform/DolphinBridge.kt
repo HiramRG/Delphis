@@ -389,6 +389,44 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             "Username=${v("Username")?.takeIf { it.isNotBlank() } ?: "(none)"}, signed in=${if (v("ApiToken").isNullOrBlank()) "no" else "yes"}"
     }
 
+    data class RaStatus(val enabled: Boolean, val user: String?, val signedIn: Boolean)
+    private val raIni = listOf("Config", "RetroAchievements.ini")
+
+    /** Whether Dolphin is signed in to RetroAchievements (Config/RetroAchievements.ini). Null without the Dolphin folder. */
+    fun raStatus(): RaStatus? {
+        val tree = prefs.dolphinTreeUri ?: return null
+        val text = runCatching { readText(tree, raIni) }.getOrNull() ?: return RaStatus(false, null, false)
+        val ed = io.github.hiramrg.delphis.core.IniEditor(text)
+        return RaStatus(
+            ed.get("Achievements", "Enabled").equals("True", ignoreCase = true),
+            ed.get("Achievements", "Username")?.takeIf { it.isNotBlank() },
+            !ed.get("Achievements", "ApiToken").isNullOrBlank(),
+        )
+    }
+
+    /**
+     * Signs Dolphin in (or out, with a null token) by writing its own settings, exactly what Dolphin saves
+     * after you sign in there. Dolphin reads this when it starts, and must not be running (it would save
+     * its old settings over it), so the caller closes it first.
+     */
+    fun setDolphinRa(user: String?, token: String?): Boolean {
+        val tree = prefs.dolphinTreeUri ?: return false
+        return runCatching {
+            val ed = io.github.hiramrg.delphis.core.IniEditor(readText(tree, raIni).orEmpty())
+            if (token != null) ed.set("Achievements", linkedMapOf("Enabled" to "True", "Username" to (user ?: ""), "ApiToken" to token))
+            else ed.set("Achievements", linkedMapOf("ApiToken" to ""))
+            writeText(tree, raIni, ed.toString())
+            CrashLog.event(if (token != null) "Dolphin signed in to RetroAchievements as $user" else "Dolphin signed out of RetroAchievements")
+            true
+        }.getOrDefault(false)
+    }
+
+    /** Ends Dolphin's process when no game is running, so it starts fresh with new settings. */
+    fun stopIdleDolphin() {
+        val pkg = installedPackage() ?: return
+        runCatching { context.getSystemService(android.app.ActivityManager::class.java).killBackgroundProcesses(pkg) }
+    }
+
     /** [Android] and [AndroidOverlayButtons] of Dolphin.ini, for Diagnostics. */
     fun dolphinTouchSettings(): String? {
         val tree = prefs.dolphinTreeUri ?: return null

@@ -93,6 +93,21 @@ class MainActivity : ComponentActivity() {
     var librarySort by mutableStateOf(LibSort.RECENT)
     var libraryQuery by mutableStateOf("")
     var settingsSection by mutableStateOf(SettingsSection.APPEARANCE)
+    /** Set to open Settings → Achievements' sign-in panel (from the Home notice). */
+    var raSignInPrompt by mutableStateOf(false)
+    private var raChecked = false
+
+    /** Once per start: if Delphis is connected to RetroAchievements but Dolphin isn't signed in, say so on Home. */
+    fun checkDolphinRa() {
+        if (raChecked || io.github.hiramrg.delphis.platform.Achievements.account(prefs) == null) return
+        raChecked = true
+        lifecycleScope.launch {
+            val st = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.raStatus() } ?: return@launch
+            if (!st.signedIn) Notices.problem(this@MainActivity, "Dolphin isn't signed in to RetroAchievements", "Games won't earn achievements until you sign in.", "Sign in") {
+                settingsSection = SettingsSection.ACHIEVEMENTS; screen = Screen.Settings; raSignInPrompt = true
+            }
+        }
+    }
     /** True while a Recently played tile (not the hero card) has controller focus on Home. */
     var homeFocusedTile = false
     /** Replaces the home bar's button hints while something special is focused (column button, search). */

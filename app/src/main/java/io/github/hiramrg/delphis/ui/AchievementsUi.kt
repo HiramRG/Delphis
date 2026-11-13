@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import io.github.hiramrg.delphis.core.GameInfo
+import kotlinx.coroutines.delay
 import io.github.hiramrg.delphis.core.RetroAchievements.Achievement
 import io.github.hiramrg.delphis.core.RetroAchievements.GameProgress
 import io.github.hiramrg.delphis.platform.Achievements
@@ -212,38 +213,46 @@ fun AchievementsSettings(act: MainActivity, switchRow: @Composable (String, Stri
     var list by remember { mutableStateOf(prefs.raList) }
     LaunchedEffect(account) { account?.let { profile = Achievements.verify(it.user, it.key) } }
 
-    Text(
-        "Achievements are unlocked by Dolphin: sign in to RetroAchievements in Dolphin too (Dolphin → Settings → Achievements). " +
-            "Delphis reads your account to show a badge when you unlock one and each game's list.",
-        fontSize = 12.sp, color = c.textDim,
-    )
-    if (account == null) {
-        Text("RetroAchievements account", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
-        OutlinedTextField(user, { user = it.trim(); error = null }, label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(
-            key, { key = it.trim(); error = null }, label = { Text("Web API key") }, singleLine = true,
-            visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(),
-        )
-        Text("Find your web API key on retroachievements.org → Settings → Keys.", fontSize = 11.sp, color = c.textDim)
-        error?.let { Text(it, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.orange) }
-        WiiButton(if (checking) "Checking…" else "Connect", primary = true, enabled = !checking && user.isNotBlank() && key.isNotBlank(), onClick = {
-            checking = true
-            scope.launch {
-                val p = Achievements.verify(user, key)
-                checking = false
-                if (p == null) error = "Couldn't sign in. Check the username and web API key" + (Achievements.lastError?.let { " ($it)" } ?: "") + "."
-                else { prefs.raUser = p.user; prefs.raKey = key; profile = p; account = Achievements.account(prefs); key = "" }
+    // One card for both: Dolphin earns achievements (its own sign-in), Delphis reads your progress (web API key).
+    var dolphin by remember { mutableStateOf<io.github.hiramrg.delphis.platform.DolphinBridge.RaStatus?>(null) }
+    var statusVersion by remember { mutableStateOf(0) }
+    LaunchedEffect(statusVersion) { dolphin = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.raStatus() } }
+    var showSignIn by remember { mutableStateOf(false) }
+    LaunchedEffect(act.raSignInPrompt) { if (act.raSignInPrompt) { act.raSignInPrompt = false; showSignIn = true } }
+    val dolOk = dolphin?.signedIn == true
+    val name = account?.user ?: dolphin?.user ?: prefs.raUser
+
+    CapsLabel("RetroAchievements account" + (name?.let { " · $it" } ?: ""))
+    GroupCard {
+        RaStatusRow(
+            dolOk, "Dolphin", "earns them while you play",
+            when { dolphin == null -> "Checking…"; dolOk -> "Signed in · ready to earn achievements"; else -> "Signed out · games won't earn achievements" },
+            warn = dolphin != null && !dolOk,
+        ) { if (dolphin != null && !dolOk) PanelBtn("Sign in", "A", true) { showSignIn = true } }
+        RowDivider()
+        RaStatusRow(
+            account != null, "Delphis", "shows your progress",
+            if (account != null) "Connected" + (profile?.let { " · ${"%,d".format(it.points)} pts" } ?: "") else "Not connected · no badges or progress",
+            warn = account == null,
+        ) {
+            when {
+                account == null && dolOk -> PanelBtn("Connect", "A", true) { showSignIn = true }
+                account != null && dolOk -> PanelBtn("Sign out", null, false) {
+                    scope.launch {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.stopIdleDolphin(); delay(300); act.bridge.setDolphinRa(null, null) }
+                        prefs.raKey = null; account = null; profile = null; statusVersion++
+                        Notices.done(act, "Signed out", "Dolphin and Delphis are both signed out of RetroAchievements.")
+                    }
+                }
             }
-        })
-    } else {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("RetroAchievements account", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                Text("Connected as ${account!!.user}" + (profile?.let { " · ${"%,d".format(it.points)} pts" } ?: ""), fontSize = 12.sp, color = c.textDim)
-            }
-            WiiButton("Sign out", onClick = { prefs.raKey = null; account = null; profile = null })
         }
     }
+
+    if (showSignIn) RaSignInPanel(
+        act, startUser = name.orEmpty(), needToken = !dolOk, needKey = account == null,
+        onDone = { p -> if (p != null) { profile = p; account = Achievements.account(prefs) }; statusVersion++; showSignIn = false },
+        onCancel = { showSignIn = false },
+    )
     switchRow("Show unlock pop-ups", "A badge appears when you unlock an achievement.", popups) { popups = it; prefs.raPopups = it }
     if (popups) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Where", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(70.dp))
@@ -256,4 +265,101 @@ fun AchievementsSettings(act: MainActivity, switchRow: @Composable (String, Stri
         "Badges appear a few seconds after Dolphin unlocks the achievement. Top-screen badges need \"close games\" (Delphis' accessibility helper) turned on.",
         fontSize = 11.sp, color = c.textDim,
     )
+}
+
+
+@Composable
+private fun RaStatusRow(ok: Boolean, who: String, role: String, line: String, warn: Boolean, trailing: @Composable RowScope.() -> Unit) {
+    val c = LocalWii.current
+    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(
+            Modifier.size(30.dp).clip(RoundedCornerShape(50)).background(if (ok) c.green.copy(alpha = 0.18f) else c.orange.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
+        ) { Text(if (ok) "✓" else "!", fontSize = 15.sp, fontWeight = FontWeight.Black, color = if (ok) c.green else c.orange) }
+        Column(Modifier.weight(1f)) {
+            Text(
+                androidx.compose.ui.text.buildAnnotatedString {
+                    append(who)
+                    pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = c.textDim)); append(" · $role"); pop()
+                },
+                fontSize = 14.sp, fontWeight = FontWeight.ExtraBold,
+            )
+            Text(line, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (warn) c.orange else c.textDim)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, content = trailing)
+    }
+}
+
+/**
+ * Signs in both at once: the password gets Dolphin its sign-in (saved where Dolphin keeps it), the web API
+ * key (only asked if Delphis doesn't have it) lets Delphis read progress. Ⓐ signs in, Ⓑ cancels.
+ */
+@Composable
+private fun RaSignInPanel(act: MainActivity, startUser: String, needToken: Boolean, needKey: Boolean, onDone: (io.github.hiramrg.delphis.core.RetroAchievements.Profile?) -> Unit, onCancel: () -> Unit) {
+    val c = LocalWii.current
+    val prefs = act.prefs
+    val scope = rememberCoroutineScope()
+    var user by remember { mutableStateOf(startUser) }
+    var password by remember { mutableStateOf("") }
+    var key by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val ready = !busy && user.isNotBlank() && (!needToken || password.isNotEmpty()) && (!needKey || key.isNotBlank())
+    val submit: () -> Unit = submit@{
+        if (!ready) return@submit
+        if (needToken && io.github.hiramrg.delphis.platform.GameWatch.session != null) { error = "Close your game first: Dolphin has to restart to pick up the sign-in."; return@submit }
+        busy = true; error = null
+        scope.launch {
+            var profile: io.github.hiramrg.delphis.core.RetroAchievements.Profile? = null
+            if (needKey) {
+                profile = Achievements.verify(user, key)
+                if (profile == null) { busy = false; error = "Delphis couldn't connect: check the username and web API key" + (Achievements.lastError?.let { " ($it)" } ?: "") + "."; return@launch }
+                prefs.raUser = profile.user; prefs.raKey = key
+            }
+            if (needToken) {
+                val r = Achievements.dolphinToken(user, password)
+                val (u, token) = r.getOrElse { busy = false; error = "Dolphin couldn't sign in: ${it.message}."; return@launch }
+                val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.stopIdleDolphin(); delay(300); act.bridge.setDolphinRa(u, token) }
+                if (!ok) { busy = false; error = "Couldn't save Dolphin's sign-in. Check Delphis still has access to Dolphin's folder (Settings → Library)."; return@launch }
+                if (prefs.raUser.isNullOrBlank()) prefs.raUser = u
+            }
+            password = ""
+            busy = false
+            Notices.done(act, "Signed in to RetroAchievements", if (needToken) "Dolphin will earn achievements from your next game." else "Delphis shows your progress again.")
+            onDone(profile)
+        }
+    }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onCancel, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        PopupPanel(
+            "RetroAchievements",
+            when { needToken && needKey -> "Sign in Dolphin and Delphis"; needToken -> "Sign in Dolphin"; else -> "Connect Delphis" },
+            Modifier.widthIn(max = 480.dp).onPreviewKeyEvent { e ->
+                if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key.nativeKeyCode == android.view.KeyEvent.KEYCODE_BUTTON_A) { submit(); true } else false
+            },
+            buttons = {
+                PanelBtn("Cancel", "B", false, onClick = onCancel)
+                PanelBtn(if (busy) "Signing in…" else "Sign in", "A", true, enabled = ready, onClick = submit)
+            },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(user, { user = it.trim(); error = null }, label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (needToken) OutlinedTextField(
+                    password, { password = it; error = null }, label = { Text("Password") }, singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(),
+                )
+                if (needKey) {
+                    OutlinedTextField(
+                        key, { key = it.trim(); error = null }, label = { Text("Web API key") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text("Find it on retroachievements.org → Settings → Keys.", fontSize = 11.5.sp, color = c.textDim)
+                } else Text("✓ Web API key already saved · Delphis uses it to show your progress", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.textDim)
+                if (needToken) Text(
+                    "Your password goes straight to RetroAchievements and is never saved. Dolphin gets its own sign-in, the same as signing in inside Dolphin. If Dolphin is open in the background, it's closed first.",
+                    fontSize = 11.5.sp, color = c.textDim, lineHeight = 15.sp,
+                )
+                error?.let { Text(it, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.orange) }
+            }
+        }
+    }
 }

@@ -188,7 +188,7 @@ fun WiiButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, 
     val c = LocalWii.current
     val shape = ButtonShape
     Box(
-        modifier.heightIn(min = 44.dp).focusRing(shape).channel(shape, primary)
+        modifier.heightIn(min = 44.dp).rememberFocus("btn-$text").focusRing(shape).channel(shape, primary)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
@@ -213,7 +213,7 @@ fun WiiChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modi
         text, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, textAlign = TextAlign.Center,
         color = if (selected) c.onAccent else c.btnText,
         onTextLayout = { TextFit.check(text, it) },
-        modifier = modifier.focusRing(shape).then(if (selected) Modifier.clip(shape).background(c.accent).border(2.dp, c.accentBorder, shape) else Modifier.channel(shape))
+        modifier = modifier.rememberFocus("chip-$text").focusRing(shape).then(if (selected) Modifier.clip(shape).background(c.accent).border(2.dp, c.accentBorder, shape) else Modifier.channel(shape))
             .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 7.dp),
     )
 }

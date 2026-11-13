@@ -81,7 +81,7 @@ fun BackLink(label: String, showKey: Boolean = true, onClick: () -> Unit) {
 fun GroupCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(18.dp)
-    Column(modifier.fillMaxWidth().clip(shape).background(c.card).border(2.dp, c.cardBorder, shape).padding(horizontal = 14.dp, vertical = 4.dp), content = content)
+    Column(modifier.fillMaxWidth().clip(shape).background(c.card).border(2.dp, c.cardBorder, shape).padding(horizontal = 8.dp, vertical = 6.dp), content = content)
 }
 
 /** Thin divider between rows in a [GroupCard]. */
@@ -95,8 +95,8 @@ fun RowDivider() {
 fun SettingRow(title: String, sub: String?, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, trailing: @Composable RowScope.() -> Unit = {}) {
     val c = LocalWii.current
     Row(
-        modifier.fillMaxWidth().then(if (onClick != null) Modifier.focusRing(RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick) else Modifier)
-            .padding(vertical = 9.dp, horizontal = 2.dp),
+        modifier.fillMaxWidth().then(if (onClick != null) Modifier.rememberFocus("row-$title").focusRing(RoundedCornerShape(12.dp), fill = true).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick) else Modifier)
+            .padding(vertical = 9.dp, horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -134,10 +134,11 @@ fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> 
     val c = LocalWii.current
     val shape = RoundedCornerShape(50)
     Row(modifier.height(height).clip(shape).background(if (c.dark) Color(0xFF15181C) else c.bar).padding(3.dp), verticalAlignment = Alignment.CenterVertically) {
+        val group = options.joinToString("|") { it.second }
         options.forEach { (v, label) ->
             val on = v == selected
             Box(
-                Modifier.fillMaxHeight().clip(shape).background(if (on) c.accent else Color.Transparent)
+                Modifier.fillMaxHeight().rememberFocus("seg-$group-$label").focusRing(shape, width = 2.5.dp).clip(shape).background(if (on) c.accent else Color.Transparent)
                     .clickable { onSelect(v) }.padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center,
             ) { Text(label, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = if (on) c.onAccent else c.textDim, maxLines = 1) }
@@ -151,7 +152,7 @@ fun PanelBtn(label: String, key: String?, primary: Boolean, modifier: Modifier =
     val c = LocalWii.current
     val shape = ButtonShape
     Row(
-        modifier.height(40.dp).focusRing(shape).channel(shape, primary)
+        modifier.height(40.dp).rememberFocus("btn-$label").focusRing(shape).channel(shape, primary)
             .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {

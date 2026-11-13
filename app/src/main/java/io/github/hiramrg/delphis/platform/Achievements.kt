@@ -69,6 +69,30 @@ object Achievements {
         }.getOrElse { lastError = it.message; null }
     }
 
+    /**
+     * Signs in the way Dolphin does (RetroAchievements' "login2" with the password) and returns the
+     * account's sign-in token, which Dolphin keeps in Config/RetroAchievements.ini. The password is
+     * only sent to retroachievements.org, never stored.
+     */
+    suspend fun dolphinToken(user: String, password: String): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val conn = (URL("https://retroachievements.org/dorequest.php").openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000; readTimeout = 15_000; requestMethod = "POST"; doOutput = true
+                setRequestProperty("User-Agent", "Delphis (Android Dolphin companion)")
+                setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+            }
+            try {
+                fun enc(v: String) = java.net.URLEncoder.encode(v, "UTF-8")
+                conn.outputStream.use { it.write("r=login2&u=${enc(user)}&p=${enc(password)}".toByteArray()) }
+                val body = (if (conn.responseCode in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
+                val j = runCatching { org.json.JSONObject(body) }.getOrNull() ?: error("RetroAchievements didn't answer (HTTP ${conn.responseCode})")
+                if (!j.optBoolean("Success")) error(j.optString("Error").ifBlank { "Wrong username or password" })
+                val token = j.optString("Token").ifBlank { error("RetroAchievements didn't send a sign-in") }
+                j.optString("User").ifBlank { user } to token
+            } finally { conn.disconnect() }
+        }
+    }
+
     /** Checks a username + web API key. Null when RA doesn't accept them (or can't be reached). */
     suspend fun verify(user: String, key: String): RetroAchievements.Profile? =
         get(RetroAchievements.url("API_GetUserProfile", user, key, "u" to user))?.let(RetroAchievements::parseProfile)

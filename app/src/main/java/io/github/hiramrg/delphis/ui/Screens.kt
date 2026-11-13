@@ -216,6 +216,8 @@ private fun KeyEvent.firstPress() = action == KeyEvent.ACTION_DOWN && repeatCoun
 
 @Composable
 fun HomeScreen(act: MainActivity) {
+    // Delphis connected to RetroAchievements but Dolphin signed out: a notice with Sign in (Ⓨ).
+    LaunchedEffect(Unit) { delay(1500); act.checkDolphinRa() }
     val c = LocalWii.current
     @Suppress("UNUSED_VARIABLE") val v = act.statsVersion
     val lastPlayed = act.prefs.lastPlayed()
@@ -1053,11 +1055,41 @@ private fun SortIcon(tint: Color) {
     }
 }
 
-/** Blue ring around whatever the D-pad is on, so it's always clear where you are. */
-fun Modifier.focusRing(shape: androidx.compose.ui.graphics.Shape, width: androidx.compose.ui.unit.Dp = 3.dp): Modifier = composed {
+/**
+ * Blue ring around whatever the D-pad is on, so it's always clear where you are. [fill] also tints the
+ * inside (settings rows), so a whole row reads as "here" at a glance.
+ */
+fun Modifier.focusRing(shape: androidx.compose.ui.graphics.Shape, width: androidx.compose.ui.unit.Dp = 3.dp, fill: Boolean = false): Modifier = composed {
     var focused by remember { mutableStateOf(false) }
+    val c = LocalWii.current
     // The cursor breathes (deep ↔ bright blue) so it's easy to spot, like the Wii Menu's.
-    this.then(if (focused) Modifier.border(width, breathingAccent(), shape) else Modifier).onFocusChanged { focused = it.hasFocus }
+    this.then(if (focused) Modifier.then(if (fill) Modifier.background(c.accentSoft, shape) else Modifier).border(width, breathingAccent(), shape) else Modifier)
+        .onFocusChanged { focused = it.hasFocus }
+}
+
+/**
+ * Focus memory for a page (Settings): every control registers under a stable id, the page remembers the
+ * last one the D-pad was on, and puts the cursor back there if it's ever dropped (a row redrawn after a
+ * change, a pop-up closing), instead of starting over from the top.
+ */
+class FocusMemory {
+    val requesters = HashMap<String, androidx.compose.ui.focus.FocusRequester>()
+    var last: String? = null
+    fun restore(fallback: String?): Boolean {
+        for (id in listOfNotNull(last, fallback)) {
+            val r = requesters[id] ?: continue
+            if (runCatching { r.requestFocus() }.isSuccess) return true
+        }
+        return false
+    }
+}
+val LocalFocusMemory = androidx.compose.runtime.staticCompositionLocalOf<FocusMemory?> { null }
+
+/** Registers this control with the page's [FocusMemory] (no-op outside one). Put it before the clickable. */
+fun Modifier.rememberFocus(id: String): Modifier = composed {
+    val m = LocalFocusMemory.current ?: return@composed this
+    val r = remember(id) { m.requesters.getOrPut(id) { androidx.compose.ui.focus.FocusRequester() } }
+    this.focusRequester(r).onFocusChanged { if (it.hasFocus) m.last = id }
 }
 
 // ============================================================================ library (column + list on Home)
@@ -1846,7 +1878,16 @@ enum class SettingsSection(val label: String) {
 @Composable
 fun SettingsScreen(act: MainActivity) {
     val c = LocalWii.current
-    Column(Modifier.fillMaxSize()) {
+    val memory = remember { FocusMemory() }
+    var hasFocus by remember { mutableStateOf(false) }
+    // Opening Settings: the cursor starts on the page you're on (not at the top of the list).
+    LaunchedEffect(Unit) { delay(80); memory.restore("nav-" + act.settingsSection.name) }
+    // The cursor was dropped (the row it was on got redrawn, a panel closed): put it back where it was.
+    LaunchedEffect(hasFocus) {
+        if (!hasFocus) { delay(120); if (!hasFocus) memory.restore("nav-" + act.settingsSection.name) }
+    }
+    androidx.compose.runtime.CompositionLocalProvider(LocalFocusMemory provides memory) {
+    Column(Modifier.fillMaxSize().onFocusChanged { hasFocus = it.hasFocus }) {
         Row(Modifier.weight(1f).fillMaxWidth()) {
             // Same nav as Home's rail: line icons, a lit bar for the page you're on, the ring only where the D-pad is.
             Column(
@@ -1884,6 +1925,7 @@ fun SettingsScreen(act: MainActivity) {
         }
         AppBottomBar("✚ Choose  Ⓐ Select  Ⓑ Back")
     }
+    }
 }
 
 /** Line icon for each Settings page. */
@@ -1909,7 +1951,7 @@ private fun SettingsNavItem(s: SettingsSection, lit: Boolean, onClick: () -> Uni
     Box(Modifier.fillMaxWidth().padding(start = 8.dp)) {
         if (lit) Box(Modifier.align(Alignment.CenterStart).offset(x = (-8).dp).width(4.dp).height(18.dp).clip(RoundedCornerShape(2.dp)).background(c.accent))
         Row(
-            Modifier.fillMaxWidth().focusRing(shape).clip(shape).background(if (lit) c.card else Color.Transparent)
+            Modifier.fillMaxWidth().rememberFocus("nav-" + s.name).focusRing(shape, fill = true).clip(shape).background(if (lit) c.card else Color.Transparent)
                 .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
