@@ -5,16 +5,13 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 33
+    const val RELEASE = 34
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("A Wii-style bottom bar.", "A thin line instead of a pill, with the clock in the middle: big time, small date."),
-        Item("A breathing cursor.", "The blue ring slowly pulses so it's easy to spot on any screen."),
-        Item("Channel zoom.", "Pages zoom in when you open them and settle back when you return Home."),
-        Item("Menu sounds.", "Soft clicks and chimes, off by default: Settings → Sound."),
-        Item("Smoother rows.", "Moving between rows on Home no longer jumps and settles back.", fix = true),
+        Item("Achievements stay up to date.", "Progress reloads whenever you come back to Delphis, and a game matched to the wrong achievement set is corrected while you play.", fix = true),
+        Item("Achievements in Diagnostics.", "Settings → Diagnostics shows Dolphin's achievement settings (on, signed in, Hardcore) and which set each game uses."),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */
