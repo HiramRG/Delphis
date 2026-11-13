@@ -375,6 +375,20 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         return readText(tree, DolphinConfigWriter.DSU_CLIENT_INI)?.lines()?.filter { it.isNotBlank() }?.joinToString("\n") { "  $it" } ?: "  (no DSUClient.ini)"
     }
 
+    /**
+     * Dolphin's own RetroAchievements switches (Config/RetroAchievements.ini [Achievements]), for
+     * Diagnostics: whether it's on, signed in (only "yes/no", never the token) and Hardcore.
+     */
+    fun achievementSettings(): String {
+        val tree = prefs.dolphinTreeUri ?: return "  (no Dolphin folder)"
+        val text = runCatching { readText(tree, listOf("Config", "RetroAchievements.ini")) }.getOrNull()
+            ?: return "  (no Config/RetroAchievements.ini: Dolphin has never been signed in to RetroAchievements here)"
+        val ed = io.github.hiramrg.delphis.core.IniEditor(text)
+        fun v(k: String) = ed.get("Achievements", k)
+        return "  Enabled=${v("Enabled") ?: "(unset)"}, Hardcore=${v("HardcoreEnabled") ?: "(unset)"}, " +
+            "Username=${v("Username")?.takeIf { it.isNotBlank() } ?: "(none)"}, signed in=${if (v("ApiToken").isNullOrBlank()) "no" else "yes"}"
+    }
+
     /** [Android] and [AndroidOverlayButtons] of Dolphin.ini, for Diagnostics. */
     fun dolphinTouchSettings(): String? {
         val tree = prefs.dolphinTreeUri ?: return null

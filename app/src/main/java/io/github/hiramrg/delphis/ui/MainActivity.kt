@@ -459,6 +459,8 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         goFullScreen()
         setupVersion++ // re-read things that can change in system settings (e.g. the close-games helper)
+        // Back from a game (or anywhere): reload achievement progress so new unlocks show.
+        io.github.hiramrg.delphis.platform.Achievements.refresh()
         // The game list showing up while a game is running (and Delphis didn't close it) means
         // Dolphin's game screen went away, most likely because Dolphin crashed.
         // (Unless the player had left the game for the home screen and opened Delphis from there.)

@@ -38,6 +38,19 @@ object Achievements {
     val version: StateFlow<Int> = _version
 
     @Volatile var lastError: String? = null; private set
+    @Volatile private var lastRefresh = 0L
+
+    /**
+     * Forget cached progress and tell every list to reload. Called when Delphis comes back on screen
+     * (e.g. after a game), so unlocks earned while playing show up even if they weren't caught live.
+     */
+    fun refresh(minGapMs: Long = 15_000) {
+        val now = System.currentTimeMillis()
+        if (now - lastRefresh < minGapMs) return
+        lastRefresh = now
+        progressCache.clear()
+        _version.value++
+    }
 
     private val progressCache = ConcurrentHashMap<Int, Pair<Long, GameProgress>>()
     private val gameLists = ConcurrentHashMap<Int, List<RetroAchievements.GameListing>>()
@@ -144,20 +157,30 @@ object Achievements {
                 if (!seen.add(u.achievementId)) continue
                 val at = parseDate(u.date) ?: continue
                 if (at < start - 20_000) continue // earned before this game started
-                if (prefs.raGameId(key) == null && RetroAchievements.sameGame(info.title, u.gameTitle)) prefs.setRaGameId(key, u.gameId)
+                // Learn (or correct) which RA game this disc is from what Dolphin actually unlocked.
+                if (prefs.raGameId(key) != u.gameId && RetroAchievements.sameGame(info.title, u.gameTitle)) {
+                    CrashLog.event("RA game for ${info.title}: ${prefs.raGameId(key)} → ${u.gameId}")
+                    prefs.setRaGameId(key, u.gameId)
+                }
                 progressCache.remove(u.gameId)
                 val p = progressById(prefs, u.gameId)
                 _version.value++
                 CrashLog.event("achievement unlocked: ${u.title} (${u.gameTitle})")
                 if (prefs.raPopups) onUnlock(Popup(u, p?.unlocked, p?.total))
             }
-            // Not sure which RA game this is yet: Dolphin reports the game to RA a little after it starts.
-            if (prefs.raGameId(key) == null && profileChecks < 3 && System.currentTimeMillis() - start > 20_000) {
+            // Check which RA game this is: Dolphin reports the game to RA a little after it starts. The id
+            // matched by title can be the wrong set (another region or a subset), so a learned id is
+            // re-checked once too, and corrected when RA says Dolphin is running a different set.
+            val known = prefs.raGameId(key)
+            if (profileChecks < (if (known == null) 3 else 1) && System.currentTimeMillis() - start > 20_000) {
                 profileChecks++
                 val last = verify(a.user, a.key)?.lastGameId
-                if (last != null) {
-                    val p = progressById(prefs, last)
-                    if (p != null && RetroAchievements.sameGame(info.title, p.title)) { prefs.setRaGameId(key, last); _version.value++ }
+                if (last != null && last != known) {
+                    val p = progressById(prefs, last, maxAgeMs = 0)
+                    if (p != null && RetroAchievements.sameGame(info.title, p.title)) {
+                        CrashLog.event("RA game for ${info.title}: $known → $last (from the profile)")
+                        prefs.setRaGameId(key, last); _version.value++
+                    }
                 }
             }
         }

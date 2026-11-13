@@ -134,6 +134,12 @@ private fun buildReport(act: MainActivity): String = buildString {
     appendLine(bridge.baseConfigStatus())
     val roles = DeviceInfo.screenRoles(act, prefs.swapScreens)
     appendLine("screens: top=${roles.topDisplayId} bottom=${roles.bottomDisplayId}")
+    // RetroAchievements: Dolphin earns them (its own settings), Delphis only reads the account.
+    appendLine("retroachievements (Dolphin): ")
+    appendLine(bridge.achievementSettings())
+    val ra = io.github.hiramrg.delphis.platform.Achievements.account(prefs)
+    appendLine("retroachievements (Delphis): account=${ra?.user ?: "(not signed in)"}, last error=${io.github.hiramrg.delphis.platform.Achievements.lastError ?: "none"}")
+    act.lastGame()?.let { g -> appendLine("  last game: ${g.info.title} → RA game id ${prefs.raGameId(g.key) ?: "(not looked up yet)"}") }
     appendLine()
     appendLine("input devices:")
     appendLine(DeviceInfo.describeDevices())
