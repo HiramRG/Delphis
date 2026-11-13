@@ -159,6 +159,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("menu_music_on", true)
         set(v) = sp.edit().putBoolean("menu_music_on", v).apply()
 
+    /** Soft clicks when moving around the menus (off by default). */
+    var menuSounds: Boolean
+        get() = sp.getBoolean("menu_sounds", false)
+        set(v) = sp.edit().putBoolean("menu_sounds", v).apply()
+
     /** 0-100, relative to the system media volume. Default a bit under it. */
     var menuMusicVolume: Int
         get() = sp.getInt("menu_music_volume", 70)

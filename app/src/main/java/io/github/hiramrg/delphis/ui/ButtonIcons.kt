@@ -55,7 +55,7 @@ fun KeyIcon(key: String, color: Color = LocalWii.current.textDim, size: Dp = 18.
                 Text(
                     key, color = color, maxLines = 1, fontWeight = FontWeight.Black,
                     fontSize = (size.value * if (key == "⊖") 0.62f else 0.53f).sp,
-                    style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
+                    style = TextStyle(fontFamily = AppFont, platformStyle = PlatformTextStyle(includeFontPadding = false)),
                 )
             }
         }
@@ -116,6 +116,8 @@ fun HintText(
     letterSpacing: TextUnit = TextUnit.Unspecified,
 ) {
     val parts = tokens(text)
+    // The icon is sized from the text size the same way as its slot, so it never spills onto the words.
+    val iconDp = with(androidx.compose.ui.platform.LocalDensity.current) { (fontSize * 1.4f).toDp() }
     val inline = mutableMapOf<String, InlineTextContent>()
     val annotated: AnnotatedString = buildAnnotatedString {
         parts.forEachIndexed { n, (isKey, s) ->
@@ -125,12 +127,12 @@ fun HintText(
                 appendInlineContent(id, s)
                 val w = if (s.length == 1 || s.startsWith("DPAD")) 1.5f else 0.42f * s.length + 0.9f
                 inline[id] = InlineTextContent(Placeholder((fontSize.value * w).sp, (fontSize.value * 1.5f).sp, PlaceholderVerticalAlign.TextCenter)) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { KeyIcon(s, color, (fontSize.value * 1.4f).dp) }
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { KeyIcon(s, color, iconDp) }
                 }
             }
         }
     }
-    Text(annotated, modifier, color = color, fontSize = fontSize, fontWeight = fontWeight, textAlign = textAlign, letterSpacing = letterSpacing, inlineContent = inline, maxLines = 2)
+    Text(annotated, modifier, color = color, fontSize = fontSize, fontWeight = fontWeight, textAlign = textAlign, letterSpacing = letterSpacing, inlineContent = inline, maxLines = 2, onTextLayout = { TextFit.check(text, it) })
 }
 
 /** Splits a button label "Ⓐ Play" into ("Play", "A"); labels without a button glyph give null. */

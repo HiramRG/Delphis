@@ -78,7 +78,7 @@ fun BadgeImage(url: String, size: Dp, radius: Dp = 7.dp) {
 /** "🏆 13 / 40 · 32%" (or compact "🏆 13/40" for the in-game top bar). */
 @Composable
 fun AchievementsChip(p: GameProgress, onClick: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false, active: Boolean = false) {
-    val shape = RoundedCornerShape(50)
+    val shape = ChipShape
     Text(
         if (compact) "🏆 ${p.unlocked}/${p.total}" else "🏆 ${p.unlocked} / ${p.total} · ${p.percent}%",
         fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = if (active) Color(0xFF2A2010) else Color(0xFFF5D27A), maxLines = 1,

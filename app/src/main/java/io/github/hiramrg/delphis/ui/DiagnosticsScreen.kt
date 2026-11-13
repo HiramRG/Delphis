@@ -95,6 +95,13 @@ fun DiagnosticsScreen(act: MainActivity) {
                 }
             }
             val shape = RoundedCornerShape(18.dp)
+            // Fit check: any button, chip or hint whose words didn't fit (would be cut off) since Delphis started.
+            Column(Modifier.fillMaxWidth().clip(shape).background(c.card).border(2.dp, c.cardBorder, shape).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                CapsLabel("Labels that didn't fit")
+                val misses = TextFit.misses
+                if (misses.isEmpty()) Text("✓ None so far. Every button, chip and hint shown since Delphis started fit its space.", fontSize = 12.sp, color = c.green)
+                else misses.forEach { Text("• $it", fontSize = 12.sp, color = c.orange) }
+            }
             Column(Modifier.fillMaxWidth().clip(shape).background(c.card).border(2.dp, c.cardBorder, shape).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 CapsLabel("Full report")
                 Text(report, fontFamily = FontFamily.Monospace, fontSize = 10.5.sp, color = c.text)

@@ -178,6 +178,7 @@ class MainActivity : ComponentActivity() {
         updater = Updater(this)
         checkForUpdates(silent = true)
         themeMode = prefs.themeMode
+        io.github.hiramrg.delphis.platform.MenuSounds.init(this, prefs.menuSounds)
         // Release notes: once after an update; a fresh install just marks them as seen.
         val pkg = runCatching { packageManager.getPackageInfo(packageName, 0) }.getOrNull()
         val isUpdate = pkg != null && pkg.lastUpdateTime > pkg.firstInstallTime
@@ -251,6 +252,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 androidx.compose.foundation.layout.Box {
+                    ChannelZoom(screen) {
                     when (val s = screen) {
                         Screen.Setup -> SetupScreen(this@MainActivity)
                         Screen.Home -> HomeScreen(this@MainActivity)
@@ -260,6 +262,7 @@ class MainActivity : ComponentActivity() {
                         Screen.Diagnostics -> DiagnosticsScreen(this@MainActivity)
                         Screen.GyroTest -> GyroTestScreen(this@MainActivity)
                     }
+                    }
                     (updateState as? UpdateState.Ready)?.let { r -> if (updatePrompt) UpdateReadyCard(r.release.versionCode, onLater = { updatePrompt = false }) { restartAndUpdate() } }
                     NoticeHost()
                 }
@@ -268,6 +271,14 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT ->
+                io.github.hiramrg.delphis.platform.MenuSounds.play(io.github.hiramrg.delphis.platform.MenuSounds.Kind.MOVE)
+            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER -> if (event.repeatCount == 0)
+                io.github.hiramrg.delphis.platform.MenuSounds.play(io.github.hiramrg.delphis.platform.MenuSounds.Kind.SELECT)
+            KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> if (event.repeatCount == 0)
+                io.github.hiramrg.delphis.platform.MenuSounds.play(io.github.hiramrg.delphis.platform.MenuSounds.Kind.BACK)
+        }
         // "Build N is ready": Ⓐ Restart & update, Ⓑ Later.
         if (updatePrompt && updateState is UpdateState.Ready) when (event.keyCode) {
             KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> {

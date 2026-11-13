@@ -149,15 +149,14 @@ fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> 
 @Composable
 fun PanelBtn(label: String, key: String?, primary: Boolean, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     val c = LocalWii.current
-    val shape = RoundedCornerShape(50)
+    val shape = ButtonShape
     Row(
-        modifier.height(40.dp).clip(shape).background(if (primary) c.accent else c.card)
-            .border(2.dp, if (primary) c.accent else c.cardBorder, shape)
+        modifier.height(40.dp).focusRing(shape).channel(shape, primary)
             .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {
-        val fg = (if (primary) c.onAccent else c.text).copy(alpha = if (enabled) 1f else 0.4f)
-        Text(label, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1)
+        val fg = channelText(primary, enabled)
+        Text(label, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1, onTextLayout = { TextFit.check(label, it) })
         if (key != null) KeyIcon(key, if (primary) fg.copy(alpha = 0.75f) else c.textDim)
     }
 }
@@ -274,21 +273,14 @@ fun EmptyState(icon: String, title: String, sub: String, modifier: Modifier = Mo
  */
 @Composable
 fun AppBottomBar(hints: String?, modifier: Modifier = Modifier, leading: @Composable RowScope.() -> Unit = {}) {
-    val c = LocalWii.current
-    val shape = RoundedCornerShape(50)
-    Row(
-        modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp).fillMaxWidth().height(48.dp)
-            .clip(shape).background(c.bar).border(2.dp, c.barBorder, shape).padding(start = 6.dp, end = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        leading()
-        Spacer(Modifier.width(10.dp))
-        Text(rememberClock(withDate = true), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, maxLines = 1)
-        Spacer(Modifier.weight(1f))
-        if (hints != null) HintText(hints, fontWeight = FontWeight.ExtraBold)
-        Box(Modifier.padding(start = 12.dp).width(2.dp).height(26.dp).background(c.barBorder))
-        SystemStatusIcons(Modifier.padding(start = 10.dp))
-    }
+    WiiBar(
+        modifier = modifier,
+        left = leading,
+        right = {
+            if (hints != null) HintText(hints, Modifier.weight(1f, fill = false), fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.End)
+            SystemStatusIcons(Modifier.padding(start = 10.dp))
+        },
+    )
 }
 
 // ============================================================================ notices
@@ -378,13 +370,13 @@ private fun NoticeCard(n: Notices.Notice) {
             if (!n.sub.isNullOrBlank()) Text(n.sub, fontSize = 12.sp, color = c.textDim, lineHeight = 15.sp, maxLines = 3, overflow = TextOverflow.Clip)
         }
         if (n.action != null && n.onAction != null) {
-            val s = RoundedCornerShape(50)
+            val s = ChipShape
             Row(
-                Modifier.height(32.dp).clip(s).background(c.card).border(2.dp, c.cardBorder, s)
+                Modifier.height(32.dp).channel(s)
                     .clickable { Notices.pressAction() }.padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp),
             ) {
-                Text(n.action, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 1)
+                Text(n.action, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = c.btnText, maxLines = 1, onTextLayout = { TextFit.check(n.action, it) })
                 KeyIcon("Y", c.textDim)
             }
         }
@@ -395,11 +387,12 @@ private fun NoticeCard(n: Notices.Notice) {
 @Composable
 fun TopChip(text: String, on: Boolean = false, onClick: () -> Unit) {
     val c = LocalWii.current
-    val shape = RoundedCornerShape(50)
+    val shape = ChipShape
     Text(
         text, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
-        color = if (on) c.accentText else c.text,
-        modifier = Modifier.clip(shape).background(if (on) c.accentSoft else c.card).border(2.dp, if (on) c.accent else c.cardBorder, shape)
+        color = if (on) c.btnPrimaryText else c.btnText,
+        onTextLayout = { TextFit.check(text, it) },
+        modifier = Modifier.channel(shape, lit = on)
             .clickable(onClick = onClick).padding(horizontal = 11.dp, vertical = 5.dp),
     )
 }
@@ -408,13 +401,13 @@ fun TopChip(text: String, on: Boolean = false, onClick: () -> Unit) {
 @Composable
 fun HomeBarPill(label: String = "Home", onClick: () -> Unit) {
     val c = LocalWii.current
-    val shape = RoundedCornerShape(50)
+    val shape = ChipShape
     Row(
-        Modifier.height(34.dp).clip(shape).background(c.card).border(2.dp, c.cardBorder, shape)
+        Modifier.height(34.dp).channel(shape)
             .focusProperties { canFocus = false }.clickable(onClick = onClick).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        Text("◀ $label", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, maxLines = 1)
+        Text("◀ $label", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.btnPrimaryText, maxLines = 1, onTextLayout = { TextFit.check(label, it) })
         KeyIcon("B", c.textDim, 16.dp)
     }
 }
@@ -424,7 +417,7 @@ fun HomeBarPill(label: String = "Home", onClick: () -> Unit) {
 @Composable
 fun ScrollingTitle(title: String, fontSize: androidx.compose.ui.unit.TextUnit = 15.5.sp) {
     val c = LocalWii.current
-    val style = androidx.compose.ui.text.TextStyle(fontSize = fontSize, fontWeight = FontWeight.ExtraBold, color = c.text)
+    val style = androidx.compose.ui.text.TextStyle(fontFamily = AppFont, fontSize = fontSize, fontWeight = FontWeight.ExtraBold, color = c.text)
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
         val maxW = constraints.maxWidth
@@ -444,5 +437,20 @@ fun ScrollingTitle(title: String, fontSize: androidx.compose.ui.unit.TextUnit = 
                 }
                 .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500, velocity = 36.dp),
         )
+    }
+}
+
+
+/**
+ * Fit check: buttons, chips and hints report a label that didn't fit its space (it would be cut off).
+ * Diagnostics lists them, so a tight spot shows up on the first test instead of going unnoticed.
+ */
+object TextFit {
+    val misses = androidx.compose.runtime.mutableStateListOf<String>()
+    fun check(label: String, layout: androidx.compose.ui.text.TextLayoutResult) {
+        if (layout.hasVisualOverflow && label !in misses) {
+            misses.add(label)
+            android.util.Log.w("DelphisFit", "Label didn't fit: \"$label\" (${layout.size.width}px, needs more)")
+        }
     }
 }

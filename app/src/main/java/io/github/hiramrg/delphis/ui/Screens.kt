@@ -111,6 +111,43 @@ fun rememberClock(withDate: Boolean = false): String {
     return SimpleDateFormat(if (withDate) "EEE M/d · $time" else time, Locale.getDefault()).format(Date(now))
 }
 
+/** The bar's clock, Wii style: big time with the date beside it in small type ("2:55  Thu 11/12"). */
+@Composable
+fun BarClock(modifier: Modifier = Modifier) {
+    val c = LocalWii.current
+    val time = rememberClock(withDate = false)
+    val date = remember(time) { SimpleDateFormat("EEE M/d", Locale.getDefault()).format(Date()) }
+    Row(modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.Bottom) {
+        Text(time, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1, softWrap = false)
+        Text(date, fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 7.dp, bottom = 2.dp))
+    }
+}
+
+/**
+ * Bar D: no pill, just a soft line along the top. Left and right get equal halves of what's left after
+ * the clock, so the clock is always centred and the two sides can never run into it (hints wrap instead).
+ */
+@Composable
+fun WiiBar(left: @Composable RowScope.() -> Unit, right: @Composable RowScope.() -> Unit, modifier: Modifier = Modifier) {
+    val c = LocalWii.current
+    Row(
+        modifier.padding(bottom = 8.dp).fillMaxWidth().height(48.dp)
+            .drawBehind {
+                val y = 1.dp.toPx()
+                drawRect(
+                    androidx.compose.ui.graphics.Brush.horizontalGradient(0f to Color.Transparent, 0.12f to c.barBorder, 0.88f to c.barBorder, 1f to Color.Transparent),
+                    topLeft = androidx.compose.ui.geometry.Offset(0f, y), size = androidx.compose.ui.geometry.Size(size.width, 1.5.dp.toPx()),
+                )
+            }
+            .padding(start = 12.dp, end = 12.dp, top = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, content = left)
+        BarClock()
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End, content = right)
+    }
+}
+
 private fun formatPlayTime(ms: Long): String {
     val min = ms / 60_000
     return when {
@@ -401,7 +438,7 @@ private fun SearchBox(act: MainActivity) {
     }
     Row(
         Modifier.width(150.dp).height(34.dp).clip(shape).background(c.card)
-            .border(if (focused || editing) 3.dp else 2.dp, if (focused || editing) c.accent else c.cardBorder, shape)
+            .border(if (focused || editing) 3.dp else 2.dp, if (focused || editing) breathingAccent() else c.cardBorder, shape)
             .then(
                 if (editing) Modifier
                 else Modifier.focusRequester(pillFocus)
@@ -420,7 +457,7 @@ private fun SearchBox(act: MainActivity) {
             if (editing) {
                 BasicTextField(
                     act.libraryQuery, { act.libraryQuery = it }, singleLine = true,
-                    textStyle = TextStyle(color = c.text, fontSize = 13.sp), cursorBrush = SolidColor(c.accent),
+                    textStyle = TextStyle(fontFamily = AppFont, color = c.text, fontSize = 13.sp), cursorBrush = SolidColor(c.accent),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
                     keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { stop() }),
                     modifier = Modifier.fillMaxWidth().focusRequester(fieldFocus)
@@ -607,7 +644,7 @@ private fun GameInfoCard(act: MainActivity, g: GameEntry, focused: Boolean, cont
     Row(
         Modifier.fillMaxSize()
             .then(if (focused) Modifier.shadow(14.dp, shape, ambientColor = c.accent, spotColor = c.accent) else Modifier)
-            .clip(shape).background(c.card).border(if (focused) 3.dp else 2.dp, if (focused) c.accent else c.cardBorder, shape).padding(12.dp),
+            .clip(shape).background(c.card).border(if (focused) 3.dp else 2.dp, if (focused) breathingAccent() else c.cardBorder, shape).padding(12.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Box(Modifier.fillMaxHeight().aspectRatio(0.72f)) {
@@ -676,7 +713,7 @@ private fun ReadyRow(icon: androidx.compose.ui.graphics.vector.ImageVector, labe
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun CardTitle(title: String) {
-    val style = TextStyle(fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 22.sp, color = LocalWii.current.text)
+    val style = TextStyle(fontFamily = AppFont, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 22.sp, color = LocalWii.current.text)
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     BoxWithConstraints(Modifier.fillMaxWidth().height(46.dp)) {
         val maxW = constraints.maxWidth
@@ -744,7 +781,7 @@ private fun AddTile(act: MainActivity, row: HomeRow, onAdd: () -> Unit, focus: a
             }
             .clickable(onClick = onAdd),
     ) {
-        Box(Modifier.size(82.dp, 76.dp / 0.72f + 6.dp).border(3.dp, if (focused) c.accent else Color.Transparent, shape).padding(3.dp)) {
+        Box(Modifier.size(82.dp, 76.dp / 0.72f + 6.dp).border(3.dp, if (focused) breathingAccent() else Color.Transparent, shape).padding(3.dp)) {
             Column(
                 Modifier.fillMaxSize().drawBehind {
                     drawRoundRect(c.accentText, cornerRadius = androidx.compose.ui.geometry.CornerRadius(10.dp.toPx()),
@@ -818,7 +855,7 @@ private fun RowTile(act: MainActivity, row: HomeRow, g: GameEntry, coverW: andro
             Modifier.size(coverW + 10.dp, coverW / 0.72f + 10.dp)
                 .graphicsLayer { scaleX = grow; scaleY = grow; alpha = if (!focused && act.homeRow == row) 0.75f else 1f }
                 .then(if (focused) Modifier.shadow(14.dp, shape, ambientColor = c.accent, spotColor = c.accent) else Modifier)
-                .border(3.dp, if (focused) c.accent else Color.Transparent, shape).padding(5.dp),
+                .border(3.dp, if (focused) breathingAccent() else Color.Transparent, shape).padding(5.dp),
         ) {
             Cover(act, g, act.prefs.showCovers, Modifier.fillMaxSize().platformRim(g).alpha(if (suggestion) 0.85f else 1f), titleSize = 10)
             if (favorite) Text("★", color = Color(0xFFFFD34D), fontSize = 13.sp, modifier = Modifier.align(Alignment.TopStart).padding(4.dp))
@@ -856,7 +893,7 @@ private fun FavoritesPicker(act: MainActivity, favorites: Set<String>, onDone: (
                     Box(
                         Modifier.aspectRatio(0.72f).then(if (i == 0) Modifier.focusRequester(first) else Modifier)
                             .onFocusChanged { focused = it.isFocused }
-                            .border(3.dp, if (focused) c.accent else Color.Transparent, RoundedCornerShape(13.dp)).padding(3.dp)
+                            .border(3.dp, if (focused) breathingAccent() else Color.Transparent, RoundedCornerShape(13.dp)).padding(3.dp)
                             .clickable { act.prefs.toggleFavorite(g.key); act.statsVersion++ },
                     ) {
                         Cover(act, g, act.prefs.showCovers, Modifier.fillMaxSize().platformRim(g), titleSize = 9)
@@ -893,12 +930,12 @@ private fun SortPopup(current: LibSort, modifier: Modifier) {
 @Composable
 private fun CardButton(label: String, key: String, modifier: Modifier, onClick: () -> Unit) {
     val c = LocalWii.current
-    val shape = RoundedCornerShape(50)
+    val shape = ChipShape
     Row(
-        modifier.height(32.dp).focusRing(shape).clip(shape).background(c.card).border(2.dp, c.cardBorder, shape).clickable(onClick = onClick).padding(horizontal = 14.dp),
+        modifier.height(32.dp).focusRing(shape).channel(shape).clickable(onClick = onClick).padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        Text(label, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, color = c.btnText, onTextLayout = { TextFit.check(label, it) })
         KeyIcon(key, size = 16.dp)
     }
 }
@@ -928,7 +965,7 @@ private fun ChannelTile(act: MainActivity, g: GameEntry, height: androidx.compos
     val shape = RoundedCornerShape(16.dp)
     Box(
         Modifier.height(height).aspectRatio(1.33f).clip(shape).background(c.card)
-            .border(if (focused) 3.dp else 2.dp, if (focused) c.accent else c.cardBorder, shape)
+            .border(if (focused) 3.dp else 2.dp, if (focused) breathingAccent() else c.cardBorder, shape)
             .onFocusChanged { focused = it.isFocused; if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = g } }
             .clickable { act.openGame(g) }.padding(5.dp),
     ) {
@@ -940,54 +977,52 @@ private fun ChannelTile(act: MainActivity, g: GameEntry, height: androidx.compos
 @Composable
 private fun HomeBar(act: MainActivity, rowsMode: Boolean, lit: Boolean) {
     val c = LocalWii.current
-    val shape = RoundedCornerShape(50)
-    Row(
-        Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp).fillMaxWidth().height(48.dp)
-            .clip(shape).background(c.bar).border(2.dp, c.barBorder, shape).padding(start = 6.dp, end = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier.size(36.dp).focusRing(RoundedCornerShape(50)).clip(RoundedCornerShape(50)).background(c.card).border(2.dp, c.cardBorder, RoundedCornerShape(50))
-                .onFocusChanged { if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeRow = null } }
-                .clickable { act.screen = Screen.Settings },
-            contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Filled.Settings, "Settings", tint = c.textDim, modifier = Modifier.size(20.dp)) }
-        // ⊖ opens Settings too. Same spacing for each button and its shortcut: ⚙ ⊖ · ⏻ Hold Ⓑ.
-        Box(Modifier.padding(start = 8.dp)) { KeyIcon("⊖") }
-        // ⏻ exits Delphis (asks first). Holding Ⓑ on Home does the same.
-        Box(
-            Modifier.padding(start = 16.dp).size(36.dp).focusRing(RoundedCornerShape(50)).clip(RoundedCornerShape(50)).background(c.card).border(2.dp, c.cardBorder, RoundedCornerShape(50))
-                .onFocusChanged { if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeRow = null } }
-                .clickable { act.exitPrompt = true },
-            contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Outlined.PowerSettingsNew, "Exit Delphis", tint = c.textDim, modifier = Modifier.size(20.dp)) }
-        HintText("Hold Ⓑ", Modifier.padding(start = 8.dp), fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold)
-        Text(rememberClock(withDate = true), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.weight(1f))
-        // No button hints here: the pinned card and the rail show them. On a row, its sort (R1 changes it);
-        // a hint only when something needs one (the search box).
-        val row = act.homeRow
-        val hint = act.homeHint
-        when {
-            hint != null -> HintText(hint)
-            rowsMode && row != null && row.sortable -> {
-                val sort = rowSort(act, row)
-                Row(
-                    Modifier.height(32.dp).clip(shape).background(if (lit) c.accentSoft else c.card).border(2.dp, if (lit) c.accent else c.cardBorder, shape)
-                        .focusProperties { canFocus = false }
-                        .clickable { act.prefs.setRowSort(row.name, LibSort.entries[(sort.ordinal + 1) % LibSort.entries.size].name); act.statsVersion++; act.sortPopupUntil = System.currentTimeMillis() + 2000 }
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp),
-                ) {
-                    SortIcon(c.text)
-                    Text(sort.label, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-                    KeyIcon("R1")
+    val round = RoundedCornerShape(50)
+    WiiBar(
+        left = {
+            Box(
+                Modifier.size(34.dp).focusRing(round).channel(round, primary = true)
+                    .onFocusChanged { if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeRow = null } }
+                    .clickable { act.screen = Screen.Settings },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Filled.Settings, "Settings", tint = c.btnText, modifier = Modifier.size(19.dp)) }
+            // ⊖ opens Settings too. Same spacing for each button and its shortcut: ⚙ ⊖ · ⏻ Hold Ⓑ.
+            Box(Modifier.padding(start = 8.dp)) { KeyIcon("⊖") }
+            // ⏻ exits Delphis (asks first). Holding Ⓑ on Home does the same.
+            Box(
+                Modifier.padding(start = 16.dp).size(34.dp).focusRing(round).channel(round, primary = true)
+                    .onFocusChanged { if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeRow = null } }
+                    .clickable { act.exitPrompt = true },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Outlined.PowerSettingsNew, "Exit Delphis", tint = c.btnText, modifier = Modifier.size(19.dp)) }
+            HintText("Hold Ⓑ", Modifier.padding(start = 8.dp), fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold)
+        },
+        right = {
+            // No button hints here: the pinned card and the rail show them. On a row, its sort (R1 changes it);
+            // a hint only when something needs one (the search box).
+            val row = act.homeRow
+            val hint = act.homeHint
+            when {
+                hint != null -> HintText(hint, Modifier.weight(1f, fill = false), textAlign = TextAlign.End)
+                rowsMode && row != null && row.sortable -> {
+                    val sort = rowSort(act, row)
+                    Row(
+                        Modifier.weight(1f, fill = false).height(30.dp).channel(ChipShape, lit = lit)
+                            .focusProperties { canFocus = false }
+                            .clickable { act.prefs.setRowSort(row.name, LibSort.entries[(sort.ordinal + 1) % LibSort.entries.size].name); act.statsVersion++; act.sortPopupUntil = System.currentTimeMillis() + 2000 }
+                            .padding(horizontal = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        SortIcon(c.btnText)
+                        Text(sort.label, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = if (lit) c.btnPrimaryText else c.btnText, maxLines = 1, onTextLayout = { TextFit.check(sort.label, it) })
+                        KeyIcon("R1")
+                    }
                 }
             }
-        }
-        // The top screen is full screen, so Android's status icons live here instead.
-        Box(Modifier.padding(start = 10.dp).width(2.dp).height(26.dp).background(c.barBorder))
-        SystemStatusIcons(Modifier.padding(start = 10.dp))
-    }
+            // The top screen is full screen, so Android's status icons live here instead.
+            SystemStatusIcons(Modifier.padding(start = 10.dp))
+        },
+    )
 }
 
 /** ⇅ */
@@ -1007,8 +1042,8 @@ private fun SortIcon(tint: Color) {
 /** Blue ring around whatever the D-pad is on, so it's always clear where you are. */
 fun Modifier.focusRing(shape: androidx.compose.ui.graphics.Shape, width: androidx.compose.ui.unit.Dp = 3.dp): Modifier = composed {
     var focused by remember { mutableStateOf(false) }
-    val c = LocalWii.current
-    this.then(if (focused) Modifier.border(width, c.accent, shape) else Modifier).onFocusChanged { focused = it.hasFocus }
+    // The cursor breathes (deep ↔ bright blue) so it's easy to spot, like the Wii Menu's.
+    this.then(if (focused) Modifier.border(width, breathingAccent(), shape) else Modifier).onFocusChanged { focused = it.hasFocus }
 }
 
 // ============================================================================ library (column + list on Home)
@@ -1114,7 +1149,7 @@ private fun RailItem(act: MainActivity, key: String, label: String, count: Strin
             Box {
                 RailIcon(key, tint, Modifier.size(22.dp))
                 if (badge) Box(Modifier.align(Alignment.TopEnd).offset(x = 5.dp, y = (-4).dp).size(13.dp).clip(RoundedCornerShape(50)).background(c.accent), contentAlignment = Alignment.Center) {
-                    Text("+", fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color(0xFF0A2533), style = TextStyle(platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)))
+                    Text("+", fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color(0xFF0A2533), style = TextStyle(fontFamily = AppFont, platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)))
                 }
             }
             if (open) {
@@ -1218,7 +1253,7 @@ private fun GameCard(act: MainActivity, g: GameEntry, favorite: Boolean, playMs:
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(16.dp)
     Column(
-        Modifier.clip(shape).background(c.card).border(if (focused) 3.dp else 2.dp, if (focused) c.accent else c.cardBorder, shape)
+        Modifier.clip(shape).background(c.card).border(if (focused) 3.dp else 2.dp, if (focused) breathingAccent() else c.cardBorder, shape)
             .onFocusChanged { focused = it.isFocused; if (it.isFocused) { act.focusedGame = g; act.homeFocusedTile = true } }
             .clickable { act.focusedGame = g; act.openGame(g) }.padding(5.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -1537,15 +1572,14 @@ private fun screenChipLabel(sc: io.github.hiramrg.delphis.core.GameScreen.Choice
 @Composable
 private fun GameChip(text: String, key: String?, on: Boolean = false, warn: Boolean = false, outline: Boolean = false, height: androidx.compose.ui.unit.Dp = 32.dp, onClick: () -> Unit) {
     val c = LocalWii.current
-    val shape = RoundedCornerShape(50)
+    val shape = ChipShape
     Row(
-        Modifier.height(height).clip(shape)
-            .background(if (on) c.accentSoft else c.card)
-            .border(2.dp, when { warn -> c.orange; on || outline -> c.accent; else -> c.cardBorder }, shape)
+        Modifier.height(height).channel(shape, lit = on || outline)
+            .then(if (warn) Modifier.border(1.5.dp, c.orange, shape) else Modifier)
             .clickable(onClick = onClick).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(text, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = if (warn) c.orange else c.text, maxLines = 1)
+        Text(text, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = when { warn -> c.orange; on -> c.btnPrimaryText; else -> c.btnText }, maxLines = 1, onTextLayout = { TextFit.check(text, it) })
         if (key != null) KeyIcon(key)
     }
 }
@@ -1557,18 +1591,16 @@ private fun GameChip(text: String, key: String?, on: Boolean = false, warn: Bool
 @Composable
 private fun GameButton(icon: String, label: String, key: String, primary: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val c = LocalWii.current
-    val shape = RoundedCornerShape(50)
-    val fg = if (primary) Color(0xFF0A2533) else c.text
+    val shape = ButtonShape
+    val fg = channelText(primary)
     Row(
-        Modifier.fillMaxWidth().height(40.dp).alpha(if (enabled) 1f else 0.45f).clip(shape)
-            .background(if (primary) c.accent else c.card)
-            .border(2.dp, if (primary) c.accent else c.cardBorder, shape)
+        Modifier.fillMaxWidth().height(40.dp).alpha(if (enabled) 1f else 0.45f).focusRing(shape).channel(shape, primary)
             .clickable(enabled = enabled, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
     ) {
         Text(icon, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1)
         Spacer(Modifier.width(6.dp))
-        Text(label, fontSize = 14.5.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1)
+        Text(label, fontSize = 14.5.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1, onTextLayout = { TextFit.check(label, it) })
         Spacer(Modifier.width(8.dp))
         KeyIcon(key, if (primary) fg.copy(alpha = 0.75f) else c.textDim)
     }
@@ -1962,6 +1994,11 @@ private fun SoundSettings(act: MainActivity) {
         value = volume, enabled = on, valueRange = 0f..100f,
         onValueChange = { volume = it; act.prefs.menuMusicVolume = it.toInt(); music.refresh(act, act.prefs) },
     )
+    var sounds by remember { mutableStateOf(act.prefs.menuSounds) }
+    SwitchRow("Menu sounds", "A soft tick when you move, a chime on Ⓐ. Original sounds made for Delphis.", sounds) {
+        sounds = it; act.prefs.menuSounds = it; io.github.hiramrg.delphis.platform.MenuSounds.enabled = it
+        if (it) io.github.hiramrg.delphis.platform.MenuSounds.play(io.github.hiramrg.delphis.platform.MenuSounds.Kind.SELECT)
+    }
     CapsLabel("Music")
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         WiiChip("Built-in tune", custom == null, { act.prefs.menuMusicUri = null; music.refresh(act, act.prefs); act.setupVersion++ })
