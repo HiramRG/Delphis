@@ -1884,7 +1884,8 @@ fun SettingsScreen(act: MainActivity) {
     LaunchedEffect(Unit) { delay(80); memory.restore("nav-" + act.settingsSection.name) }
     // The cursor was dropped (the row it was on got redrawn, a panel closed): put it back where it was.
     LaunchedEffect(hasFocus) {
-        if (!hasFocus) { delay(120); if (!hasFocus) memory.restore("nav-" + act.settingsSection.name) }
+        // (Not while a pop-up window has the focus: that one keeps it.)
+        if (!hasFocus) { delay(120); if (!hasFocus && act.hasWindowFocus()) memory.restore("nav-" + act.settingsSection.name) }
     }
     androidx.compose.runtime.CompositionLocalProvider(LocalFocusMemory provides memory) {
     Column(Modifier.fillMaxSize().onFocusChanged { hasFocus = it.hasFocus }) {
