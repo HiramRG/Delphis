@@ -37,7 +37,8 @@ import androidx.compose.ui.unit.sp
 
 /** Glyphs used in hint strings, and the button each stands for. */
 private val GLYPHS = mapOf("Ⓐ" to "A", "Ⓑ" to "B", "Ⓧ" to "X", "Ⓨ" to "Y", "✚" to "DPAD", "⊖" to "⊖")
-private val WORD_KEYS = setOf("L1", "R1", "L2", "R2", "L3", "R3", "Start", "Select")
+// "Select" isn't here: the word stays text ("Ⓐ Select"); the Select button is written ⊖.
+private val WORD_KEYS = setOf("L1", "R1", "L2", "R2", "L3", "R3", "Start")
 
 /** A button icon: [key] is "A", "L1", "⊖", "DPAD" (D-pad) or "DPAD_LR" (D-pad, left / right). */
 @Composable

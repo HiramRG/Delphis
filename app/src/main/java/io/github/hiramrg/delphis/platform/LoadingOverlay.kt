@@ -43,6 +43,8 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
         SAVING("SAVING YOUR PROGRESS", 0),
         CLOSING("CLOSING THE GAME", 1),
         STARTING("STARTING", 2),
+        /** "Exit Delphis": game → Dolphin → Delphis, last step lit. */
+        EXITING("CLOSING DELPHIS", 2),
     }
 
     private var root: View? = null
@@ -53,6 +55,7 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
     private var coverView: ImageView? = null
     private var coverTitle: TextView? = null
     private var dots: List<View> = emptyList()
+    private var coverFrameView: View? = null
     private var pal = Palette.light
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val safety = Runnable { hide() }
@@ -67,7 +70,8 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
         titleView?.visibility = if (title.isNullOrBlank()) View.GONE else View.VISIBLE
         lineView?.text = line
         dots.forEachIndexed { i, d -> (d.background as GradientDrawable).setColor(if (i == phase.step) pal.accent else pal.border) }
-        setCover(title, gameId)
+        if (phase == Phase.EXITING) { coverTitle?.text = "⏻\nDelphis"; coverTitle?.gravity = Gravity.CENTER; coverTitle?.textSize = 18f; coverView?.visibility = View.GONE }
+        else { coverTitle?.gravity = Gravity.BOTTOM or Gravity.START; coverTitle?.textSize = 15f; setCover(title, gameId) }
         // Never leave the screen covered if something goes wrong.
         handler.removeCallbacks(safety)
         handler.postDelayed(safety, 60_000)
@@ -116,7 +120,10 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
         inner.addView(coverTitle, FrameLayout.LayoutParams(-1, -1))
         inner.addView(coverView, FrameLayout.LayoutParams(-1, -1))
         coverFrame.addView(inner, FrameLayout.LayoutParams(-1, -1))
-        row.addView(coverFrame, LinearLayout.LayoutParams(dp(150f), dp(206f)).apply { marginEnd = dp(26f) })
+        // Narrow screens (the bottom screen) skip the cover so the text never gets cut.
+        val narrow = ctx.resources.displayMetrics.widthPixels / d < 560f
+        coverFrameView = coverFrame
+        if (!narrow) row.addView(coverFrame, LinearLayout.LayoutParams(dp(150f), dp(206f)).apply { marginEnd = dp(26f) })
 
         val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         phaseView = TextView(ctx).apply { setTextColor(pal.accentText); textSize = 12f; typeface = Typeface.DEFAULT_BOLD; letterSpacing = 0.08f }
@@ -132,7 +139,7 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
                 .also { progress.addView(it, LinearLayout.LayoutParams(dp(10f), dp(10f)).apply { marginStart = dp(if (i == 0) 14f else 8f) }) }
         }
         col.addView(progress, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(14f) })
-        row.addView(col, LinearLayout.LayoutParams(dp(330f), -2))
+        row.addView(col, LinearLayout.LayoutParams(dp(if (narrow) 300f else 330f), -2))
         frame.addView(row, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
         frame.addView(TextView(ctx).apply { text = "Delphis"; setTextColor(pal.dim); textSize = 11f },
             FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(12f) })

@@ -87,6 +87,17 @@ class DolphinExitService : AccessibilityService() {
 
         fun hideLoading(delayMs: Long = 0) { instance?.let { s -> s.handler.post { s.loading.hide(delayMs) } } }
 
+        /** "Closing Delphis and Dolphin" on both screens (exit). Stays until [hideExit]. */
+        fun showExit(topDisplayId: Int?, bottomDisplayId: Int?): Boolean {
+            val s = instance ?: return false
+            s.handler.post {
+                s.loading.show(LoadingOverlay.Phase.EXITING, "See you next time", null, "Closing Delphis and Dolphin…", topDisplayId)
+                if (bottomDisplayId != null && bottomDisplayId != topDisplayId) s.exitBottom.show(LoadingOverlay.Phase.EXITING, "Closing…", null, "Delphis and Dolphin", bottomDisplayId)
+            }
+            return true
+        }
+        fun hideExit(delayMs: Long = 0) { instance?.let { s -> s.handler.post { s.loading.hide(delayMs); s.exitBottom.hide(delayMs) } } }
+
         // ---- bottom-screen trackpad: served to Dolphin as a DSU pad (see DsuServer); kept here for the callers
         @Suppress("UNUSED_PARAMETER") fun trackpadDown(topDisplayId: Int) { DsuServer.ensureStarted() }
         fun trackpadMove(dxDp: Float, dyDp: Float, speed: io.github.hiramrg.delphis.core.Trackpad.Speed) = DsuServer.move(dxDp, dyDp, speed)
@@ -126,6 +137,7 @@ class DolphinExitService : AccessibilityService() {
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val loading by lazy { LoadingOverlay(this) }
     private val achievementToast by lazy { AchievementToast(this) }
+    private val exitBottom by lazy { LoadingOverlay(this) }
     private val sideFill by lazy { SideFill(this) }
     /** While side fills show: hide them whenever Dolphin's menu (at the screen's edge) is open. */
     private val sideMenuCheck: Runnable = object : Runnable {

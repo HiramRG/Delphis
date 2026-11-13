@@ -85,12 +85,20 @@ fun PresetEditor(
     onCancel: () -> Unit,
     /** The edited preset, and the new preset's name (null = update the preset). */
     onSave: (Preset, String?) -> Unit,
+    /** Bumped by a "◀ Back" button outside the editor: same as Ⓑ. */
+    backSignal: Int = 0,
 ) {
     var maps by remember(base.id) { mutableStateOf(base.mappings) }
     val editable = remember(base.id) { EDIT_ORDER.filter { PresetEdits.sections(base.controller, it).isNotEmpty() } }
     var selected by remember(base.id) { mutableStateOf(editable.firstOrNull { c -> base.mappings.any { it.control == c } } ?: editable.firstOrNull()) }
     val changed = maps != base.mappings
     val draft = PresetEdits.build(base, maps, customId)
+    // Ⓑ / ◀ Back leaves the editor (back to the game page); with unsaved changes it asks once.
+    var leaving by remember { mutableStateOf(false) }
+    val requestBack = { if (maps != base.mappings) leaving = true else onCancel() }
+    androidx.activity.compose.BackHandler { requestBack() }
+    var lastSignal by remember { androidx.compose.runtime.mutableIntStateOf(backSignal) }
+    androidx.compose.runtime.LaunchedEffect(backSignal) { if (backSignal != lastSignal) { lastSignal = backSignal; requestBack() } }
 
     BoxWithConstraints(modifier) {
         // The top screen is ~700 dp wide; the in-game bottom screen ~450 dp.
@@ -113,6 +121,21 @@ fun PresetEditor(
         else BottomEditor(state, saveLabel, reset, onCancel, save)
         if (asking && updateName != null) SaveChoice(updateName, newName, saveLabel, wide, onBack = { asking = false }) { name -> asking = false; onSave(draft, name) }
         if (resetting && onReset != null) ResetConfirm(base.name, wide, onKeep = { resetting = false }) { resetting = false; onReset() }
+        if (leaving) {
+            // Top screen: a dialog (Ⓐ / Ⓑ work). In game (bottom screen) it stays in the window so Dolphin keeps the controller.
+            if (wide) ConfirmDialog(
+                "Edit preset", "Leave without saving?", "Your changes to this preset aren't saved yet.",
+                confirm = "Discard", cancel = "Keep editing", onCancel = { leaving = false },
+            ) { leaving = false; onCancel() }
+            else {
+                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.6f)).clickable { leaving = false })
+                ConfirmPanel(
+                    "Edit preset", "Leave without saving?", "Your changes to this preset aren't saved yet.", confirm = "Discard", cancel = "Keep editing",
+                    modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.92f).clickable(enabled = false) {},
+                    onCancel = { leaving = false },
+                ) { leaving = false; onCancel() }
+            }
+        }
     }
 }
 

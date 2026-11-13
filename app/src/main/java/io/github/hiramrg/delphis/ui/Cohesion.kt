@@ -404,9 +404,9 @@ fun TopChip(text: String, on: Boolean = false, onClick: () -> Unit) {
     )
 }
 
-/** "◀ Home Ⓑ" as a pill in the bottom bar (game page). */
+/** "◀ Home Ⓑ" (or "◀ Back Ⓑ") as a pill in the bottom bar (game page). */
 @Composable
-fun HomeBarPill(onClick: () -> Unit) {
+fun HomeBarPill(label: String = "Home", onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(50)
     Row(
@@ -414,7 +414,7 @@ fun HomeBarPill(onClick: () -> Unit) {
             .focusProperties { canFocus = false }.clickable(onClick = onClick).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        Text("◀ Home", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, maxLines = 1)
+        Text("◀ $label", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, maxLines = 1)
         KeyIcon("B", c.textDim, 16.dp)
     }
 }

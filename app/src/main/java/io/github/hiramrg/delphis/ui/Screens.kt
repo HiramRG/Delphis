@@ -1246,11 +1246,13 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
 
     val target = p.editTarget
     if (p.editing && target != null) {
+        var backSignal by remember { mutableIntStateOf(0) }
         Column(Modifier.fillMaxSize()) {
-            Header(game.info.title, onBack = { p.editing = false })
+            Header(game.info.title)
             PresetEditor(
                 base = target, customId = act.store.customIdFor(game.key), saveLabel = "Save",
-                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                backSignal = backSignal,
                 controlForKey = remember { thorControlForKey(act.prefs) },
                 updateName = if (act.store.isMine(target.id)) null else act.store.root(target).name,
                 newName = act.store.newName(game.key, target),
@@ -1262,6 +1264,8 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                     else p.saveEdited(edited, target, newName)
                 },
             )
+            // ◀ Back goes back to the game page (Ⓑ too); it asks first if there are unsaved changes.
+            AppBottomBar(null, leading = { HomeBarPill("Back") { backSignal++ } })
         }
         return
     }
@@ -1495,7 +1499,11 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         }
     }
     // The same bottom bar as Home; "◀ Home Ⓑ" lives in it.
-    AppBottomBar(null, leading = { HomeBarPill { act.screen = Screen.Home }; Spacer(Modifier.width(14.dp)) })
+    // While Change is open, ◀ Back (and Ⓑ) closes just the list; otherwise ◀ Home.
+    androidx.activity.compose.BackHandler(enabled = showList && !companion) { showList = false }
+    AppBottomBar(null, leading = {
+        if (showList && !companion) HomeBarPill("Back") { showList = false } else HomeBarPill { act.screen = Screen.Home }
+    })
     }
     confirmReset?.let { r -> ResetConfirm(r.name, wide = true, onKeep = { confirmReset = null }) { confirmReset = null; p.resetToDefault(r) } }
     confirmDelete?.let { d ->

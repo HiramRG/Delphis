@@ -5,16 +5,15 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 30
+    const val RELEASE = 31
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("An easier-to-see cursor.", "A thick blue ring with a soft glow and a small gap from the Wii / GameCube rim; the game under it grows a little."),
-        Item("Rows start at the first game.", "Moving up or down into a row always puts the cursor on its first game.", fix = true),
-        Item("Exit closes Dolphin too.", "Exiting now removes Dolphin from Recent apps, so it really closes.", fix = true),
-        Item("Tidier bottom bar.", "⏻ matches the ⚙ button, with “Hold Ⓑ” next to it."),
-        Item("Picture panel.", "Screen and Look are the same size, so switching tabs doesn't jump."),
+        Item("A proper goodbye.", "Exiting shows “Closing Delphis and Dolphin” on both screens while everything closes."),
+        Item("Back from Change and Edit.", "◀ Back Ⓑ closes the preset list or the editor and returns to the game page; leaving the editor with unsaved changes asks first."),
+        Item("Clearer hints.", "In Settings the bar reads ✚ Choose · Ⓐ Select · Ⓑ Back.", fix = true),
+        Item("An easier-to-see cursor, rows that start at the first game, and exit that closes Dolphin too.", ""),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

@@ -301,10 +301,13 @@ class MainActivity : ComponentActivity() {
         exitPrompt = false
         lifecycleScope.launch {
             val pkg = bridge.installedPackage()
+            val roles = DeviceInfo.screenRoles(this@MainActivity, prefs.swapScreens)
             if (io.github.hiramrg.delphis.platform.GameWatch.session != null) runCatching {
-                bridge.closeDolphin(DeviceInfo.screenRoles(this@MainActivity, prefs.swapScreens).topDisplayId, "Closing the game…")
+                bridge.closeDolphin(roles.topDisplayId, "Closing the game…")
             }
-            io.github.hiramrg.delphis.platform.DolphinExitService.hideLoading()
+            // "Closing Delphis and Dolphin" covers both screens while Recent apps is used behind it.
+            io.github.hiramrg.delphis.platform.DolphinExitService.showExit(roles.topDisplayId, roles.bottomDisplayId)
+            kotlinx.coroutines.delay(350)
             pkg?.let { p ->
                 // No app may force-stop another, so Dolphin's card is removed from Recent apps (Android then
                 // ends its process); the background-process call is a fallback.
@@ -314,6 +317,7 @@ class MainActivity : ComponentActivity() {
             }
             runCatching { io.github.hiramrg.delphis.platform.MenuMusic.stop() }
             MenuCompanion.close()
+            io.github.hiramrg.delphis.platform.DolphinExitService.hideExit(1200)
             finishAndRemoveTask()
         }
     }
