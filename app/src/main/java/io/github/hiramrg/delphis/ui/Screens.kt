@@ -12,6 +12,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -768,7 +769,7 @@ private fun GameRowView(act: MainActivity, row: HomeRow, games: List<GameEntry>,
     val c = LocalWii.current
     val focused = act.homeRow == row
     val quiet = act.homeRow != null && !focused
-    val coverW by androidx.compose.animation.core.animateDpAsState(when { focused -> 58.dp; quiet -> 40.dp; else -> 50.dp }, label = "row size")
+    val coverW by androidx.compose.animation.core.animateDpAsState(when { focused -> 54.dp; quiet -> 40.dp; else -> 48.dp }, label = "row size")
     val alpha by androidx.compose.animation.core.animateFloatAsState(if (quiet) 0.45f else 1f, label = "row fade")
     val first = act.rowFocus.getOrPut(row) { androidx.compose.ui.focus.FocusRequester() }
     Column(Modifier.fillMaxWidth().alpha(alpha)) {
@@ -788,7 +789,7 @@ private fun GameRowView(act: MainActivity, row: HomeRow, games: List<GameEntry>,
         @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
         LazyRow(
             Modifier.focusProperties { enter = { first } }.focusGroup(),
-            state = rowState, horizontalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(vertical = 4.dp, horizontal = 3.dp),
+            state = rowState, horizontalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(vertical = 6.dp, horizontal = 6.dp),
         ) {
             itemsIndexed(games, key = { _, g -> row.name + g.uri.toString() }) { i, g -> RowTile(act, row, g, coverW, g.key in favorites, focus = if (i == 0) first else null) }
             // Favorites keeps its "+" at the end.
@@ -803,21 +804,29 @@ private fun RowTile(act: MainActivity, row: HomeRow, g: GameEntry, coverW: andro
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(13.dp)
     Column(
-        Modifier.width(coverW + 6.dp).then(if (focus != null) Modifier.focusRequester(focus) else Modifier)
+        Modifier.width(coverW + 10.dp).then(if (focus != null) Modifier.focusRequester(focus) else Modifier)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = g; act.homeRow = row }
             }
             .clickable { act.focusedGame = g; act.openGame(g) },
     ) {
-        Box(Modifier.size(coverW + 6.dp, coverW / 0.72f + 6.dp).border(3.dp, if (focused) c.accent else Color.Transparent, shape).padding(3.dp)) {
+        // The cursor: a dark gap, then a thick blue ring with a soft glow, and the game grows a little,
+        // so it never blends into the white (Wii) or purple (GameCube) rim. The rest of the row fades slightly.
+        val grow by androidx.compose.animation.core.animateFloatAsState(if (focused) 1.08f else 1f, label = "cursor grow")
+        Box(
+            Modifier.size(coverW + 10.dp, coverW / 0.72f + 10.dp)
+                .graphicsLayer { scaleX = grow; scaleY = grow; alpha = if (!focused && act.homeRow == row) 0.75f else 1f }
+                .then(if (focused) Modifier.shadow(14.dp, shape, ambientColor = c.accent, spotColor = c.accent) else Modifier)
+                .border(3.dp, if (focused) c.accent else Color.Transparent, shape).padding(5.dp),
+        ) {
             Cover(act, g, act.prefs.showCovers, Modifier.fillMaxSize().platformRim(g).alpha(if (suggestion) 0.85f else 1f), titleSize = 10)
             if (favorite) Text("★", color = Color(0xFFFFD34D), fontSize = 13.sp, modifier = Modifier.align(Alignment.TopStart).padding(4.dp))
             if (suggestion) Box(Modifier.align(Alignment.TopEnd).padding(4.dp).size(22.dp).clip(RoundedCornerShape(50)).background(Color(0xCC0E1013)), contentAlignment = Alignment.Center) {
                 Text("☆", color = Color(0xFFFFD34D), fontSize = 13.sp)
             }
         }
-        if (coverW > 52.dp) Text(g.info.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 3.dp, top = 1.dp))
+        if (coverW > 52.dp) Text(g.info.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (focused) c.accentText else c.text, modifier = Modifier.padding(start = 3.dp, top = 1.dp))
     }
 }
 
