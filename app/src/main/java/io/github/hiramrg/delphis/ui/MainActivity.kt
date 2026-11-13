@@ -298,6 +298,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        io.github.hiramrg.delphis.platform.MenuSounds.onMotion(event)
         motionListener?.let { if (it(event)) return true }
         return super.dispatchGenericMotionEvent(event)
     }

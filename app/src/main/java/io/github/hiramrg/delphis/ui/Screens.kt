@@ -539,8 +539,6 @@ private fun HomeRows(
     // peeks out (the list's top padding) and the next one is cut off by the bottom of the screen.
     LaunchedEffect(act.homeRow, rows.size) {
         val idx = rows.indexOfFirst { it.first == act.homeRow }
-        delay(60)
-        androidx.compose.runtime.snapshotFlow { state.isScrollInProgress }.first { !it }
         runCatching { if (idx < 0) state.animateScrollToItem(0) else state.animateScrollToItem(idx) }
     }
     // The rail asks to jump to a row: scroll there, then put the ring on its first game.
@@ -572,6 +570,13 @@ private fun HomeRows(
                 act.homeRow == HomeRow.FAVORITES && favorites.isEmpty() -> FavoritesEmptyCard()
             }
         }
+        // Only one scroll moves the rows: the one above that lines the row up under the card. Android's own
+        // "bring the focused game into view" scroll is turned off for this list, because the two ran one after
+        // the other and made the list jump and then settle back (a small recoil). Each row keeps it sideways.
+        @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+        val rowSpec = androidx.compose.foundation.gestures.LocalBringIntoViewSpec.current
+        @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides NoBringIntoView) {
         LazyColumn(
             Modifier.weight(1f).fillMaxWidth(), state = state,
             contentPadding = PaddingValues(start = 12.dp, end = 14.dp, top = 10.dp, bottom = 120.dp),
@@ -579,12 +584,21 @@ private fun HomeRows(
         ) {
             rows.forEach { (row, games) ->
                 item(key = "row-" + row.name) {
-                    if (row == HomeRow.FAVORITES && games.isEmpty()) FavoritesEmptyRow(act, suggestions(act, favorites, playTime), onAddFavorites)
-                    else GameRowView(act, row, games, favorites, onAddFavorites)
+                    @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+                    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides rowSpec) {
+                        if (row == HomeRow.FAVORITES && games.isEmpty()) FavoritesEmptyRow(act, suggestions(act, favorites, playTime), onAddFavorites)
+                        else GameRowView(act, row, games, favorites, onAddFavorites)
+                    }
                 }
             }
         }
+        }
     }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private object NoBringIntoView : androidx.compose.foundation.gestures.BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = 0f
 }
 
 /** Home's rows, top to bottom (the rail lists them in the same order). */
