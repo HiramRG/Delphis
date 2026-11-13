@@ -306,7 +306,8 @@ class MainActivity : ComponentActivity() {
                 bridge.closeDolphin(roles.topDisplayId, "Closing the game…")
             }
             // "Closing Delphis and Dolphin" covers both screens while Recent apps is used behind it.
-            io.github.hiramrg.delphis.platform.DolphinExitService.showExit(roles.topDisplayId, roles.bottomDisplayId)
+            val last = lastGame()?.info
+            io.github.hiramrg.delphis.platform.DolphinExitService.showExit(roles.topDisplayId, roles.bottomDisplayId, last?.title, last?.gameId)
             kotlinx.coroutines.delay(350)
             pkg?.let { p ->
                 // No app may force-stop another, so Dolphin's card is removed from Recent apps (Android then

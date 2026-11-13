@@ -62,7 +62,8 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
 
     val isShowing: Boolean get() = root != null
 
-    fun show(phase: Phase, title: String?, gameId: String?, line: String, displayId: Int?) {
+    /** [coverName]: the game shown on the cover card when [title] is something else (the exit screen). */
+    fun show(phase: Phase, title: String?, gameId: String?, line: String, displayId: Int?, coverName: String? = null) {
         handler.removeCallbacks(hideLater)
         if (root == null) runCatching { attach(displayId) }.onFailure { CrashLog.event("loading screen failed: ${it.message}"); return }
         phaseView?.text = phase.label
@@ -70,8 +71,7 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
         titleView?.visibility = if (title.isNullOrBlank()) View.GONE else View.VISIBLE
         lineView?.text = line
         dots.forEachIndexed { i, d -> (d.background as GradientDrawable).setColor(if (i == phase.step) pal.accent else pal.border) }
-        if (phase == Phase.EXITING) { coverTitle?.text = "⏻\nDelphis"; coverTitle?.gravity = Gravity.CENTER; coverTitle?.textSize = 18f; coverView?.visibility = View.GONE }
-        else { coverTitle?.gravity = Gravity.BOTTOM or Gravity.START; coverTitle?.textSize = 15f; setCover(title, gameId) }
+        setCover(coverName ?: title, gameId)
         // Never leave the screen covered if something goes wrong.
         handler.removeCallbacks(safety)
         handler.postDelayed(safety, 60_000)

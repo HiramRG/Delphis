@@ -88,10 +88,11 @@ class DolphinExitService : AccessibilityService() {
         fun hideLoading(delayMs: Long = 0) { instance?.let { s -> s.handler.post { s.loading.hide(delayMs) } } }
 
         /** "Closing Delphis and Dolphin" on both screens (exit). Stays until [hideExit]. */
-        fun showExit(topDisplayId: Int?, bottomDisplayId: Int?): Boolean {
+        fun showExit(topDisplayId: Int?, bottomDisplayId: Int?, lastTitle: String?, lastGameId: String?): Boolean {
             val s = instance ?: return false
             s.handler.post {
-                s.loading.show(LoadingOverlay.Phase.EXITING, "See you next time", null, "Closing Delphis and Dolphin…", topDisplayId)
+                // The cover is the last game played (the one on Home's Continue card).
+                s.loading.show(LoadingOverlay.Phase.EXITING, "See you next time", lastGameId, "Closing Delphis and Dolphin…", topDisplayId, coverName = lastTitle ?: "Delphis")
                 if (bottomDisplayId != null && bottomDisplayId != topDisplayId) s.exitBottom.show(LoadingOverlay.Phase.EXITING, "Closing…", null, "Delphis and Dolphin", bottomDisplayId)
             }
             return true
