@@ -1891,15 +1891,27 @@ fun SettingsScreen(act: MainActivity) {
     Column(Modifier.fillMaxSize().onFocusChanged { hasFocus = it.hasFocus }) {
         Row(Modifier.weight(1f).fillMaxWidth()) {
             // Same nav as Home's rail: line icons, a lit bar for the page you're on, the ring only where the D-pad is.
+            val railScroll = rememberScrollState()
+            val pageScroll = rememberScrollState()
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val railSpec = remember(railScroll) { SettingsScrollSpec(railScroll, with(density) { 60.dp.toPx() }, with(density) { 16.dp.toPx() }) }
+            val pageSpec = remember(pageScroll) { SettingsScrollSpec(pageScroll, with(density) { 170.dp.toPx() }, with(density) { 24.dp.toPx() }) }
+            // A new page starts at its top.
+            LaunchedEffect(act.settingsSection) { pageScroll.scrollTo(0) }
+            @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides railSpec) {
             Column(
-                Modifier.width(206.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 14.dp, top = 12.dp, end = 6.dp, bottom = 8.dp),
+                Modifier.width(206.dp).fillMaxHeight().verticalScroll(railScroll).padding(start = 14.dp, top = 12.dp, end = 6.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 BackLink("Home") { act.screen = Screen.Home }
                 Spacer(Modifier.height(6.dp))
                 SettingsSection.entries.forEach { s -> SettingsNavItem(s, act.settingsSection == s) { act.settingsSection = s } }
             }
-            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 18.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            }
+            @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides pageSpec) {
+            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(pageScroll).padding(start = 12.dp, end = 18.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column {
                     CapsLabel("Settings")
                     Text(act.settingsSection.label, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
@@ -1923,9 +1935,29 @@ fun SettingsScreen(act: MainActivity) {
                     }
                 }
             }
+            }
         }
         AppBottomBar("✚ Choose  Ⓐ Select  Ⓑ Back")
     }
+    }
+}
+
+/**
+ * How Settings scrolls to the item the D-pad moves to, both ways: the item plus a margin is always fully
+ * in view, and anything near the top of the page scrolls the page all the way up, so the page title and
+ * the first rows come back into view when you go back up.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private class SettingsScrollSpec(val state: androidx.compose.foundation.ScrollState, val topSnapPx: Float, val marginPx: Float) : androidx.compose.foundation.gestures.BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        if (state.value + offset < topSnapPx) return -state.value.toFloat()
+        val top = offset - marginPx
+        val bottom = offset + size + marginPx
+        return when {
+            top < 0f -> top
+            bottom > containerSize -> minOf(bottom - containerSize, top)
+            else -> 0f
+        }
     }
 }
 
