@@ -684,6 +684,7 @@ private fun GameInfoCard(act: MainActivity, g: GameEntry, focused: Boolean, cont
                     Box(Modifier.fillMaxHeight().fillMaxWidth((ach.percent / 100f).coerceIn(0.02f, 1f)).clip(RoundedCornerShape(50)).background(Color(0xFFF5C542)))
                 }
                 Text("${ach.percent}%", fontSize = 11.sp, color = c.textDim, maxLines = 1)
+                if (ach.savedAt != null) OfflineTag()
                 KeyIcon("R3", size = 16.dp)
             } else Text("🏆 No achievements for this game", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1)
             Box(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(1.dp).background(c.cardBorder.copy(alpha = 0.6f)))

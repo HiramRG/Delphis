@@ -183,6 +183,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        io.github.hiramrg.delphis.platform.Achievements.init(this)
         super.onCreate(savedInstanceState)
         goFullScreen()
         prefs = Prefs(this)
@@ -556,6 +557,13 @@ class MainActivity : ComponentActivity() {
             val result = withContext(Dispatchers.IO) {
                 if (prefs.autoSaveResume) bridge.ensureSaveStatesEnabled()
                 bridge.ensureTouchOverlayOff()
+                // Only Delphis' achievement badge: hide Dolphin's own while Delphis can show its badge (online,
+                // signed in, pop-ups on). Offline Delphis can't see unlocks, so Dolphin's messages come back.
+                val online = runCatching {
+                    val cm = ctx.getSystemService(android.net.ConnectivityManager::class.java)
+                    cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+                }.getOrDefault(false)
+                bridge.setDolphinMessages(prefs.raHideDolphin && prefs.raPopups && online && io.github.hiramrg.delphis.platform.Achievements.account(prefs) != null)
                 // Multiplayer: P1 is the Thor unless it sits out; players 2-4 are the other controllers connected now.
                 val slots = io.github.hiramrg.delphis.platform.Pads.slots(prefs, gameId, preset)
                 val (p1, profile) = slots.first()

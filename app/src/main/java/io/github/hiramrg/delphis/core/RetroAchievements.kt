@@ -32,7 +32,8 @@ object RetroAchievements {
         fun badgeUrl(): String = "$MEDIA/Badge/$badge" + (if (unlocked) "" else "_lock") + ".png"
     }
 
-    data class GameProgress(val gameId: Int, val title: String, val achievements: List<Achievement>) {
+    /** [savedAt] is set when this is Delphis' saved copy (offline): when it was downloaded. */
+    data class GameProgress(val gameId: Int, val title: String, val achievements: List<Achievement>, val savedAt: Long? = null) {
         val total: Int get() = achievements.size
         val unlocked: Int get() = achievements.count { it.unlocked }
         val pointsTotal: Int get() = achievements.sumOf { it.points }

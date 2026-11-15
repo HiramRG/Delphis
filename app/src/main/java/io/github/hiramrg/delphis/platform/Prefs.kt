@@ -245,6 +245,14 @@ class Prefs(context: Context) {
     var raPopups: Boolean
         get() = sp.getBoolean("ra_popups", true)
         set(v) = sp.edit().putBoolean("ra_popups", v).apply()
+    /** Turn off Dolphin's own on-screen messages (its achievement pop-up) so only Delphis' badge shows. */
+    var raHideDolphin: Boolean
+        get() = sp.getBoolean("ra_hide_dolphin", true)
+        set(v) = sp.edit().putBoolean("ra_hide_dolphin", v).apply()
+    /** Delphis turned Dolphin's on-screen messages off (so it only ever turns back on what it turned off). */
+    var osdOffByDelphis: Boolean
+        get() = sp.getBoolean("osd_off_by_delphis", false)
+        set(v) = sp.edit().putBoolean("osd_off_by_delphis", v).apply()
     /** Where unlock badges show: "top", "bottom" or "both". */
     var raWhere: String
         get() = sp.getString("ra_where", "top") ?: "top"

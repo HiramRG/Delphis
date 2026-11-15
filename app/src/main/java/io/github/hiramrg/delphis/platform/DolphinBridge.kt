@@ -451,6 +451,22 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         }.onFailure { CrashLog.event("couldn't turn Dolphin's touch overlay off: ${it.message}") }
     }
 
+    /**
+     * Dolphin's "Show on-screen messages" ([Interface] OnScreenDisplayMessages in Dolphin.ini, read when
+     * Dolphin starts). Off hides Dolphin's achievement pop-up (and its other messages) so only Delphis'
+     * badge shows. Turning it back on only happens if Delphis was the one that turned it off.
+     */
+    fun setDolphinMessages(hide: Boolean) {
+        val tree = prefs.dolphinTreeUri ?: return
+        if (!hide && !prefs.osdOffByDelphis) return
+        runCatching {
+            val existing = readText(tree, DolphinConfigWriter.dolphinIniPath) ?: ""
+            val updated = io.github.hiramrg.delphis.core.IniEditor(existing).apply { set("Interface", mapOf("OnScreenDisplayMessages" to if (hide) "False" else "True")) }.toString()
+            if (updated != existing) writeText(tree, DolphinConfigWriter.dolphinIniPath, updated)
+            prefs.osdOffByDelphis = hide
+        }.onFailure { CrashLog.event("couldn't change Dolphin's on-screen messages: ${it.message}") }
+    }
+
     fun ensureSaveStatesEnabled() {
         val tree = prefs.dolphinTreeUri ?: return
         runCatching {

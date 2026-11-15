@@ -135,6 +135,7 @@ class NowPlayingActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        io.github.hiramrg.delphis.platform.Achievements.init(this)
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
         bridge = DolphinBridge(this, prefs)

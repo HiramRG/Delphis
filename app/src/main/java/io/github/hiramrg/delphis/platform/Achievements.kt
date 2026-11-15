@@ -56,6 +56,17 @@ object Achievements {
     private val gameLists = ConcurrentHashMap<Int, List<RetroAchievements.GameListing>>()
     private val badges = LruCache<String, Bitmap>(64)
 
+    /** Where the offline copies live (progress per game, badge pictures). Set from the activities. */
+    @Volatile private var dir: File? = null
+    fun init(context: Context) { if (dir == null) dir = context.applicationContext.filesDir }
+    private fun savedFile(gameId: Int) = dir?.let { File(it, "ra-progress/$gameId.json") }
+
+    /** Delphis' saved copy of a game's progress (last download), marked with when it was saved. */
+    private fun saved(gameId: Int): GameProgress? = runCatching {
+        val f = savedFile(gameId)?.takeIf { it.exists() } ?: return null
+        RetroAchievements.parseGameProgress(f.readText())?.copy(savedAt = f.lastModified())
+    }.getOrNull()
+
     private suspend fun get(url: String): String? = withContext(Dispatchers.IO) {
         runCatching {
             val conn = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -123,9 +134,15 @@ object Achievements {
     suspend fun progressById(prefs: Prefs, gameId: Int, maxAgeMs: Long = 120_000): GameProgress? {
         progressCache[gameId]?.let { (at, p) -> if (System.currentTimeMillis() - at < maxAgeMs) return p }
         val a = account(prefs) ?: return null
-        val p = get(RetroAchievements.url("API_GetGameInfoAndUserProgress", a.user, a.key, "g" to gameId, "u" to a.user))
-            ?.let(RetroAchievements::parseGameProgress) ?: return progressCache[gameId]?.second
+        val json = get(RetroAchievements.url("API_GetGameInfoAndUserProgress", a.user, a.key, "g" to gameId, "u" to a.user))
+        val p = json?.let(RetroAchievements::parseGameProgress)
+            // Offline (or RA down): the last progress Delphis downloaded, marked Offline.
+            ?: return progressCache[gameId]?.second?.takeIf { it.savedAt == null && System.currentTimeMillis() - progressCache[gameId]!!.first < 600_000 } ?: saved(gameId)
         progressCache[gameId] = System.currentTimeMillis() to p
+        withContext(Dispatchers.IO) {
+            runCatching { savedFile(gameId)?.let { f -> f.parentFile?.mkdirs(); f.writeText(json) } }
+            saveBadges(p)
+        }
         return p
     }
 
@@ -137,10 +154,28 @@ object Achievements {
 
     // ---------------------------------------------------------------- badges
 
+    private fun badgeFile(base: File, url: String) = File(base, "ra-badges/" + url.substringAfterLast('/'))
+
+    /** Downloads the badge pictures this game doesn't have yet, so its list looks the same offline. */
+    private fun saveBadges(p: GameProgress) {
+        val base = dir ?: return
+        p.achievements.forEach { a ->
+            val url = a.badgeUrl()
+            val f = badgeFile(base, url)
+            if (!f.exists()) runCatching {
+                (URL(url).openConnection() as HttpURLConnection).run {
+                    connectTimeout = 10_000; readTimeout = 15_000
+                    try { if (responseCode == 200) inputStream.use { i -> f.parentFile?.mkdirs(); f.writeBytes(i.readBytes()) } } finally { disconnect() }
+                }
+            }
+        }
+    }
+
     suspend fun badge(context: Context, url: String): Bitmap? {
         badges.get(url)?.let { return it }
+        init(context)
         return withContext(Dispatchers.IO) {
-            val file = File(context.cacheDir, "ra-badges/" + url.substringAfterLast('/'))
+            val file = badgeFile(context.applicationContext.filesDir, url)
             val bytes = if (file.exists()) file.readBytes() else runCatching {
                 (URL(url).openConnection() as HttpURLConnection).run {
                     connectTimeout = 10_000; readTimeout = 15_000

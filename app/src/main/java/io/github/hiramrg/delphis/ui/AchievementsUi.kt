@@ -81,7 +81,7 @@ fun BadgeImage(url: String, size: Dp, radius: Dp = 7.dp) {
 fun AchievementsChip(p: GameProgress, onClick: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false, active: Boolean = false) {
     val shape = ChipShape
     Text(
-        if (compact) "🏆 ${p.unlocked}/${p.total}" else "🏆 ${p.unlocked} / ${p.total} · ${p.percent}%",
+        if (compact) "🏆 ${p.unlocked}/${p.total}" else "🏆 ${p.unlocked} / ${p.total} · " + (if (p.savedAt != null) "Offline" else "${p.percent}%"),
         fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = if (active) Color(0xFF2A2010) else Color(0xFFF5D27A), maxLines = 1,
         modifier = modifier.clip(shape).background(if (active) AchGold else AchGoldSoft).border(2.dp, if (active) AchGold else AchGoldBorder, shape)
             .clickable(onClick = onClick).padding(horizontal = 11.dp, vertical = 5.dp),
@@ -114,6 +114,7 @@ fun AchievementList(
                 split?.let { KeyIcon(it.second, Color(0xFFA3ADB8), 16.dp) }
             }
         }
+        p.savedAt?.let { at -> OfflineLine(at) }
         Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF15181C))) {
             Box(Modifier.fillMaxHeight().fillMaxWidth(p.percent / 100f).background(Brush.horizontalGradient(listOf(AchGold, Color(0xFFF5D27A)))))
         }
@@ -260,6 +261,12 @@ fun AchievementsSettings(act: MainActivity, switchRow: @Composable (String, Stri
             WiiChip(label, where == id, { where = id; prefs.raWhere = id })
         }
     }
+    var hideDolphin by remember { mutableStateOf(prefs.raHideDolphin) }
+    if (popups) switchRow(
+        "Hide Dolphin's pop-ups",
+        "Only Delphis' badge shows. Also hides Dolphin's other on-screen messages (like \"Saved state\"). When the Thor is offline, Dolphin's come back.",
+        hideDolphin,
+    ) { hideDolphin = it; prefs.raHideDolphin = it }
     switchRow("Achievement list", "🏆 button on the game page and in game, with your progress.", list) { list = it; prefs.raList = it }
     Text(
         "Badges appear a few seconds after Dolphin unlocks the achievement. Top-screen badges need \"close games\" (Delphis' accessibility helper) turned on.",
@@ -361,5 +368,24 @@ private fun RaSignInPanel(act: MainActivity, startUser: String, needToken: Boole
                 error?.let { Text(it, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.orange) }
             }
         }
+    }
+}
+
+
+/** "⦸ Offline" tag (Delphis' saved copy of the progress). */
+@Composable
+fun OfflineTag(modifier: Modifier = Modifier) {
+    Text(
+        "⦸ Offline", fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFF5C542), maxLines = 1, softWrap = false,
+        modifier = modifier.clip(RoundedCornerShape(50)).background(Color(0xFF3A3220)).padding(horizontal = 8.dp, vertical = 2.dp),
+    )
+}
+
+@Composable
+private fun OfflineLine(savedAt: Long) {
+    val whenText = remember(savedAt) { java.text.SimpleDateFormat("EEE h:mm a", java.util.Locale.getDefault()).format(java.util.Date(savedAt)) }
+    Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OfflineTag()
+        Text("Saved $whenText · new unlocks show when you're back online", fontSize = 11.sp, color = Color(0xFFA3ADB8), modifier = Modifier.weight(1f))
     }
 }
