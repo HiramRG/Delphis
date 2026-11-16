@@ -33,7 +33,11 @@ object RetroAchievements {
     }
 
     /** [savedAt] is set when this is Delphis' saved copy (offline): when it was downloaded. */
-    data class GameProgress(val gameId: Int, val title: String, val achievements: List<Achievement>, val savedAt: Long? = null) {
+    data class GameProgress(
+        val gameId: Int, val title: String, val achievements: List<Achievement>, val savedAt: Long? = null,
+        /** About the game (RetroAchievements' game page): year, genre, developer, title-screen picture URL. */
+        val year: String? = null, val genre: String? = null, val developer: String? = null, val titleImage: String? = null,
+    ) {
         val total: Int get() = achievements.size
         val unlocked: Int get() = achievements.count { it.unlocked }
         val pointsTotal: Int get() = achievements.sumOf { it.points }
@@ -103,7 +107,13 @@ object RetroAchievements {
                 a.optString("BadgeName"), earned, a.optInt("DisplayOrder", 0),
             )
         }
-        GameProgress(id, o.optString("Title"), list)
+        fun str(k: String) = o.optString(k).takeIf { it.isNotBlank() && it != "null" }
+        GameProgress(
+            id, o.optString("Title"), list,
+            year = str("Released")?.let { Regex("(19|20)\\d{2}").find(it)?.value },
+            genre = str("Genre"), developer = str("Developer") ?: str("Publisher"),
+            titleImage = (str("ImageTitle") ?: str("ImageIngame"))?.takeIf { it.endsWith(".png") || it.endsWith(".jpg") }?.let { MEDIA + it },
+        )
     }.getOrNull()
 
     /** API_GetUserRecentAchievements. */

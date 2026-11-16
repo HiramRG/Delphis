@@ -96,7 +96,19 @@ class Prefs(context: Context) {
 
     /** When each game was last started (epoch ms). */
     fun lastPlayed(): Map<String, Long> = readMap("last_played")
-    fun markPlayed(gameKey: String) = writeMap("last_played", lastPlayed() + (gameKey to System.currentTimeMillis()))
+    fun markPlayed(gameKey: String) {
+        writeMap("last_played", lastPlayed() + (gameKey to System.currentTimeMillis()))
+        val n = sessions()
+        writeMap("sessions", n + (gameKey to (n[gameKey] ?: 0L) + 1))
+    }
+
+    /** How many times each game was started (counted from build 205 on). */
+    fun sessions(): Map<String, Long> = readMap("sessions")
+
+    /** Bottom screen on Home: "controls" (how to play) or "progress" (achievements and stats). L3 flips it. */
+    var bottomView: String
+        get() = sp.getString("bottom_view", "controls") ?: "controls"
+        set(v) = sp.edit().putString("bottom_view", v).apply()
 
     /** Total time played per game (ms). */
     fun playTime(): Map<String, Long> = readMap("play_time")

@@ -149,7 +149,7 @@ fun WiiBar(left: @Composable RowScope.() -> Unit, right: @Composable RowScope.()
     }
 }
 
-private fun formatPlayTime(ms: Long): String {
+fun formatPlayTime(ms: Long): String {
     val min = ms / 60_000
     return when {
         min <= 0 -> "New"
@@ -323,6 +323,12 @@ fun HomeScreen(act: MainActivity) {
             }
             // ⊖ opens Settings from anywhere on Home.
             KeyEvent.KEYCODE_BUTTON_SELECT -> { if (e.firstPress()) act.screen = Screen.Settings; true }
+            // Bottom screen: L3 flips Controls | Progress, L2 flips the controls between Thor and List.
+            KeyEvent.KEYCODE_BUTTON_THUMBL -> {
+                if (e.firstPress()) { act.bottomView = if (act.bottomView == "progress") "controls" else "progress"; act.prefs.bottomView = act.bottomView }
+                true
+            }
+            KeyEvent.KEYCODE_BUTTON_L2 -> { if (e.firstPress()) act.homeControlsToggle++; true }
             else -> false
         }
     }

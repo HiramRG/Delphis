@@ -77,6 +77,9 @@ class MainActivity : ComponentActivity() {
     var updatePrompt by mutableStateOf(false)
     /** "A new version is ready to download" pop-up (Ⓐ Download / Ⓑ Later), shown once per new build. */
     var foundPrompt by mutableStateOf(false)
+    /** Bottom screen on Home: "controls" or "progress" (L3 flips it), and L2 flips its controls Thor | List. */
+    var bottomView by mutableStateOf("controls")
+    var homeControlsToggle by mutableIntStateOf(0)
 
     var screen by mutableStateOf<Screen>(Screen.Home)
     /** Light (classic Wii, default) or dark menus. The in-game bottom screen is always dark. */
@@ -186,6 +189,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         io.github.hiramrg.delphis.platform.Achievements.init(this)
+        bottomView = Prefs(this).bottomView
         super.onCreate(savedInstanceState)
         goFullScreen()
         prefs = Prefs(this)
