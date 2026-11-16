@@ -855,6 +855,17 @@ private fun GameRowView(act: MainActivity, row: HomeRow, games: List<GameEntry>,
                 else -> Text(row.title, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
             }
             Text("${games.size}", fontSize = 12.sp, color = c.textDim, fontWeight = FontWeight.Bold)
+            // The full name of the game under the cursor, next to the row's title (never cut: a very long
+            // one scrolls slowly in the space left).
+            val here = act.focusedGame?.takeIf { g0 -> focused && games.any { it.key == g0.key } }
+            if (here != null) {
+                Text("·", fontSize = 14.sp, color = c.textDim, fontWeight = FontWeight.Bold)
+                @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+                Text(
+                    here.info.title, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, maxLines = 1, softWrap = false,
+                    modifier = Modifier.weight(1f, fill = false).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 900, repeatDelayMillis = 1500, velocity = 32.dp),
+                )
+            }
         }
         // Coming into a row from above or below always puts the cursor on its first game; a row the
         // cursor left scrolls back to its start, so that first game is ready.
@@ -903,30 +914,8 @@ private fun RowTile(act: MainActivity, row: HomeRow, g: GameEntry, coverW: andro
             }
         }
         if (coverW > 52.dp) {
-            if (focused) {
-                // The focused game's name in a rounded blue pill; a name that doesn't fit scrolls inside it
-                // (after a moment, with soft faded edges) so it can be read.
-                val pill = RoundedCornerShape(9.dp)
-                Box(
-                    Modifier.padding(top = 3.dp).fillMaxWidth().clip(pill).background(c.accentSoft).border(1.5.dp, c.accent, pill)
-                        .padding(horizontal = 6.dp, vertical = 1.dp),
-                ) {
-                    Text(
-                        g.info.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, color = c.accentText,
-                        modifier = Modifier.fillMaxWidth()
-                            .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
-                            .drawWithContent {
-                                drawContent()
-                                val fade = (6.dp.toPx() / size.width).coerceAtMost(0.3f)
-                                drawRect(
-                                    androidx.compose.ui.graphics.Brush.horizontalGradient(0f to Color.Transparent, fade to Color.Black, 1f - fade to Color.Black, 1f to Color.Transparent),
-                                    blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
-                                )
-                            }
-                            .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 900, repeatDelayMillis = 1200, velocity = 32.dp),
-                    )
-                }
-            } else Text(g.info.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, color = c.text, modifier = Modifier.padding(start = 3.dp, top = 1.dp))
+            // The game under the cursor: its short name in blue (the full name is next to the row's title).
+            Text(g.info.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (focused) c.accentText else c.text, modifier = Modifier.padding(start = 3.dp, top = 3.dp))
         }
     }
 }
