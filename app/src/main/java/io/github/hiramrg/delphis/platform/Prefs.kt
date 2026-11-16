@@ -159,6 +159,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("menu_music_on", true)
         set(v) = sp.edit().putBoolean("menu_music_on", v).apply()
 
+    /** Newest build Delphis already asked about ("A new version is ready to download"), so it asks once. */
+    var promptedUpdateBuild: Int
+        get() = sp.getInt("prompted_update_build", 0)
+        set(v) = sp.edit().putInt("prompted_update_build", v).apply()
+
     /** Soft clicks when moving around the menus (off by default). */
     var menuSounds: Boolean
         get() = sp.getBoolean("menu_sounds", false)

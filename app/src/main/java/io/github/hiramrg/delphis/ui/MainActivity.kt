@@ -75,6 +75,8 @@ class MainActivity : ComponentActivity() {
     var updateState by mutableStateOf<UpdateState>(UpdateState.Idle)
     /** The "Build N is ready" card; "Later" hides it and leaves the banner. */
     var updatePrompt by mutableStateOf(false)
+    /** "A new version is ready to download" pop-up (Ⓐ Download / Ⓑ Later), shown once per new build. */
+    var foundPrompt by mutableStateOf(false)
 
     var screen by mutableStateOf<Screen>(Screen.Home)
     /** Light (classic Wii, default) or dark menus. The in-game bottom screen is always dark. */
@@ -280,6 +282,7 @@ class MainActivity : ComponentActivity() {
                     }
                     }
                     (updateState as? UpdateState.Ready)?.let { r -> if (updatePrompt) UpdateReadyCard(r.release.versionCode, onLater = { updatePrompt = false }) { restartAndUpdate() } }
+                    (updateState as? UpdateState.Available)?.let { a -> if (foundPrompt) UpdateFoundCard(a.release.versionCode, onLater = { foundPrompt = false }) { foundPrompt = false; installUpdate(a.release) } }
                     NoticeHost()
                 }
             }
@@ -302,6 +305,25 @@ class MainActivity : ComponentActivity() {
             }
             KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
                 if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) updatePrompt = false; return true
+            }
+        }
+        // "A new version is ready to download": Ⓐ Download, Ⓑ Later.
+        (updateState as? UpdateState.Available)?.let { a -> if (foundPrompt) when (event.keyCode) {
+            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) { foundPrompt = false; installUpdate(a.release) }; return true
+            }
+            KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) foundPrompt = false; return true
+            }
+        } }
+        // R2 on Home: the update banner's button (Download, then Restart & update).
+        if (event.keyCode == KeyEvent.KEYCODE_BUTTON_R2 && screen is Screen.Home) {
+            val st = updateState
+            if (st is UpdateState.Available || st is UpdateState.Ready) {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    if (st is UpdateState.Available) installUpdate(st.release) else restartAndUpdate()
+                }
+                return true
             }
         }
         // A notice with a fix ("Fix it Ⓨ"): Ⓨ presses it.
@@ -411,7 +433,10 @@ class MainActivity : ComponentActivity() {
         updateState = UpdateState.Checking
         lifecycleScope.launch {
             updateState = when (val r = updater.check()) {
-                is Updater.Check.UpdateAvailable -> UpdateState.Available(r.release)
+                is Updater.Check.UpdateAvailable -> UpdateState.Available(r.release).also {
+                    // Ask once per new build; afterwards the banner's button (R2) does it.
+                    if (prefs.promptedUpdateBuild != r.release.versionCode) { prefs.promptedUpdateBuild = r.release.versionCode; foundPrompt = true }
+                }
                 is Updater.Check.UpToDate -> if (silent) UpdateState.Idle else UpdateState.UpToDate(updater.installedVersionName())
                 is Updater.Check.Failed -> if (silent) UpdateState.Idle else UpdateState.Failed(r.reason)
             }

@@ -540,8 +540,23 @@ private fun HomeRows(
     // The row the ring is on sits right under the pinned card, fully visible; the row above only
     // peeks out (the list's top padding) and the next one is cut off by the bottom of the screen.
     LaunchedEffect(act.homeRow, rows.size) {
-        val idx = rows.indexOfFirst { it.first == act.homeRow }
-        runCatching { if (idx < 0) state.animateScrollToItem(0) else state.animateScrollToItem(idx) }
+        val idx = rows.indexOfFirst { it.first == act.homeRow }.coerceAtLeast(0)
+        // One smooth move that lands exactly: the rows grow and shrink while the list scrolls, so a plain
+        // "scroll to row" aims at where the row was when it started and then jumps to where it ended up (the
+        // recoil, with the row's label popping in late). Instead, every frame measures where the row is now
+        // and moves the list so the row sits where the curve says it should — up or down, no correction at the end.
+        val start = state.layoutInfo.visibleItemsInfo.firstOrNull { it.index == idx }?.offset
+        if (start == null) { runCatching { state.scrollToItem(idx) }; return@LaunchedEffect }
+        val curve = androidx.compose.animation.core.Animatable(0f)
+        runCatching {
+            curve.animateTo(1f, androidx.compose.animation.core.tween(ROW_ANIM_MS, easing = androidx.compose.animation.core.FastOutSlowInEasing)) {
+                val now = state.layoutInfo.visibleItemsInfo.firstOrNull { it.index == idx }?.offset ?: return@animateTo
+                val want = start * (1f - value)
+                state.dispatchRawDelta(now - want)
+            }
+            // Snap away any sub-pixel rest once the rows have finished resizing.
+            state.layoutInfo.visibleItemsInfo.firstOrNull { it.index == idx }?.offset?.let { if (it != 0) state.dispatchRawDelta(it.toFloat()) }
+        }
     }
     // The rail asks to jump to a row: scroll there, then put the ring on its first game.
     LaunchedEffect(act.railJump) {
@@ -597,6 +612,9 @@ private fun HomeRows(
         }
     }
 }
+
+/** Rows resize and the list scrolls over the same time, so they move as one. */
+private const val ROW_ANIM_MS = 300
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 private object NoBringIntoView : androidx.compose.foundation.gestures.BringIntoViewSpec {
@@ -823,7 +841,8 @@ private fun GameRowView(act: MainActivity, row: HomeRow, games: List<GameEntry>,
     val c = LocalWii.current
     val focused = act.homeRow == row
     val quiet = act.homeRow != null && !focused
-    val coverW by androidx.compose.animation.core.animateDpAsState(when { focused -> 54.dp; quiet -> 40.dp; else -> 48.dp }, label = "row size")
+    // Same length and curve as the list's scroll, so the two finish together.
+    val coverW by androidx.compose.animation.core.animateDpAsState(when { focused -> 54.dp; quiet -> 40.dp; else -> 48.dp }, androidx.compose.animation.core.tween(ROW_ANIM_MS, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "row size")
     val alpha by androidx.compose.animation.core.animateFloatAsState(if (quiet) 0.45f else 1f, label = "row fade")
     val first = act.rowFocus.getOrPut(row) { androidx.compose.ui.focus.FocusRequester() }
     Column(Modifier.fillMaxWidth().alpha(alpha)) {

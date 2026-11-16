@@ -5,14 +5,13 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 36
+    const val RELEASE = 37
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("One achievement pop-up.", "Dolphin's own pop-up is hidden so only Delphis' badge shows (Settings → Achievements → Hide Dolphin's pop-ups). Offline, Dolphin's comes back."),
-        Item("Achievements offline.", "Your progress and each game's list (with badges) still show without internet, marked Offline."),
-        Item("Settings scroll both ways.", "Going back up with the D-pad scrolls the page back up.", fix = true),
+        Item("Update with the buttons.", "When a new version is out, Delphis asks once (Ⓐ Download). After that, R2 on Home downloads it, then restarts to install it."),
+        Item("Smooth rows.", "Moving up and down between rows on Home is one smooth move, with no bounce at the end.", fix = true),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

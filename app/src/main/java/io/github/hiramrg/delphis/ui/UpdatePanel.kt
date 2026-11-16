@@ -68,8 +68,9 @@ fun UpdateBanner(act: MainActivity) {
         Icon(Icons.Filled.SystemUpdate, null, tint = LocalWii.current.accentText)
         Spacer(Modifier.width(8.dp))
         Text(statusText(s), fontSize = 13.sp, modifier = Modifier.weight(1f))
-        if (s is UpdateState.Available) PanelBtn("Download", null, true) { act.installUpdate(s.release) }
-        if (s is UpdateState.Ready) PanelBtn("Restart & update", null, true) { act.restartAndUpdate() }
+        // R2 presses it from anywhere on Home (the cursor never has to reach the banner).
+        if (s is UpdateState.Available) PanelBtn("Download", "R2", true) { act.installUpdate(s.release) }
+        if (s is UpdateState.Ready) PanelBtn("Restart & update", "R2", true) { act.restartAndUpdate() }
     }
 }
 
@@ -85,6 +86,21 @@ private fun statusText(s: UpdateState): String = when (s) {
     is UpdateState.Failed -> "Couldn't update: ${s.reason}"
 }
 
+
+/** "A new version is ready to download": Download (Ⓐ) starts it in the background; Later (Ⓑ) leaves the banner (R2). */
+@Composable
+fun androidx.compose.foundation.layout.BoxScope.UpdateFoundCard(build: Int, onLater: () -> Unit, onDownload: () -> Unit) {
+    PopupPanel(
+        "Update · build $build", "A new version of Delphis is ready to download",
+        Modifier.align(Alignment.TopEnd).padding(top = 30.dp, end = 16.dp).widthIn(max = 500.dp).fillMaxWidth(0.72f),
+        buttons = {
+            PanelBtn("Later", "B", false, onClick = onLater)
+            PanelBtn("Download", "A", true, onClick = onDownload)
+        },
+    ) {
+        Text("It downloads in the background while you keep playing. Delphis asks before it restarts to install it.", fontSize = 12.sp, color = LocalWii.current.textDim)
+    }
+}
 
 /** "Build N is ready": Restart & update (Ⓐ) closes Delphis, installs and reopens it; Later (Ⓑ) leaves the banner. */
 @Composable
