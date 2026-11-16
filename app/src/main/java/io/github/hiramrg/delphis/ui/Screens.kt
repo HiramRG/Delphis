@@ -12,6 +12,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -871,6 +872,7 @@ private fun GameRowView(act: MainActivity, row: HomeRow, games: List<GameEntry>,
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun RowTile(act: MainActivity, row: HomeRow, g: GameEntry, coverW: androidx.compose.ui.unit.Dp, favorite: Boolean, suggestion: Boolean = false, focus: androidx.compose.ui.focus.FocusRequester? = null) {
     val c = LocalWii.current
@@ -882,7 +884,8 @@ private fun RowTile(act: MainActivity, row: HomeRow, g: GameEntry, coverW: andro
                 focused = it.isFocused
                 if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = g; act.homeRow = row }
             }
-            .clickable { act.focusedGame = g; act.openGame(g) },
+            // No default (square) highlight: the ring and the title pill below are the cursor.
+            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { act.focusedGame = g; act.openGame(g) },
     ) {
         // The cursor: a dark gap, then a thick blue ring with a soft glow, and the game grows a little,
         // so it never blends into the white (Wii) or purple (GameCube) rim. The rest of the row fades slightly.
@@ -899,7 +902,32 @@ private fun RowTile(act: MainActivity, row: HomeRow, g: GameEntry, coverW: andro
                 Text("☆", color = Color(0xFFFFD34D), fontSize = 13.sp)
             }
         }
-        if (coverW > 52.dp) Text(g.info.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (focused) c.accentText else c.text, modifier = Modifier.padding(start = 3.dp, top = 1.dp))
+        if (coverW > 52.dp) {
+            if (focused) {
+                // The focused game's name in a rounded blue pill; a name that doesn't fit scrolls inside it
+                // (after a moment, with soft faded edges) so it can be read.
+                val pill = RoundedCornerShape(9.dp)
+                Box(
+                    Modifier.padding(top = 3.dp).fillMaxWidth().clip(pill).background(c.accentSoft).border(1.5.dp, c.accent, pill)
+                        .padding(horizontal = 6.dp, vertical = 1.dp),
+                ) {
+                    Text(
+                        g.info.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, color = c.accentText,
+                        modifier = Modifier.fillMaxWidth()
+                            .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                            .drawWithContent {
+                                drawContent()
+                                val fade = (6.dp.toPx() / size.width).coerceAtMost(0.3f)
+                                drawRect(
+                                    androidx.compose.ui.graphics.Brush.horizontalGradient(0f to Color.Transparent, fade to Color.Black, 1f - fade to Color.Black, 1f to Color.Transparent),
+                                    blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                                )
+                            }
+                            .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 900, repeatDelayMillis = 1200, velocity = 32.dp),
+                    )
+                }
+            } else Text(g.info.title, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, color = c.text, modifier = Modifier.padding(start = 3.dp, top = 1.dp))
+        }
     }
 }
 
