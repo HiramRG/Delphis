@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.draw.alpha
 import io.github.hiramrg.delphis.platform.GameEntry
@@ -249,123 +250,64 @@ private fun FocusedGamePanel(act: MainActivity) {
     @Suppress("UNUSED_VARIABLE") val v = act.statsVersion
     val preset = act.prefs.presetFor(g.key)?.let { act.store.byId(it) }
     val ach = rememberAchievements(act.prefs, g.key, g.info)
-    val progressView = act.bottomView == "progress"
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-        GameBanner(act, g, ach, progressView) { act.bottomView = if (progressView) "controls" else "progress"; act.prefs.bottomView = act.bottomView }
-        if (progressView) {
-            if (ach != null) ProgressCard(ach, Modifier.weight(1f).fillMaxWidth())
-            else WiiCard(Modifier.fillMaxWidth(), padding = 10.dp) {
-                Text("🏆 No achievements for this game", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1)
-            }
-            StatCards(act, g)
-            if (ach == null) ControlsSummary(act, g, preset, Modifier.weight(1f).fillMaxWidth())
-        } else {
-            WiiCard(Modifier.weight(1f).fillMaxWidth(), padding = 8.dp) {
-                if (preset == null) {
-                    CapsLabel("Controls")
-                    Text("Not chosen yet · press Ⓧ for the game page", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        SelectedControlsTitle()
-                        Text(" " + preset.name.uppercase(), fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, color = c.green, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    }
-                    ControlsSwitchable(preset, act.prefs, g.key, Modifier.fillMaxSize().padding(top = 4.dp), toggle = act.homeControlsToggle, toggleKey = "L2")
-                }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PanelBtn(if (act.prefs.isFavorite(g.key)) "★ Favorite" else "☆ Favorite", "Y", false, Modifier.weight(1f)) { act.prefs.toggleFavorite(g.key); act.statsVersion++ }
-            PanelBtn("Play", "A", true, Modifier.weight(1.6f)) { act.quickPlay(g) }
+    // Simple on purpose (the bottom screen is small): banner, the controls in use, three facts, two buttons.
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        GameBanner(act, g)
+        ControlsBar(act, g, preset)
+        FactTiles(act, g, ach, Modifier.weight(1f).fillMaxWidth())
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            PanelBtn(if (act.prefs.isFavorite(g.key)) "★" else "☆", "Y", false, Modifier.weight(1f).height(46.dp)) { act.prefs.toggleFavorite(g.key); act.statsVersion++ }
+            PanelBtn("Play", "A", true, Modifier.weight(2.4f).height(46.dp)) { act.quickPlay(g) }
         }
     }
 }
 
-/**
- * The game's banner: its title-screen picture from RetroAchievements (or the cover, softly blurred), the
- * cover, name and year · genre · developer, plus the Controls | Progress switch (L3) in the corner.
- */
+/** The game's banner: its cover, softly blurred, behind the cover and the name. */
 @Composable
-private fun GameBanner(act: MainActivity, g: GameEntry, ach: io.github.hiramrg.delphis.core.RetroAchievements.GameProgress?, progressView: Boolean, onSwitch: () -> Unit) {
-    val c = LocalWii.current
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val shape = RoundedCornerShape(16.dp)
-    val picture by produceState<android.graphics.Bitmap?>(null, ach?.titleImage) {
-        value = ach?.titleImage?.let { io.github.hiramrg.delphis.platform.Achievements.badge(context, it) }
-    }
-    Box(Modifier.fillMaxWidth().height(118.dp).clip(shape).background(Color(0xFF15181C))) {
-        if (picture != null) androidx.compose.foundation.Image(picture!!.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
-        else Cover(act, g, act.prefs.showCovers, Modifier.fillMaxSize().blur(18.dp).alpha(0.75f), titleSize = 10)
+private fun GameBanner(act: MainActivity, g: GameEntry) {
+    val shape = RoundedCornerShape(18.dp)
+    Box(Modifier.fillMaxWidth().height(130.dp).clip(shape).background(Color(0xFF15181C))) {
+        Cover(act, g, act.prefs.showCovers, Modifier.fillMaxSize().blur(18.dp).alpha(0.8f), titleSize = 10)
         // Darker at the bottom so the name always reads.
         Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to Color.Transparent, 0.35f to Color(0x33000000), 1f to Color(0xEE14171B))))
-        Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.Bottom) {
-            Cover(act, g, act.prefs.showCovers, Modifier.size(width = 68.dp, height = 96.dp).platformRim(g, 2.dp), titleSize = 9)
-            Spacer(Modifier.width(11.dp))
-            Column(Modifier.weight(1f)) {
-                Text(g.info.title, fontSize = 14.5.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 17.sp)
-                val time = act.prefs.playTime()[g.key] ?: 0L
-                val meta = listOfNotNull(
-                    ach?.year, ach?.genre,
-                    if (ach?.year == null && ach?.genre == null) (if (g.info.platform == io.github.hiramrg.delphis.core.Platform.WII) "Wii" else "GameCube") else null,
-                    if (time > 60_000) formatPlayTime(time) + " played" else null,
-                ).joinToString(" · ")
-                Text(meta, fontSize = 11.sp, color = Color(0xFFC9D0D8), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-        Row(Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            val seg = RoundedCornerShape(50)
-            Row(Modifier.height(26.dp).clip(seg).background(Color(0xC014171B)).border(1.5.dp, Color(0xFF4A535E), seg).padding(2.dp)) {
-                listOf(false to "🎮 Controls", true to "🏆 Progress").forEach { (p, label) ->
-                    val on = p == progressView
-                    Box(
-                        Modifier.fillMaxHeight().clip(seg).background(if (on) c.accent else Color.Transparent).clickable { if (!on) onSwitch() }.padding(horizontal = 9.dp),
-                        contentAlignment = Alignment.Center,
-                    ) { Text(label, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = if (on) Color(0xFF0A2533) else Color(0xFFC9D0D8), maxLines = 1) }
-                }
-            }
-            KeyIcon("L3", Color(0xFFE8ECF0))
+        Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.Bottom) {
+            Cover(act, g, act.prefs.showCovers, Modifier.size(width = 76.dp, height = 106.dp).platformRim(g, 2.5.dp), titleSize = 9)
+            Spacer(Modifier.width(13.dp))
+            Text(g.info.title, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 20.sp, modifier = Modifier.weight(1f))
         }
     }
 }
 
-/** Achievements bar (R3 opens the list) and the next two to go for. */
+/** The controls in use: preset name in full, what it emulates, and Change Ⓧ (the game page). */
 @Composable
-private fun ProgressCard(p: io.github.hiramrg.delphis.core.RetroAchievements.GameProgress, modifier: Modifier) {
+private fun ControlsBar(act: MainActivity, g: GameEntry, preset: Preset?) {
     val c = LocalWii.current
-    WiiCard(modifier, padding = 10.dp) {
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("🏆 ${p.unlocked} / ${p.total}", fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-                Box(Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(50)).background(if (c.dark) Color(0xFF15181C) else c.cardBorder)) {
-                    Box(Modifier.fillMaxHeight().fillMaxWidth((p.percent / 100f).coerceIn(0.02f, 1f)).background(Color(0xFFF5C542)))
-                }
-                if (p.savedAt != null) OfflineTag() else Text("${p.percent}%", fontSize = 11.5.sp, color = c.textDim, maxLines = 1)
-                KeyIcon("R3", size = 16.dp)
-            }
-            val next = p.achievements.filter { !it.unlocked }.sortedWith(compareBy({ it.displayOrder }, { it.id })).take(2)
-            if (next.isEmpty()) Text("✓ Every achievement unlocked!", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.green)
-            else {
-                Text("NEXT UP", fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp, color = c.textDim)
-                next.forEach { a ->
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        BadgeImage(a.badgeUrl(), 28.dp, 6.dp)
-                        Column(Modifier.weight(1f)) {
-                            Text(a.title, fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(a.description, fontSize = 10.sp, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        Text("${a.points} pts", fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFE0A82E))
-                    }
-                }
-            }
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        Modifier.fillMaxWidth().height(52.dp).clip(shape).background(c.card).border(2.dp, if (preset != null) c.green else c.cardBorder, shape)
+            .clickable { act.openGame(g) }.padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.SportsEsports, null, tint = if (preset != null) c.green else c.textDim, modifier = Modifier.size(24.dp))
+        Column(Modifier.weight(1f)) {
+            @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+            Text(
+                preset?.name ?: "Controls not chosen yet", fontSize = 14.5.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false,
+                // A long name scrolls rather than getting cut.
+                modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 2000, velocity = 28.dp),
+            )
+            Text(if (preset != null) preset.controller.label + " · ✓ selected" else "Pick them on the game page", fontSize = 11.sp, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        Text("Change", fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, maxLines = 1)
+        KeyIcon("X")
     }
 }
 
-/** Time played · sessions · when the autosave is from ("today" or the day and date). */
+/** Three facts you read at a glance: achievements, time played, the autosave (time + "today" or date). */
 @Composable
-private fun StatCards(act: MainActivity, g: GameEntry) {
+private fun FactTiles(act: MainActivity, g: GameEntry, ach: io.github.hiramrg.delphis.core.RetroAchievements.GameProgress?, modifier: Modifier) {
     val c = LocalWii.current
     val time = act.prefs.playTime()[g.key] ?: 0L
-    val sessions = act.prefs.sessions()[g.key] ?: 0L
     val autosave by produceState<Long?>(null, g.key, act.statsVersion) {
         value = g.info.gameId?.let { id -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.quickStateTime(id) } }
     }
@@ -376,31 +318,22 @@ private fun StatCards(act: MainActivity, g: GameEntry) {
         if (now.get(java.util.Calendar.YEAR) == then.get(java.util.Calendar.YEAR) && now.get(java.util.Calendar.DAY_OF_YEAR) == then.get(java.util.Calendar.DAY_OF_YEAR)) "today"
         else java.text.SimpleDateFormat("EEE M/d", java.util.Locale.getDefault()).format(java.util.Date(it))
     }
-    val cards = listOf(
-        "🕒 " + (if (time > 60_000) formatPlayTime(time) else "—") to "played",
-        "▶ " + (if (sessions > 0) "$sessions" else "—") to "sessions",
-        "💾 " + (save?.let { fmtTime.format(java.util.Date(it)) } ?: "None") to (if (saveDay != null) "autosave · $saveDay" else "autosave"),
+    val tiles = listOf(
+        Triple("🏆", ach?.let { "${it.unlocked} / ${it.total}" } ?: "—", ach?.let { if (it.savedAt != null) "offline" else "${it.percent}%" } ?: "no achievements"),
+        Triple("🕒", if (time > 60_000) formatPlayTime(time) else "—", "played"),
+        Triple("💾", save?.let { fmtTime.format(java.util.Date(it)) } ?: "—", saveDay ?: "no autosave"),
     )
-    Row(Modifier.fillMaxWidth().height(52.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        cards.forEach { (big, small) ->
-            val shape = RoundedCornerShape(13.dp)
-            Column(Modifier.weight(1f).fillMaxHeight().clip(shape).background(c.card).border(2.dp, c.cardBorder, shape).padding(horizontal = 9.dp), verticalArrangement = Arrangement.Center) {
-                Text(big, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false)
-                Text(small, fontSize = 10.5.sp, color = c.textDim, maxLines = 1, softWrap = false)
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        tiles.forEach { (icon, big, small) ->
+            val shape = RoundedCornerShape(16.dp)
+            Column(
+                Modifier.weight(1f).fillMaxHeight().clip(shape).background(c.card).border(2.dp, c.cardBorder, shape).padding(horizontal = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+            ) {
+                Text(icon, fontSize = 18.sp)
+                Text(big, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false)
+                Text(small, fontSize = 11.5.sp, color = c.textDim, maxLines = 1, softWrap = false)
             }
-        }
-    }
-}
-
-/** For games without achievements: the selected controls, where the game starts and its picture. */
-@Composable
-private fun ControlsSummary(act: MainActivity, g: GameEntry, preset: Preset?, modifier: Modifier) {
-    val c = LocalWii.current
-    WiiCard(modifier, padding = 10.dp) {
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
-            SelectedControlsTitle()
-            Text(preset?.name ?: "Not chosen yet", fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(if (act.prefs.autoSaveFor(g.info.gameId)) "Starts from your autosave" else "Starts from the beginning", fontSize = 11.sp, color = c.textDim, maxLines = 1)
         }
     }
 }
