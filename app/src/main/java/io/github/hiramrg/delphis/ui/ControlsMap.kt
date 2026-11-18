@@ -256,7 +256,7 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     val tw = Thor.W * k; val th = (if (pad) PAD_H - Thor.TABS else Thor.H) * k; val tabs = Thor.TABS * k
     val colGap = if (wide) 14f else 9f
     val colW = (W - tw) / 2f - colGap - 4f
-    val rowGap = 5f
+    var rowGap = 5f
 
     // ---- fit: one font size for every label
     var fs = if (wide) 12.5f else 11f
@@ -264,7 +264,8 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     var bs = 0f; var badgeH = 0f
     fun badgeW(k: ThorControl) = if (isChip(k)) chipW(k, bs) else badgeH
     while (true) {
-        bs = maxOf(7.5f, fs - 2f); badgeH = bs + 7f
+        // Badges and gaps shrink with the text, so a short card still fits every row.
+        bs = maxOf(5.5f, fs - 2f); badgeH = bs + minOf(7f, fs * 0.55f); rowGap = minOf(5f, fs * 0.4f)
         val lines = 2 // never more than two lines per label
         // Labels start after the column's widest badge (all badges share one rail).
         val lRail = left.maxOfOrNull { badgeW(it) } ?: 0f
