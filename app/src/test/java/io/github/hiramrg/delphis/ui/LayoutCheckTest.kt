@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.test.core.app.ApplicationProvider
 import io.github.hiramrg.delphis.core.ButtonLabels
 import io.github.hiramrg.delphis.core.GameInfo
@@ -321,9 +322,26 @@ class LayoutCheckTest {
                     }.getOrNull()
                     val origin = coords?.positionInRoot() ?: node.positionInRoot
                     val box = coords?.boundsInRoot() ?: node.boundsInRoot
+                    // (The layout read through semantics may be laid out at the full available width rather than the
+                    // text's own width: place each line in the text's box by its alignment.)
+                    val boxW = layout.size.width.toFloat()
+                    val boxH = layout.size.height.toFloat()
+                    val paraW = layout.multiParagraph.width
+                    val align = layout.layoutInput.style.textAlign
                     var l = Float.MAX_VALUE; var t = Float.MAX_VALUE; var r = -Float.MAX_VALUE; var b = -Float.MAX_VALUE
+                    var widest = 0f
                     for (i in 0 until layout.lineCount) {
-                        l = min(l, layout.getLineLeft(i)); r = max(r, layout.getLineRight(i))
+                        var ll = layout.getLineLeft(i); var lr = layout.getLineRight(i)
+                        if (paraW > boxW + 1f) {
+                            val w = lr - ll
+                            when (align) {
+                                TextAlign.Center -> { ll = (boxW - w) / 2f; lr = (boxW + w) / 2f }
+                                TextAlign.End, TextAlign.Right -> { ll = boxW - w; lr = boxW }
+                                else -> { ll = 0f; lr = w }
+                            }
+                        }
+                        widest = max(widest, lr - ll)
+                        l = min(l, ll); r = max(r, lr)
                         t = min(t, layout.getLineTop(i)); b = max(b, layout.getLineBottom(i))
                     }
                     if (layout.lineCount > 0 && r > l && b > t) {
@@ -332,11 +350,16 @@ class LayoutCheckTest {
                         val quote = "\"" + text.take(70) + (if (text.length > 70) "…" else "") + "\""
                         val shown = visible != null || scroller != null
                         // 1. Cut off: more words than fit (ellipsis, max lines, a box too small).
-                        if (layout.hasVisualOverflow && !marquee && shown) {
-                            fun dp(px: Float) = (px / density).toInt()
-                            val why = if (layout.didOverflowHeight) "${layout.lineCount} line(s) in a box ${dp(layout.size.height.toFloat())} dp tall"
-                                else "${dp(layout.multiParagraph.width)} dp wide in ${dp(layout.size.width.toFloat())} dp"
-                            found += "$quote is cut off ($why)"
+                        if (!marquee && shown) {
+                            fun dp(px: Float) = Math.round(px / density)
+                            val ellipsized = (0 until layout.lineCount).any { layout.isLineEllipsized(it) }
+                            val why = when {
+                                layout.multiParagraph.didExceedMaxLines || ellipsized -> "only ${layout.lineCount} line(s) fit"
+                                layout.multiParagraph.height > boxH + tol -> "needs ${dp(layout.multiParagraph.height)} dp of height, has ${dp(boxH)}"
+                                widest > boxW + tol -> "needs ${dp(widest)} dp of width, has ${dp(boxW)}"
+                                else -> null
+                            }
+                            if (why != null) found += "$quote is cut off ($why)"
                         }
                         // 2. Labels wrap to two lines at most (your rule); paragraphs may wrap more.
                         val bold = (layout.layoutInput.style.fontWeight ?: FontWeight.Normal) >= FontWeight.SemiBold
