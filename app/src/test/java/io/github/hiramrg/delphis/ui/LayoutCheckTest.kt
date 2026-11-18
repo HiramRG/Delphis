@@ -142,6 +142,13 @@ class LayoutCheckTest {
                 if (size.oneScreen && s == SettingsSection.BOTTOM) continue
                 show(act, size, "Settings → ${s.label}") { act.screen = Screen.Settings; act.settingsSection = s }
             }
+            // The bottom bar with an Xbox controller's hints, in dark mode (where they wrapped on the Galaxy Tab).
+            if (size.oneScreen) for (s in listOf(SettingsSection.DISPLAY, SettingsSection.CONTROLS)) {
+                show(act, size, "Settings → ${s.label} · Xbox hints", after = { PadGlyphs.labels = size.labels; act.themeMode = "light" }) {
+                    PadGlyphs.labels = io.github.hiramrg.delphis.core.ButtonLabels.XBOX; act.themeMode = "dark"
+                    act.screen = Screen.Settings; act.settingsSection = s
+                }
+            }
             show(act, size, "Diagnostics") { act.screen = Screen.Diagnostics }
             // Pop-ups over Home (only the pop-up's own words are checked).
             show(act, size, "Pop-up: update found", popupOnly = true, after = { act.foundPrompt = false; act.updateState = MainActivity.UpdateState.Idle }) {

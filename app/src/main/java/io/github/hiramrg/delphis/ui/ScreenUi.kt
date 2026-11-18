@@ -219,8 +219,13 @@ fun BoxScope.PicturePanel(
         if (showRes) {
             if (compact) {
                 // The in-game menu: one line per level, its tag on the right, so everything fits the panel.
-                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    io.github.hiramrg.delphis.core.Resolution.Level.entries.forEach { l -> ResolutionLine(l, l == res, advice?.scale) { onRes(l) } }
+                // Two columns of one-line rows (short tags), so the panel fits a phone too.
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    io.github.hiramrg.delphis.core.Resolution.Level.entries.chunked(2).forEach { pair ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            pair.forEach { l -> ResolutionLine(l, l == res, advice?.scale, Modifier.weight(1f)) { onRes(l) } }
+                        }
+                    }
                 }
             } else {
                 Column(Modifier.fillMaxWidth().height(area), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -265,12 +270,12 @@ fun resolutionWhy(a: io.github.hiramrg.delphis.platform.DeviceInfo.ResolutionAdv
 }
 
 @Composable
-private fun ResolutionLine(l: io.github.hiramrg.delphis.core.Resolution.Level, on: Boolean, recommended: Int?, onClick: () -> Unit) {
+private fun ResolutionLine(l: io.github.hiramrg.delphis.core.Resolution.Level, on: Boolean, recommended: Int?, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(10.dp)
     val fit = recommended?.let { io.github.hiramrg.delphis.core.Resolution.fit(l, it) }
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 28.dp).focusRing(shape).clip(shape)
+        modifier.heightIn(min = 28.dp).focusRing(shape).clip(shape)
             .background(if (on) (if (c.dark) Color(0xFF173444) else c.accentSoft) else (if (c.dark) Color(0xFF20252B) else c.card))
             .border(if (on) 2.dp else 1.dp, if (on) Sel else c.cardBorder, shape).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -279,10 +284,10 @@ private fun ResolutionLine(l: io.github.hiramrg.delphis.core.Resolution.Level, o
         if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF6BCB77))
         Spacer(Modifier.weight(1f))
         when (fit) {
-            io.github.hiramrg.delphis.core.Resolution.Fit.RECOMMENDED -> CostTag(fit.label, Color(0xFF6BCB77), Color(0xFF1F3B2A))
-            io.github.hiramrg.delphis.core.Resolution.Fit.MAYBE -> CostTag(fit.label, Color(0xFFF5C542), Color(0xFF3D331A))
-            io.github.hiramrg.delphis.core.Resolution.Fit.SLOW -> CostTag(fit.label, Color(0xFFFF8A80), Color(0xFF3D1F1F))
-            io.github.hiramrg.delphis.core.Resolution.Fit.FAST -> CostTag(fit.label, c.textDim, if (c.dark) Color(0xFF2A3038) else c.cardBorder)
+            io.github.hiramrg.delphis.core.Resolution.Fit.RECOMMENDED -> CostTag("★ Best", Color(0xFF6BCB77), Color(0xFF1F3B2A))
+            io.github.hiramrg.delphis.core.Resolution.Fit.MAYBE -> CostTag("Slower", Color(0xFFF5C542), Color(0xFF3D331A))
+            io.github.hiramrg.delphis.core.Resolution.Fit.SLOW -> CostTag("Too slow", Color(0xFFFF8A80), Color(0xFF3D1F1F))
+            io.github.hiramrg.delphis.core.Resolution.Fit.FAST -> CostTag("Faster", c.textDim, if (c.dark) Color(0xFF2A3038) else c.cardBorder)
             null -> {}
         }
     }
