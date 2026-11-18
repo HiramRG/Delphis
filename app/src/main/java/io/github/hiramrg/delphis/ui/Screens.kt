@@ -1041,7 +1041,7 @@ private fun HomeBar(act: MainActivity, rowsMode: Boolean, lit: Boolean) {
                 Box(
                     Modifier.size(36.dp).focusRing(round).channel(round)
                         .onFocusChanged { if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeRow = null } }
-                        .clickable { if (act.checkIssues > 0) act.settingsSection = SettingsSection.HELP; act.screen = Screen.Settings },
+                        .clickable { act.screen = Screen.Settings },
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Filled.Settings, "Settings", tint = c.textDim, modifier = Modifier.size(20.dp)) }
                 // Something in the Delphis check needs attention (Settings → Diagnostics).
@@ -1995,7 +1995,10 @@ fun SettingsScreen(act: MainActivity) {
                 Spacer(Modifier.height(6.dp))
                 // One screen: no "Bottom screen" page.
                 val one = act.oneScreen
-                SettingsSection.entries.filter { !(one && it == SettingsSection.BOTTOM) }.forEach { s -> SettingsNavItem(s, act.settingsSection == s) { act.settingsSection = s } }
+                SettingsSection.entries.filter { !(one && it == SettingsSection.BOTTOM) }.forEach { s ->
+                    // Diagnostics: the Delphis check's dot while something needs attention.
+                    SettingsNavItem(s, act.settingsSection == s, dot = s == SettingsSection.HELP && act.checkIssues > 0) { act.settingsSection = s }
+                }
             }
             }
             @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -2074,7 +2077,7 @@ private fun settingsIcon(s: SettingsSection): androidx.compose.ui.graphics.vecto
 }
 
 @Composable
-private fun SettingsNavItem(s: SettingsSection, lit: Boolean, onClick: () -> Unit) {
+private fun SettingsNavItem(s: SettingsSection, lit: Boolean, dot: Boolean = false, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(12.dp)
     Box(Modifier.fillMaxWidth().padding(start = 8.dp)) {
@@ -2085,7 +2088,8 @@ private fun SettingsNavItem(s: SettingsSection, lit: Boolean, onClick: () -> Uni
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Icon(settingsIcon(s), null, tint = if (lit) c.accentText else c.textDim, modifier = Modifier.size(18.dp))
-            Text(s.label, fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = if (lit) c.text else c.textDim, maxLines = 2, lineHeight = 16.sp)
+            Text(s.label, fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = if (lit) c.text else c.textDim, maxLines = 2, lineHeight = 16.sp, modifier = Modifier.weight(1f, fill = false))
+            if (dot) AttentionDot()
         }
     }
 }

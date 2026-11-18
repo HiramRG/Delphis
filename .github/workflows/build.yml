@@ -11,6 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -24,6 +25,7 @@ jobs:
       # a phone and a tablet; it fails (and nothing is published) if any words are cut off, run off the screen,
       # overlap, or a label wraps to more than two lines.
       - name: Unit tests and layout check
+        timeout-minutes: 25
         run: |
           set -o pipefail
           gradle :app:testDebugUnitTest 2>&1 | tee test.log

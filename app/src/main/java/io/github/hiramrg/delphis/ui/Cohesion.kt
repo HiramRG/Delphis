@@ -280,7 +280,7 @@ fun AppBottomBar(hints: String?, modifier: Modifier = Modifier, leading: @Compos
         left = leading,
         right = {
             // Button hints only with a controller (touch: every action is on screen).
-            if (hints != null && !PadGlyphs.touch) HintText(hints, Modifier.weight(1f, fill = false), fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.End)
+            if (hints != null && (!PadGlyphs.touch || !hasKeys(hints))) HintText(hints, Modifier.weight(1f, fill = false), fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.End)
             SystemStatusIcons(Modifier.padding(start = 10.dp))
         },
     )

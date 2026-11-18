@@ -83,8 +83,40 @@ class LayoutCheckTest {
     private fun game(id: String, title: String, platform: Platform) =
         GameEntry(Uri.parse("content://delphis.test/games/$id"), "$title.rvz", 1_000_000L, 0L, GameInfo(id, title, platform))
 
+    @Volatile private var doing = "starting"
+    @Volatile private var doingSince = System.currentTimeMillis()
+
+    private fun step(what: String) {
+        val now = System.currentTimeMillis()
+        println("[layout] ${(now - doingSince)} ms · $doing")
+        doing = what; doingSince = now
+    }
+
+    /** Stops a stuck run (instead of CI waiting for hours) with what it was doing and where. */
+    private fun startWatchdog(testThread: Thread) {
+        val started = System.currentTimeMillis()
+        Thread {
+            while (true) {
+                Thread.sleep(5_000)
+                val now = System.currentTimeMillis()
+                if (now - doingSince > 150_000 || now - started > 16 * 60_000) {
+                    val dump = buildString {
+                        appendLine("Layout check stopped: \"$doing\" ran ${(now - doingSince) / 1000} s (whole check ${(now - started) / 1000} s).")
+                        testThread.stackTrace.take(70).forEach { appendLine("  at $it") }
+                    }
+                    println(dump)
+                    runCatching { File(out, "hang.txt").writeText(dump); writeSummary(dump) }
+                    Runtime.getRuntime().halt(3)
+                }
+            }
+        }.apply { isDaemon = true; name = "layout-watchdog" }.start()
+    }
+
     @Test
     fun layoutCheck() {
+        startWatchdog(Thread.currentThread())
+        // Fewer frames per second of (virtual) time: animations still finish, with far less drawing.
+        org.robolectric.shadows.ShadowChoreographer.setFrameDelay(Duration.ofMillis(64))
         TestHooks.offline = true
         val app = ApplicationProvider.getApplicationContext<android.app.Application>()
         Prefs(app).apply {
@@ -153,6 +185,7 @@ class LayoutCheckTest {
         }
         inGameMenu(bottom, NowPlayingActivity::class.java, session(game("REDE41", "Red Steel", Platform.WII), "redsteel-trackpad"), "In-game menu (trackpad)")
 
+        step("done")
         writeSummary()
         if (problems.isNotEmpty()) fail("${problems.size} layout problem(s):\n" + problems.joinToString("\n") { "${it.size} · ${it.screen}: ${it.what}" })
     }
@@ -160,6 +193,7 @@ class LayoutCheckTest {
     // ------------------------------------------------------------------ activities
 
     private fun withMain(size: Size, block: (MainActivity) -> Unit) {
+        step("${size.id}: starting Delphis")
         RuntimeEnvironment.setQualifiers(size.qualifiers)
         val controller = try { Robolectric.buildActivity(MainActivity::class.java).setup() } catch (e: Throwable) {
             harness(size, "Delphis (main screen)", e); return
@@ -168,7 +202,7 @@ class LayoutCheckTest {
         try {
             act.oneScreen = size.oneScreen
             PadGlyphs.labels = size.labels
-            settle(800)
+            settle(640)
             // Games come from a scan normally; these stand in (set after the start-up refresh of the list).
             act.games = games
             settle(200)
@@ -194,6 +228,7 @@ class LayoutCheckTest {
     private fun session(g: GameEntry, preset: String) = GameSession(g.uri, g.fileName, g.info, preset, applied = true)
 
     private fun inGameMenu(size: Size, cls: Class<out Activity>, s: GameSession, name: String) {
+        step("${size.id}: starting $name")
         RuntimeEnvironment.setQualifiers(size.qualifiers)
         PadGlyphs.labels = size.labels
         val app = ApplicationProvider.getApplicationContext<android.app.Application>()
@@ -201,7 +236,7 @@ class LayoutCheckTest {
         val controller = try { Robolectric.buildActivity(cls, intent).setup() } catch (e: Throwable) {
             harness(size, name, e); GameWatch.session = null; return
         }
-        try { check(controller.get(), size, name, wait = 1500) } catch (e: Throwable) { harness(size, name, e) }
+        try { check(controller.get(), size, name, wait = 900) } catch (e: Throwable) { harness(size, name, e) }
         finally {
             runCatching { controller.pause().stop().destroy() }
             GameWatch.session = null
@@ -223,7 +258,8 @@ class LayoutCheckTest {
         }
     }
 
-    private fun check(act: Activity, size: Size, screen: String, popupOnly: Boolean = false, wait: Long = 1200) {
+    private fun check(act: Activity, size: Size, screen: String, popupOnly: Boolean = false, wait: Long = 700) {
+        step("${size.id}: $screen")
         settle(wait)
         val decor = act.window.decorView
         // A panel window (the one-screen in-game menu) keeps its own width; Robolectric makes every window full screen.
@@ -343,8 +379,8 @@ class LayoutCheckTest {
         val looper = shadowOf(Looper.getMainLooper())
         var t = 0L
         while (t < ms) {
-            looper.idleFor(Duration.ofMillis(16)); t += 16
-            if (t % 128 == 0L) Thread.sleep(3)
+            looper.idleFor(Duration.ofMillis(64)); t += 64
+            Thread.sleep(2)
         }
         looper.idle()
     }
@@ -362,7 +398,7 @@ class LayoutCheckTest {
 
     private fun slug(s: String) = s.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
 
-    private fun writeSummary() {
+    private fun writeSummary(stopped: String? = null) {
         val md = StringBuilder()
         md.appendLine("### Layout check: every screen at every size")
         md.appendLine()
@@ -377,6 +413,7 @@ class LayoutCheckTest {
             problems.forEach { md.appendLine("- ${it.size} · ${it.screen}: ${it.what}" + if (it.shot.isNotEmpty()) " (`${it.shot}`)" else "") }
         }
         notes.forEach { md.appendLine(); md.appendLine("_${it}_") }
+        if (stopped != null) { md.appendLine(); md.appendLine("```"); md.appendLine(stopped.take(6000)); md.appendLine("```") }
         File(out, "summary.md").writeText(md.toString())
         File(out, "problems.txt").writeText(problems.joinToString("\n") { "${it.size} · ${it.screen}: ${it.what}" })
     }
