@@ -273,8 +273,8 @@ class LayoutCheckTest {
         }
         // Robolectric doesn't draw frames, and Compose lays out a changed screen when it draws: lay it out now
         // (twice, for anything placed from another part's size), so the check reads the screen as it is.
-        repeat(2) { composeRoots(decor).forEach { r -> r.measureAndLayout() }; settle(128) }
-        composeRoots(decor).forEach { r -> r.measureAndLayout() }
+        repeat(2) { layOut(decor); settle(128) }
+        layOut(decor)
         val shot = "${size.id}/${slug(screen)}.png"
         val found = mutableListOf<String>()
         val roots = composeRoots(decor)
@@ -405,6 +405,14 @@ class LayoutCheckTest {
             found += "\"${a.text.take(50)}\" overlaps \"${b.text.take(50)}\""
         }
         return found
+    }
+
+    /** Runs Compose's pending measure and layout (what drawing a frame would do). */
+    private fun layOut(decor: View) {
+        for (r in composeRoots(decor)) {
+            val done = runCatching { r.javaClass.getMethod("measureAndLayout", Boolean::class.javaPrimitiveType).invoke(r, true) }.isSuccess
+            if (!done) runCatching { r.view.draw(Canvas(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888))) }
+        }
     }
 
     private fun Rect.translate(o: Offset) = Rect(left + o.x, top + o.y, right + o.x, bottom + o.y)
