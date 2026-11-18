@@ -265,14 +265,15 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     fun badgeW(k: ThorControl) = if (isChip(k)) chipW(k, bs) else badgeH
     while (true) {
         bs = maxOf(7.5f, fs - 2f); badgeH = bs + 7f
-        val lines = if (fs <= 10f) 3 else 2
+        val lines = 2 // never more than two lines per label
         // Labels start after the column's widest badge (all badges share one rail).
         val lRail = left.maxOfOrNull { badgeW(it) } ?: 0f
         val rRail = right.maxOfOrNull { badgeW(it) } ?: 0f
         leftL = left.map { fitted(mapLabel(actions[it]!!), fs, colW - lRail - 6f, TextAlign.End, lines) }
         rightL = right.map { fitted(mapLabel(actions[it]!!), fs, colW - rRail - 6f, TextAlign.Start, lines) }
         fun colH(ls: List<TextLayoutResult>) = ls.sumOf { maxOf(h(it), badgeH).toDouble() }.toFloat() + rowGap * (ls.size - 1).coerceAtLeast(0)
-        if (maxOf(colH(leftL), colH(rightL)) <= H - 6f || fs <= 7.5f) break
+        val twoLines = (leftL + rightL).all { it.lineCount <= 2 }
+        if ((twoLines && maxOf(colH(leftL), colH(rightL)) <= H - 6f) || fs <= 6f) break
         fs -= 0.5f
     }
     fun colH(ls: List<TextLayoutResult>) = ls.sumOf { maxOf(h(it), badgeH).toDouble() }.toFloat() + rowGap * (ls.size - 1).coerceAtLeast(0)
@@ -397,6 +398,8 @@ fun ControlsSwitchable(preset: Preset, prefs: io.github.hiramrg.delphis.platform
     var tooSmall by androidx.compose.runtime.remember(preset.id) { androidx.compose.runtime.mutableStateOf(false) }
     // Too small to read (a short phone panel): the list, whatever was picked before.
     val list = tooSmall || saved.value == "list"
+    // The interface is drawn bigger on big screens, so judge the text at its real size.
+    val scale = androidx.compose.ui.platform.LocalDensity.current.density / androidx.compose.ui.platform.LocalContext.current.resources.displayMetrics.density
     fun set(v: Boolean) { saved.value = if (v) "list" else "thor"; gameKey?.let { prefs.setControlsView(it, saved.value!!) } }
     // A button (L2 on the game page) flips it too.
     var lastToggle by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(toggle) }
@@ -408,7 +411,7 @@ fun ControlsSwitchable(preset: Preset, prefs: io.github.hiramrg.delphis.platform
             if (toggleKey != null) KeyIcon(toggleKey)
         }
         if (list) ControlsList(preset, Modifier.weight(1f).fillMaxWidth())
-        else ControlsMap(preset, Modifier.weight(1f).fillMaxWidth(), onFit = { fs -> if (fs < MIN_MAP_FONT && !tooSmall) tooSmall = true })
+        else ControlsMap(preset, Modifier.weight(1f).fillMaxWidth(), onFit = { fs -> if (fs * scale < MIN_MAP_FONT && !tooSmall) tooSmall = true })
     }
 }
 
