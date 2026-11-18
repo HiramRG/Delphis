@@ -764,7 +764,7 @@ open class NowPlayingActivity : ComponentActivity() {
                             CapsLabel("Touch controls")
                             Text("Dolphin's on-screen buttons", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = LocalWii.current.text)
                             Text(
-                                "No controller is connected, so you play with the buttons Dolphin draws over the game (${preset.controller.label}). " +
+                                "No controller is connected, so you play with the buttons Dolphin draws over the game, set up as ${preset.controller.label}. " +
                                     "Connect a controller and restart the game to play with it instead.",
                                 fontSize = 12.sp, color = LocalWii.current.textDim, lineHeight = 16.sp,
                             )
