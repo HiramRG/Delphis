@@ -96,15 +96,17 @@ class DolphinExitService : AccessibilityService() {
          * starts watching for ⊖ + Start. [gameKey] decides "new games only" for the full pill.
          */
         fun gameStarted(context: Context, gameKey: String) {
-            val s = instance ?: return
+            val s = instance ?: run { CrashLog.event("one screen game: \"close games\" isn't running, so no pill or shortcut"); return }
             val prefs = Prefs(context)
             val first = prefs.firstPillFor(gameKey)
             val showFull = when (prefs.pillFull) { 0 -> true; 1 -> first; else -> false }
             val pads = DeviceInfo.gamepads()
             val controller = pads.firstOrNull()?.let { "🎮 " + it.name } ?: "👆 Touch controls"
             s.handler.post {
+                s.lastPillState = null; s.keyLogs = 0
                 s.menuShortcut(true)
                 s.shortcut = prefs.menuShortcut
+                CrashLog.event("one screen game: pill ${if (prefs.pillShown) "on" else "off"}, shortcut ${prefs.menuShortcutLabel}, key filter ${if (s.filterActive()) "on" else "NOT on"}")
                 if (prefs.pillShown) s.pill.start(showFull, prefs.pillOpacity, controller, prefs.menuShortcutLabel) else s.pill.stop()
                 s.handler.removeCallbacks(s.pillCheck)
                 s.handler.postDelayed(s.pillCheck, 1000)
@@ -185,7 +187,9 @@ class DolphinExitService : AccessibilityService() {
     private val pillCheck: Runnable = object : Runnable {
         override fun run() {
             if (!pill.showing) return
-            pill.setVisible(gameInFront())
+            val state = gameState()
+            if (state != lastPillState) { lastPillState = state; CrashLog.event("pill: $state") }
+            pill.setVisible(state == "in front")
             handler.postDelayed(this, 700)
         }
     }
@@ -196,8 +200,28 @@ class DolphinExitService : AccessibilityService() {
      * Dolphin's game is on screen and Delphis' menu isn't over it. (Checks Dolphin's game view itself: the
      * "top app" can be another window on some tablets, e.g. Samsung's game tools.)
      */
-    private fun gameInFront(): Boolean = !GameLauncher.busy && !GameWatch.menuOpen &&
-        DolphinBridge.KNOWN_PACKAGES.any { runCatching { find(it, "frame_emulation_fragment") != null }.getOrDefault(false) }
+    private fun gameInFront(): Boolean = gameState() == "in front"
+
+    /**
+     * Why the pill shows or not, in words (also written to the Diagnostics events when it changes).
+     * Dolphin's game view or Dolphin as the top app counts as "in front"; when neither can be read (some
+     * tablets hide them), a running game that hasn't gone to the background counts too, unless Delphis'
+     * own game list is on screen.
+     */
+    private fun gameState(): String {
+        if (GameWatch.session == null) return "no game"
+        if (GameLauncher.busy) return "starting / closing"
+        if (GameWatch.menuOpen) return "Delphis' menu open"
+        val view = DolphinBridge.KNOWN_PACKAGES.any { runCatching { find(it, "frame_emulation_fragment") != null }.getOrDefault(false) }
+        if (view) return "in front"
+        val top = topScreenApp()
+        if (top != null && top in DolphinBridge.KNOWN_PACKAGES) return "in front"
+        if (top == packageName) return "Delphis on screen"
+        if (GameWatch.suspended.value) return "game in the background"
+        return "in front"
+    }
+    private var lastPillState: String? = null
+    private var keyLogs = 0
 
     private var shortcutOn = false
     /** Prefs.menuShortcut: 0 = Home button, 1 = ⊖ + Start, 2 = both. */
@@ -231,6 +255,11 @@ class DolphinExitService : AccessibilityService() {
         val event = PadKeys.translate(raw, Prefs(this), true)
         val code = event.keyCode
         val down = event.action == android.view.KeyEvent.ACTION_DOWN
+        if (down && event.repeatCount == 0 && keyLogs < 6 && code in setOf(android.view.KeyEvent.KEYCODE_BUTTON_MODE, android.view.KeyEvent.KEYCODE_HOME,
+                android.view.KeyEvent.KEYCODE_BUTTON_SELECT, android.view.KeyEvent.KEYCODE_BUTTON_START)) {
+            keyLogs++
+            CrashLog.event("key ${android.view.KeyEvent.keyCodeToString(code)} from ${raw.device?.name ?: "?"} · game ${gameState()}")
+        }
         if (!down && swallowUp.remove(code)) {
             if (code == android.view.KeyEvent.KEYCODE_BUTTON_SELECT) selectHeld = false
             if (code == android.view.KeyEvent.KEYCODE_BUTTON_START) startHeld = false
@@ -254,6 +283,10 @@ class DolphinExitService : AccessibilityService() {
         return false
     }
 
+    private fun filterActive(): Boolean = runCatching {
+        (serviceInfo.flags and android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS) != 0
+    }.getOrDefault(false)
+
     private fun fromGamepad(e: android.view.KeyEvent): Boolean {
         val src = e.source
         return (src and android.view.InputDevice.SOURCE_GAMEPAD) == android.view.InputDevice.SOURCE_GAMEPAD ||
@@ -263,6 +296,7 @@ class DolphinExitService : AccessibilityService() {
 
     /** Brings Delphis' in-game menu over the game (it waits behind it while you play). */
     private fun openInGameMenu() {
+        CrashLog.event("opening Delphis' menu (session ${GameWatch.session != null}, busy ${GameLauncher.busy})")
         if (GameWatch.session == null || GameLauncher.busy) return
         val intent = Intent(this, io.github.hiramrg.delphis.ui.InGameMenuActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
