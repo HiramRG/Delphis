@@ -161,7 +161,7 @@ class MainActivity : ComponentActivity() {
     fun helperAppInfo() {
         runCatching { startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
-    fun helperAccessibility() { exitHelperPrompt = null; io.github.hiramrg.delphis.platform.DolphinExitService.openSettings(this) }
+    fun helperAccessibility() { exitHelperPrompt = null; io.github.hiramrg.delphis.platform.DolphinExitService.openSettings(this@MainActivity) }
 
     /** One screen: a game is still open in the background (Android's Home, or the app switcher). */
     var runningPrompt by mutableStateOf(false)
@@ -428,7 +428,7 @@ class MainActivity : ComponentActivity() {
                 BackHandler(enabled = screen == Screen.Home || screen == Screen.Setup) { }
                 if (!oneScreen) exitHelperPrompt?.let { action ->
                     val notNow = { exitHelperPrompt = null; prefs.skipExitHelperPrompt = true; action() }
-                    val open = { exitHelperPrompt = null; io.github.hiramrg.delphis.platform.DolphinExitService.openSettings(this) }
+                    val open = { exitHelperPrompt = null; io.github.hiramrg.delphis.platform.DolphinExitService.openSettings(this@MainActivity) }
                     androidx.compose.ui.window.Dialog(onDismissRequest = { exitHelperPrompt = null }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
                         val focus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
                         PopupPanel(
