@@ -233,6 +233,7 @@ class DolphinExitService : AccessibilityService() {
         val top = topScreenApp()
         if (top != null && top in DolphinBridge.KNOWN_PACKAGES) return "in front"
         if (top == packageName) return "Delphis on screen"
+        if (top != null) return "another app on screen ($top)"
         if (GameWatch.suspended.value) return "game in the background"
         return "in front"
     }
@@ -317,6 +318,8 @@ class DolphinExitService : AccessibilityService() {
         val intent = Intent(this, io.github.hiramrg.delphis.ui.InGameMenuActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             .putExtra(io.github.hiramrg.delphis.ui.InGameMenuActivity.EXTRA_OPEN, true)
+            // The session too, in case Android closed the menu meanwhile (it's then opened fresh with it).
+            .also { i -> GameWatch.session?.writeTo(i) }
         val top = DeviceInfo.screenRoles(this, Prefs(this).swapScreens).topDisplayId
         val options = android.app.ActivityOptions.makeBasic().setLaunchDisplayId(top).toBundle()
         runCatching { startActivity(intent, options) }.onFailure { CrashLog.event("couldn't open the in-game menu: ${it.message}") }

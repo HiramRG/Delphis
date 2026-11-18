@@ -95,10 +95,20 @@ open class NowPlayingActivity : ComponentActivity() {
      */
     protected open val panelMode: Boolean = false
 
-    /** One screen: hide the menu and give the game back the screen and the controller. */
+    /**
+     * One screen: hide the menu and give the game back the screen and the controller, by bringing Dolphin's
+     * game to the front. (Never moveTaskToBack: that puts this task behind the Home screen, and Android closes
+     * tasks that are kept out of Recent apps once they're behind Home, which ended the session, the pill and
+     * the Home-button shortcut a second after every game started. On the Thor this view is on the second
+     * display, which Android never trims.)
+     */
     protected fun resumeGame() {
-        moveTaskToBack(true)
+        val s = session ?: GameWatch.session
+        if (s != null) bridge.bringToFront(s.uri, DeviceInfo.screenRoles(this, prefs.swapScreens).topDisplayId)
     }
+
+    /** Set when the player quits from this menu (so closing it ends the session; Android closing it doesn't). */
+    private var quitting = false
 
     /** Bumped each time the one-screen menu opens, to put the cursor on ▶ Resume. */
     private var openSignal by mutableIntStateOf(0)
@@ -201,11 +211,13 @@ open class NowPlayingActivity : ComponentActivity() {
             padsAtStart += DeviceInfo.gamepads().map { it.name }
             getSystemService(android.hardware.input.InputManager::class.java).registerInputDeviceListener(padListener, android.os.Handler(android.os.Looper.getMainLooper()))
         }
-        // One screen, a game starting: step behind right away, so Dolphin (launched next) is in front with the controller.
-        if (panelMode && !intent.getBooleanExtra(InGameMenuActivity.EXTRA_OPEN, false)) window.decorView.post { moveTaskToBack(true) }
         if (!panelMode) preferLowRefreshRate()
-        session = GameSession.from(intent)
-        watch(session)
+        // One screen: a game starting (Dolphin, launched next, covers this), or the menu opened again after
+        // Android closed it (the game kept running: same session, no new start).
+        val reopened = panelMode && (intent.getBooleanExtra(InGameMenuActivity.EXTRA_OPEN, false) || intent.getBooleanExtra(InGameMenuActivity.EXTRA_QUIT, false))
+        session = GameSession.from(intent) ?: if (panelMode) GameWatch.session else null
+        watch(session, announce = !reopened)
+        if (panelMode && intent.getBooleanExtra(InGameMenuActivity.EXTRA_QUIT, false)) window.decorView.post { quitFromHome() }
         setContent {
             WiiTheme(dark = true) {
                 session?.let { s ->
@@ -337,6 +349,8 @@ open class NowPlayingActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (panelMode && intent.getBooleanExtra(InGameMenuActivity.EXTRA_QUIT, false)) { quitFromHome(); return }
+        // One screen: just opening the menu over the running game (the intent carries the session, it's not a new game).
+        if (panelMode && intent.getBooleanExtra(InGameMenuActivity.EXTRA_OPEN, false)) return
         if (intent.getBooleanExtra(EXTRA_RESUMED, false)) {
             // Back from the home screen: this window came to the front, so give focus back to the game.
             window.decorView.postDelayed({
@@ -352,19 +366,30 @@ open class NowPlayingActivity : ComponentActivity() {
     }
 
     /** Lets the rest of the app know which game is running, to spot it stopping unexpectedly. */
-    private fun watch(s: GameSession?) {
-        if (panelMode && s != null) DolphinExitService.gameStarted(this, s.key)
+    private fun watch(s: GameSession?, announce: Boolean = true) {
+        if (panelMode && s != null && announce) DolphinExitService.gameStarted(this, s.key)
         GameWatch.session = s
         GameWatch.unexpectedStop.value = false
         GameWatch.suspended.value = false
         // The player went to the home screen / another app: hide with the game (it comes back with it).
-        GameWatch.onSuspended = { gone -> runOnUiThread { updateCounting(); if (gone) moveTaskToBack(true) } }
+        // (One screen: nothing to hide, the menu is already behind the game.)
+        GameWatch.onSuspended = { gone -> runOnUiThread { updateCounting(); if (gone && !panelMode) moveTaskToBack(true) } }
     }
 
     override fun onDestroy() {
         if (panelMode) runCatching { getSystemService(android.hardware.input.InputManager::class.java).unregisterInputDeviceListener(padListener) }
         removeFocusSink()
         runCatching { unregisterReceiver(screenReceiver) }
+        if (isFinishing && panelMode && !quitting) {
+            // One screen: Android closed the menu (e.g. after its Home button) but the game is still running in
+            // Dolphin. Keep the session, the pill and the shortcut; the menu opens again from them.
+            recordPlayTime(); session?.let { if (unsaved > 0) prefs.addPlayTime(it.key, unsaved) }; unsaved = 0L
+            GameWatch.onSuspended = null
+            GameWatch.menuOpen = false
+            io.github.hiramrg.delphis.platform.CrashLog.event("in-game menu closed by Android; the game keeps running")
+            super.onDestroy()
+            return
+        }
         if (isFinishing && panelMode) DolphinExitService.gameEnded()
         if (isFinishing) { DolphinExitService.hideSides(); recordPlayTime(); session?.let { if (unsaved > 0) prefs.addPlayTime(it.key, unsaved) }; unsaved = 0L; GameWatch.session = null; GameWatch.onSuspended = null; GameWatch.suspended.value = false }
         super.onDestroy()
@@ -406,8 +431,8 @@ open class NowPlayingActivity : ComponentActivity() {
     private fun applyAndRestart(s: GameSession, preset: Preset, remember: Boolean) {
         busy = "Restarting the game with the new controls…"
         GameLauncher.run(this) {
-            // One screen: the menu steps aside first, so Dolphin is in front for its own menu (autosave, exit).
-            if (panelMode) { moveTaskToBack(true); delay(450) }
+            // One screen: Dolphin comes to the front first, for its own menu (autosave, exit).
+            if (panelMode) { bridge.bringToFront(s.uri, DeviceInfo.screenRoles(this@NowPlayingActivity, prefs.swapScreens).topDisplayId); delay(700) }
             val applied = MainActivity.applyPreset(this@NowPlayingActivity, bridge, prefs, s.info.gameId, preset)
             if (remember) prefs.setPresetFor(s.key, preset.id)
             val roles = DeviceInfo.screenRoles(this@NowPlayingActivity, prefs.swapScreens)
@@ -431,8 +456,11 @@ open class NowPlayingActivity : ComponentActivity() {
     /** Closes the game and Dolphin, then shows Delphis' game list (or the frontend that started the game). */
     private fun backToMainMenu() {
         busy = "Closing the game…"
+        quitting = true
         GameLauncher.run(this) {
-            if (panelMode) { moveTaskToBack(true); delay(450) }
+            if (panelMode) (session ?: GameWatch.session)?.let { s0 ->
+                bridge.bringToFront(s0.uri, DeviceInfo.screenRoles(this@NowPlayingActivity, prefs.swapScreens).topDisplayId); delay(700)
+            }
             val roles = DeviceInfo.screenRoles(this@NowPlayingActivity, prefs.swapScreens)
             bridge.closeDolphin(roles.topDisplayId, "Closing the game…")
             // Show the game list (or the frontend that started the game) on the top screen, where the game was, and close this one.

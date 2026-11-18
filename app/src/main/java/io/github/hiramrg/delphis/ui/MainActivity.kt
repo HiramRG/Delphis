@@ -169,7 +169,8 @@ class MainActivity : ComponentActivity() {
         runCatching {
             startActivity(android.content.Intent(this, InGameMenuActivity::class.java)
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                .putExtra(InGameMenuActivity.EXTRA_QUIT, true))
+                .putExtra(InGameMenuActivity.EXTRA_QUIT, true)
+                .also { i -> io.github.hiramrg.delphis.platform.GameWatch.session?.writeTo(i) })
         }
     }
 
