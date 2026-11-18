@@ -96,6 +96,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
+          target_commitish: ${{ github.sha }}
           name: Delphis (latest build)
           body: |
             Install **Delphis.apk** on your AYN Thor, or use *Settings → Updates* inside Delphis.
@@ -109,7 +110,7 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         run: |
           git tag -f latest
-          git push -f origin latest
+          git push -f origin refs/tags/latest
       - name: Remove old files from the release
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
@@ -125,6 +126,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: beta
+          target_commitish: ${{ github.sha }}
           name: Delphis (beta build)
           body: |
             Beta build for testing. Install **Delphis.apk**, or choose *Beta* in *Settings → Updates → Update channel* inside Delphis.
@@ -137,8 +139,9 @@ jobs:
       - name: Move the "beta" tag to this commit
         if: github.ref == 'refs/heads/beta' && github.event_name != 'pull_request'
         run: |
+          # (refs/tags/…: a branch is also called "beta")
           git tag -f beta
-          git push -f origin beta
+          git push -f origin refs/tags/beta
       - name: Remove old files from the beta release
         if: github.ref == 'refs/heads/beta' && github.event_name != 'pull_request'
         env:
