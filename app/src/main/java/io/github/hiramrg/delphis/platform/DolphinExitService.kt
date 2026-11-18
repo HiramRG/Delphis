@@ -50,6 +50,20 @@ class DolphinExitService : AccessibilityService() {
         /** See [dismissFromRecentsImpl]. False when the service isn't running. */
         suspend fun dismissFromRecents(appLabel: String): Boolean = instance?.dismissFromRecentsImpl(appLabel) ?: false
 
+        /**
+         * Settings → Controllers → "Test it": catches the controller's menu buttons the way it does during a game
+         * (the key filter), and tells [onKey] "home:<key>" or "combo". False when "close games" isn't running.
+         */
+        fun startShortcutTest(onKey: (String) -> Unit): Boolean {
+            val s = instance ?: return false
+            s.handler.post { s.testCallback = onKey; s.selectHeld = false; s.startHeld = false; s.menuShortcut(true); CrashLog.event("menu button test: key filter ${if (s.filterActive()) "on" else "NOT on"}") }
+            return true
+        }
+        fun stopShortcutTest() {
+            val s = instance ?: return
+            s.handler.post { s.testCallback = null; if (GameWatch.session == null) s.menuShortcut(false) }
+        }
+
         /** See [pressQuickSave]. Null when the service isn't running. */
         suspend fun quickSave(pkg: String): StateResult? = instance?.pressQuickSave(pkg)
 
@@ -241,6 +255,7 @@ class DolphinExitService : AccessibilityService() {
     private var keyLogs = 0
 
     private var shortcutOn = false
+    private var testCallback: ((String) -> Unit)? = null
     /** Prefs.menuShortcut: 0 = Home button, 1 = ⊖ + Start, 2 = both. */
     private var shortcut = 0
     private var selectHeld = false
@@ -272,10 +287,23 @@ class DolphinExitService : AccessibilityService() {
         val event = PadKeys.translate(raw, Prefs(this), true)
         val code = event.keyCode
         val down = event.action == android.view.KeyEvent.ACTION_DOWN
-        if (down && event.repeatCount == 0 && keyLogs < 6 && code in setOf(android.view.KeyEvent.KEYCODE_BUTTON_MODE, android.view.KeyEvent.KEYCODE_HOME,
-                android.view.KeyEvent.KEYCODE_BUTTON_SELECT, android.view.KeyEvent.KEYCODE_BUTTON_START)) {
+        val home = code == android.view.KeyEvent.KEYCODE_BUTTON_MODE || code == android.view.KeyEvent.KEYCODE_HOME
+        // Settings' "Test it": report what arrives; the Home button is kept (so Android doesn't go home).
+        testCallback?.let { cb ->
+            if (fromGamepad(event)) {
+                if (down && event.repeatCount == 0) CrashLog.event("menu button test: ${android.view.KeyEvent.keyCodeToString(raw.keyCode)} from ${raw.device?.name ?: "?"}")
+                if (home && down && event.repeatCount == 0) handler.post { cb("home:" + android.view.KeyEvent.keyCodeToString(code).removePrefix("KEYCODE_")) }
+                if (code == android.view.KeyEvent.KEYCODE_BUTTON_SELECT) selectHeld = down
+                if (code == android.view.KeyEvent.KEYCODE_BUTTON_START) startHeld = down
+                if (down && selectHeld && startHeld) handler.post { cb("combo") }
+            }
+            return home && fromGamepad(event)
+        }
+        // Every controller key, for the first few in a game: shows in Diagnostics what each button sends.
+        if (down && event.repeatCount == 0 && keyLogs < 10 && fromGamepad(event)) {
             keyLogs++
-            CrashLog.event("key ${android.view.KeyEvent.keyCodeToString(code)} from ${raw.device?.name ?: "?"} · game ${gameState()}")
+            CrashLog.event("key ${android.view.KeyEvent.keyCodeToString(raw.keyCode)}" + (if (raw.keyCode != code) " (as ${android.view.KeyEvent.keyCodeToString(code)})" else "") +
+                " from ${raw.device?.name ?: "?"} · game ${gameState()}")
         }
         if (!down && swallowUp.remove(code)) {
             if (code == android.view.KeyEvent.KEYCODE_BUTTON_SELECT) selectHeld = false

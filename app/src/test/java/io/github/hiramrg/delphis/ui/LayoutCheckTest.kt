@@ -161,6 +161,13 @@ class LayoutCheckTest {
                 show(act, size, "Pop-up: close games", popupOnly = true, after = { act.exitHelperPrompt = null }) {
                     act.screen = Screen.Home; act.exitHelperForPlay = true; act.exitHelperPrompt = {}
                 }
+                for (step in 1..3) show(act, size, "Pop-up: add a controller, step $step", popupOnly = true, after = { act.addPadClose() }) {
+                    act.screen = Screen.Home; act.addPadBrand = 0; act.addPadFound = "Xbox Wireless Controller"; act.addPadPlayer = 1; act.addPadStep = step
+                }
+                show(act, size, "Settings → Controllers (testing the button)", after = { act.shortcutTest = null }) {
+                    act.screen = Screen.Settings; act.settingsSection = SettingsSection.CONTROLS
+                    act.shortcutTest = "Nothing arrived. If you pressed the Xbox button, this device keeps it, so use View + Menu (now both work)."
+                }
                 show(act, size, "Pop-up: game still open", popupOnly = true, after = { act.runningPrompt = false; GameWatch.session = null }) {
                     act.screen = Screen.Home; GameWatch.session = session(games[1], "gamecube"); act.runningPrompt = true
                 }

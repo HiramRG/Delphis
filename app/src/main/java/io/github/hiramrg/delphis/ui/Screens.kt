@@ -1960,6 +1960,9 @@ fun SetupScreen(act: MainActivity) {
 
 // ============================================================================ settings
 
+/** One screen: "Controls" is the Controllers page (no Thor there). */
+fun SettingsSection.title(act: MainActivity): String = if (this == SettingsSection.CONTROLS && act.oneScreen) "Controllers" else label
+
 enum class SettingsSection(val label: String) {
     APPEARANCE("Appearance"), SOUND("Sound"), CONTROLS("Controls"), GYRO("Gyro aiming"), CLOSING("Closing games"),
     DISPLAY("Display"), BOTTOM("Bottom screen"), ACHIEVEMENTS("Achievements"), LIBRARY("Library & folders"), FRONTENDS("Frontends"), UPDATES("Updates"), HELP("Diagnostics"),
@@ -2000,7 +2003,7 @@ fun SettingsScreen(act: MainActivity) {
                 val one = act.oneScreen
                 SettingsSection.entries.filter { !(one && it == SettingsSection.BOTTOM) }.forEach { s ->
                     // Diagnostics: the Delphis check's dot while something needs attention.
-                    SettingsNavItem(s, act.settingsSection == s, dot = s == SettingsSection.HELP && act.checkIssues > 0) { act.settingsSection = s }
+                    SettingsNavItem(s, act.settingsSection == s, dot = s == SettingsSection.HELP && act.checkIssues > 0, label = s.title(act)) { act.settingsSection = s }
                 }
             }
             }
@@ -2009,12 +2012,12 @@ fun SettingsScreen(act: MainActivity) {
             Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(pageScroll).padding(start = 12.dp, end = 18.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column {
                     CapsLabel("Settings")
-                    Text(act.settingsSection.label, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                    Text(act.settingsSection.title(act), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                 }
                 when (act.settingsSection) {
                     SettingsSection.APPEARANCE -> AppearanceSettings(act)
                     SettingsSection.SOUND -> SoundSettings(act)
-                    SettingsSection.CONTROLS -> ControlsSettings(act)
+                    SettingsSection.CONTROLS -> if (act.oneScreen) ControllersSettings(act) else ControlsSettings(act)
                     SettingsSection.GYRO -> GyroSettings(act)
                     SettingsSection.CLOSING -> ClosingSettings(act)
                     SettingsSection.DISPLAY -> DisplaySettings(act)
@@ -2080,7 +2083,7 @@ private fun settingsIcon(s: SettingsSection): androidx.compose.ui.graphics.vecto
 }
 
 @Composable
-private fun SettingsNavItem(s: SettingsSection, lit: Boolean, dot: Boolean = false, onClick: () -> Unit) {
+private fun SettingsNavItem(s: SettingsSection, lit: Boolean, dot: Boolean = false, label: String = s.label, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(12.dp)
     Box(Modifier.fillMaxWidth().padding(start = 8.dp)) {
@@ -2091,7 +2094,7 @@ private fun SettingsNavItem(s: SettingsSection, lit: Boolean, dot: Boolean = fal
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Icon(settingsIcon(s), null, tint = if (lit) c.accentText else c.textDim, modifier = Modifier.size(18.dp))
-            Text(s.label, fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = if (lit) c.text else c.textDim, maxLines = 2, lineHeight = 16.sp, modifier = Modifier.weight(1f, fill = false))
+            Text(label, fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = if (lit) c.text else c.textDim, maxLines = 2, lineHeight = 16.sp, modifier = Modifier.weight(1f, fill = false))
             if (dot) AttentionDot()
         }
     }
@@ -2389,20 +2392,6 @@ private fun ScreensSettings(act: MainActivity) {
         }
     }
     if (one) {
-        var shortcut by remember { mutableIntStateOf(prefs.menuShortcut) }
-        CapsLabel("In-game menu")
-        GroupCard {
-            Column(Modifier.padding(horizontal = 8.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text("Open Delphis' menu with", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
-                Text(
-                    "The Home button (⌂ on Switch, the Xbox button, PS on PlayStation) isn't used by games, so the game never sees it. " +
-                        "⊖ + Start: whichever you press second goes only to Delphis.",
-                    fontSize = 12.sp, color = c.textDim, lineHeight = 15.sp,
-                )
-                Segmented(listOf(0 to "⌂ Home button", 1 to "⊖ + Start", 2 to "Both"), shortcut, { shortcut = it; prefs.menuShortcut = it })
-                Text("The pill at the top of the game always works too.", fontSize = 11.5.sp, color = c.textDim)
-            }
-        }
         PillSettings(act)
     }
 }

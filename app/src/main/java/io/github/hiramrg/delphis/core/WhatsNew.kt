@@ -5,17 +5,16 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 45
+    const val RELEASE = 46
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("Delphis check.", "Settings → Diagnostics lists everything Delphis needs, each with a Fix button. A dot on ⚙ and one notice tell you when something needs attention."),
-        Item("One in-game menu.", "The same menu on the Thor's bottom screen and over the game on phones and tablets: Controls, Achievements and Picture, then Change, Edit, Restart and Quit game."),
-        Item("Hints for your controller.", "On phones and tablets the button hints show your controller's own buttons (Xbox, PlayStation, Switch). With touch controls they're left out."),
-        Item("Interface size.", "Settings → Display: Automatic makes Delphis fill a tablet the way it fills the Thor's screen."),
-        Item("Beta updates.", "Settings → Updates → Update channel: Beta gets new versions first, to try them."),
-        Item("Every word fits.", "Home's card, the game page and Report a problem no longer cut words off. Quitting a game on one screen no longer leaves a hidden prompt on Home.", fix = true),
+        Item("Controllers page.", "Phones and tablets: Settings → Controllers shows each controller, its player and whether its buttons were checked."),
+        Item("Add a controller, step by step.", "Pick Xbox, PlayStation, Switch or another, see which button to hold for pairing, and Delphis moves on by itself when it connects."),
+        Item("A menu button that works.", "Settings → Controllers: open Delphis' menu with the Xbox / PS / Home button, View + Menu, or both (the new default), and test it."),
+        Item("No more fake \"AYN Thor\" player.", "Off the Thor, the first controller is Player 1; a handheld's own controls go by its name. The controls map shows a plain controller.", fix = true),
+        Item("Touch controls go away with a controller.", "On Android 14 and newer, Delphis restarts Dolphin when the touch controls need to change.", fix = true),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

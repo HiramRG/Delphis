@@ -325,6 +325,17 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         kotlinx.coroutines.delay(400)
         runCatching { am.killBackgroundProcesses(pkg) }
         kotlinx.coroutines.delay(900)
+        // Android 14+ no longer lets one app end another's process, and Dolphin only reads its touch-controls
+        // setting when it starts: when that setting has to change, Dolphin's card is removed from Recent apps
+        // (Android then ends it), the same way Delphis closes Dolphin when you exit.
+        val want = overlayWanted
+        if (want != null && android.os.Build.VERSION.SDK_INT >= 34 && prefs.overlayInDolphin != want) {
+            val label = runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault("Dolphin")
+            val closed = runCatching { DolphinExitService.dismissFromRecents(label) }.getOrDefault(false)
+            CrashLog.event("Dolphin restarted for touch controls ${if (want) "on" else "off"}: ${if (closed) "closed from Recent apps" else "no Recent apps card (not running?)"}")
+            prefs.overlayInDolphin = want
+            kotlinx.coroutines.delay(600)
+        }
         CoverActivity.shown = null
         // Dolphin is hidden behind the cover, so there's no way to see whether that worked.
         return CloseResult.UNVERIFIED
@@ -442,10 +453,14 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
     }
 
     /** Keeps Dolphin's touch overlay off (see DolphinConfigWriter.touchOverlayOff); Dolphin picks it up when it next starts. */
+    /** The touch-controls setting the next game should start with (see closeDolphin). */
+    var overlayWanted: Boolean? = null
+
     fun ensureTouchOverlayOff() = setTouchOverlay(false)
 
     /** Dolphin's on-screen buttons: off on the Thor; on for one-screen devices with no controller connected. */
     fun setTouchOverlay(on: Boolean) {
+        overlayWanted = on
         val tree = prefs.dolphinTreeUri ?: return
         runCatching {
             val existing = readText(tree, DolphinConfigWriter.dolphinIniPath) ?: ""

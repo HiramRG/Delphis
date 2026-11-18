@@ -78,6 +78,22 @@ object DeviceInfo {
     }
 
     /** Real gamepads (not virtual), for multiplayer: Android device, its name and whether it's external. */
+    /** A handheld's own controls (not a keyboard or button strip that happens to report gamepad keys): face buttons and a stick. */
+    fun looksLikeHandheldPad(d: InputDevice): Boolean = runCatching {
+        d.hasKeys(android.view.KeyEvent.KEYCODE_BUTTON_A, android.view.KeyEvent.KEYCODE_BUTTON_B).all { it } && d.getMotionRange(android.view.MotionEvent.AXIS_X) != null
+    }.getOrDefault(false)
+
+    /** This device's name for people: "Retroid Pocket 5", "Galaxy Tab S12+"… */
+    fun deviceLabel(): String {
+        val model = android.os.Build.MODEL.orEmpty().trim()
+        val maker = android.os.Build.MANUFACTURER.orEmpty().trim().replaceFirstChar { it.uppercase() }
+        return when {
+            model.isEmpty() -> "Built-in controls"
+            model.startsWith(maker, ignoreCase = true) -> model
+            else -> "$maker $model"
+        }
+    }
+
     fun gamepads(): List<InputDevice> = allDevices().filter { !it.isVirtual && isGamepad(it) }
 
     fun dolphinQualifiers(names: List<String>): List<String> {

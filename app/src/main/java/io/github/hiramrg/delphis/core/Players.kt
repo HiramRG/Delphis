@@ -39,11 +39,13 @@ data class Pad(
      * by position. Learned from the one-time "press the bottom button" check; null = not checked yet.
      */
     val byLabel: Boolean? = null,
+    /** The built-in controls' name: "AYN Thor" on the Thor, the device's name on another handheld. */
+    val builtInName: String = "AYN Thor",
 ) {
-    /** Short label for the pills: "Thor", "Xbox Wireless", "8BitDo Pro 2". */
+    /** Short label for the pills: "AYN Thor", "Xbox Wireless", "8BitDo Pro 2". */
     val shortName: String
-        get() = if (builtIn) "Thor" else name.replace(Regex("(?i)\\s*(controller|gamepad)\\s*"), " ").trim().ifEmpty { name }
-    val longName: String get() = if (builtIn) "Thor (built-in)" else name
+        get() = if (builtIn) builtInName else name.replace(Regex("(?i)\\s*(controller|gamepad)\\s*"), " ").trim().ifEmpty { name }
+    val longName: String get() = if (builtIn) "$builtInName (built-in)" else name
 }
 
 /**

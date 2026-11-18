@@ -54,8 +54,13 @@ object PadGlyphs {
         internal set
     val touch: Boolean get() = labels == null
 
+    /** The controls map draws the Thor (true) or a plain controller (one screen: phones, tablets, other handhelds). */
+    var thorBody by mutableStateOf(true)
+        internal set
+
     /** Reads the connected controller again (one screen); call when controllers come and go. */
     fun update(oneScreen: Boolean) {
+        thorBody = !oneScreen
         labels = if (!oneScreen) io.github.hiramrg.delphis.core.ButtonLabels.NINTENDO
         else io.github.hiramrg.delphis.platform.DeviceInfo.gamepads().firstOrNull()?.let { io.github.hiramrg.delphis.core.ButtonLabels.forVendor(it.vendorId) }
     }

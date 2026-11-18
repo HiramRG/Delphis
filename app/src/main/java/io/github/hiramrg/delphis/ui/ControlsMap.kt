@@ -318,10 +318,24 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
         val l = measure(key.padLabel, maxOf(6.5f, 9f * k), White)
         if (h(l) < tabs + 3f) drawText(l, topLeft = p(X(x + 23f) - w(l) / 2f, oy - tabs + (tabs - h(l)) / 2f))
     }
-    drawRoundRect(deviceFill, p(ox, oy), Size(tw * s, th * s), CornerRadius(34f * k * s))
-    drawRoundRect(c.cardBorder, p(ox, oy), Size(tw * s, th * s), CornerRadius(34f * k * s), style = Stroke(2f * s))
-    drawRoundRect(screenFill, p(X(Thor.SCREEN_X), Y(Thor.SCREEN_Y)), Size(Thor.SCREEN_W * k * s, Thor.SCREEN_H * k * s), CornerRadius(7f * k * s))
-    drawRoundRect(c.cardBorder, p(X(Thor.SCREEN_X), Y(Thor.SCREEN_Y)), Size(Thor.SCREEN_W * k * s, Thor.SCREEN_H * k * s), CornerRadius(7f * k * s), style = Stroke(1.2f * s))
+    if (PadGlyphs.thorBody) {
+        drawRoundRect(deviceFill, p(ox, oy), Size(tw * s, th * s), CornerRadius(34f * k * s))
+        drawRoundRect(c.cardBorder, p(ox, oy), Size(tw * s, th * s), CornerRadius(34f * k * s), style = Stroke(2f * s))
+        drawRoundRect(screenFill, p(X(Thor.SCREEN_X), Y(Thor.SCREEN_Y)), Size(Thor.SCREEN_W * k * s, Thor.SCREEN_H * k * s), CornerRadius(7f * k * s))
+        drawRoundRect(c.cardBorder, p(X(Thor.SCREEN_X), Y(Thor.SCREEN_Y)), Size(Thor.SCREEN_W * k * s, Thor.SCREEN_H * k * s), CornerRadius(7f * k * s), style = Stroke(1.2f * s))
+    } else {
+        // Not a Thor: a plain controller with grips (same control positions, no screen).
+        val body = androidx.compose.ui.graphics.Path().apply {
+            moveTo(X(70f) * s, Y(0f) * s); lineTo(X(230f) * s, Y(0f) * s)
+            cubicTo(X(270f) * s, Y(0f) * s, X(292f) * s, Y(30f) * s, X(296f) * s, Y(70f) * s); lineTo(X(300f) * s, Y(130f) * s)
+            cubicTo(X(300f) * s, Y(152f) * s, X(272f) * s, Y(160f) * s, X(252f) * s, Y(140f) * s); lineTo(X(222f) * s, Y(116f) * s)
+            lineTo(X(78f) * s, Y(116f) * s); lineTo(X(48f) * s, Y(140f) * s)
+            cubicTo(X(28f) * s, Y(160f) * s, X(0f) * s, Y(152f) * s, X(0f) * s, Y(130f) * s); lineTo(X(4f) * s, Y(70f) * s)
+            cubicTo(X(8f) * s, Y(30f) * s, X(30f) * s, Y(0f) * s, X(70f) * s, Y(0f) * s); close()
+        }
+        drawPath(body, deviceFill)
+        drawPath(body, c.cardBorder, style = Stroke(2f * s))
+    }
     drawCircle(if (used(SELECT)) ChipBlue else unused, 5f * k * s, p(X(76f), Y(20f)))
     drawCircle(if (used(START)) ChipBlue else unused, 5f * k * s, p(X(224f), Y(20f)))
     drawCircle(unused, 19f * k * s, p(X(44f), Y(50f)))
@@ -358,7 +372,8 @@ fun ControlsSwitchable(preset: Preset, prefs: io.github.hiramrg.delphis.platform
     androidx.compose.runtime.LaunchedEffect(toggle) { if (toggle != lastToggle) { lastToggle = toggle; set(!list) } }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Segmented(listOf(false to "Thor", true to "List"), list, { v -> set(v) }, height = 28.dp)
+            // "Thor" only on the Thor; elsewhere the drawing is a plain controller.
+            Segmented(listOf(false to (if (PadGlyphs.thorBody) "Thor" else "Map"), true to "List"), list, { v -> set(v) }, height = 28.dp)
             if (toggleKey != null) KeyIcon(toggleKey)
         }
         if (list) ControlsList(preset, Modifier.weight(1f).fillMaxWidth())

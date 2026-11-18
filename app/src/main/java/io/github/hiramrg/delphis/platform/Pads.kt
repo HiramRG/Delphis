@@ -23,11 +23,14 @@ object Pads {
      * the controller check / settings named.
      */
     fun detect(prefs: Prefs): List<Pad> {
-        val thorNames = setOfNotNull(prefs.deviceName, prefs.calibratedDeviceName)
+        val one = runCatching { DeviceInfo.oneScreen(prefs.context) }.getOrDefault(false)
+        // One screen (phone, tablet, one-screen handheld): only a handheld's own controls are built in, never a
+        // controller that went through the check. On the Thor: its internal pad, or the one the check named.
+        val thorNames = if (one) emptySet() else setOfNotNull(prefs.deviceName, prefs.calibratedDeviceName)
         val qualifiers = DeviceInfo.dolphinQualifiersById()
         val pads = DeviceInfo.gamepads().groupBy { it.descriptor ?: "id${it.id}" }.map { (key, devs) ->
             val d = devs.first()
-            val builtIn = d.name in thorNames || (thorNames.isEmpty() && !d.isExternal)
+            val builtIn = if (one) !d.isExternal && DeviceInfo.looksLikeHandheldPad(d) else d.name in thorNames || (thorNames.isEmpty() && !d.isExternal)
             Triple(key, d, builtIn) to devs.mapNotNull { qualifiers[it.id] }
         }
         val names = pads.groupingBy { it.first.second.name }.eachCount()
@@ -36,13 +39,18 @@ object Pads {
             val quals = if (builtIn) DeviceInfo.dolphinQualifiers(listOf(d.name))
             // A controller whose name is unique also gets ids 0-4, in case Dolphin numbers it differently.
             else (exact + if (names[d.name] == 1) (0..4).map { "Android/$it/${d.name}" } else emptyList()).distinct()
-            Pad(key, d.name, quals, builtIn, if (builtIn) ButtonLabels.NINTENDO else ButtonLabels.forVendor(d.vendorId), if (builtIn) true else prefs.padByLabel(key))
+            Pad(
+                key, d.name, quals, builtIn, if (builtIn) ButtonLabels.NINTENDO else ButtonLabels.forVendor(d.vendorId), if (builtIn) true else prefs.padByLabel(key),
+                builtInName = if (one) DeviceInfo.deviceLabel() else "AYN Thor",
+            )
         }
     }
 
     /** Controller description for [pad]: the Thor keeps its calibration; others use Android's standard layout (buttons by position). */
     fun profileFor(pad: Pad?, prefs: Prefs): ControllerProfile = when {
         pad == null || pad.builtIn -> DeviceInfo.controllerProfile(prefs)
+        // One screen: the controller that went through the Controller check keeps what the check recorded.
+        pad.name == prefs.calibratedDeviceName && prefs.calibration.isNotEmpty() -> DeviceInfo.controllerProfile(prefs).copy(devices = pad.qualifiers)
         // Reports buttons by letter on a Nintendo layout: Button A is on the right, Button B at the bottom.
         pad.byLabel == true -> ControllerProfile(
             devices = pad.qualifiers,
@@ -88,4 +96,19 @@ fun rememberPads(prefs: Prefs): List<Pad> {
         onDispose { im.unregisterInputDeviceListener(listener) }
     }
     return pads
+}
+
+/** The menu shortcut's buttons as the connected controller prints them. */
+data class ShortcutNames(val home: String, val combo: String) {
+    companion object {
+        fun forVendor(vendorId: Int?): ShortcutNames = when (vendorId) {
+            null -> ShortcutNames("⌂ Home button", "⊖ + Start")
+            0x045e -> ShortcutNames("Xbox button", "View + Menu")
+            0x054c -> ShortcutNames("PS button", "Create + Options")
+            0x057e -> ShortcutNames("⌂ Home button", "− + +")
+            else -> ShortcutNames("Home button", "Select + Start")
+        }
+        /** For the first external controller connected now (the Thor's own names otherwise). */
+        fun forConnected(): ShortcutNames = forVendor(DeviceInfo.gamepads().firstOrNull { it.isExternal }?.vendorId)
+    }
 }

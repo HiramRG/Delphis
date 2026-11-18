@@ -159,7 +159,7 @@ fun PlayersDialog(
                         Text("NEW CONTROLLER", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, letterSpacing = 1.sp)
                         Text(p.longName, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("Press the bottom face button on this controller, whatever letter it has.", fontSize = 12.sp, color = c.text)
-                        HintText("Once per controller · Ⓑ on the Thor skips (uses the usual layout)", fontSize = 10.5.sp, modifier = Modifier.padding(top = 3.dp))
+                        HintText("Once per controller · Ⓑ skips (uses the usual layout)", fontSize = 10.5.sp, modifier = Modifier.padding(top = 3.dp))
                     }
                 }
             }
@@ -172,8 +172,8 @@ fun PlayersDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Thor sits out", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        Text("Only the other controllers play; the Thor still works in Delphis' menus", fontSize = 11.sp, color = c.textDim)
+                        Text("${thor.shortName} sits out", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text("Only the other controllers play; the built-in controls still work in Delphis' menus", fontSize = 11.sp, color = c.textDim)
                     }
                     Switch(thor.key in setup.out, { toggle(thor) }, colors = SwitchDefaults.colors(checkedTrackColor = c.accent))
                 }
@@ -197,7 +197,7 @@ fun PlayersDialog(
                                 n == null && p.key in setup.out -> "Sitting out"
                                 n == null -> "Not playing (4 players max)"
                                 p.builtIn -> "Built-in controls"
-                                else -> "Buttons by position, like the Thor's"
+                                else -> "Buttons by position (the right one selects)"
                             }, fontSize = 11.sp, color = c.textDim,
                         )
                     }

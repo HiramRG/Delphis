@@ -35,14 +35,14 @@ fun NoControllerPrompt(
                 Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
-                            (if (nintendo) "Delphis reads its buttons by their letters, like on the Thor. "
-                            else "Delphis uses buttons by position, like on the Thor, so some letters are swapped. ") +
+                            (if (nintendo) "Delphis reads its buttons by their letters. "
+                            else "Delphis uses buttons by position, so the button on the right selects whatever its letter. ") +
                                 "Let's check it once: press each button when asked (about a minute).",
                             fontSize = 12.5.sp, color = c.textDim, lineHeight = 17.sp,
                         )
                         Text(
                             when {
-                                nintendo -> "Same letters as the Thor: Ⓐ selects, Ⓑ goes back."
+                                nintendo -> "Ⓐ selects, Ⓑ goes back."
                                 sony -> "Press ○ (right) to select and ✕ (bottom) to go back. Games use the same positions."
                                 else -> "Press Ⓑ (right) to select and Ⓐ (bottom) to go back. Games use the same positions."
                             },
@@ -78,7 +78,7 @@ fun NoControllerPrompt(
                 )
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PanelBtn("Use touch controls", "B", false, Modifier.weight(1f)) { onTouch() }
-                    PanelBtn("Open Bluetooth settings", "A", true, Modifier.weight(1.25f)) { onBluetooth() }
+                    PanelBtn("Add a controller", "A", true, Modifier.weight(1.25f)) { onBluetooth() }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) { DontAskRow("Don't show this again", dontShow) { onDontShow(it) } }
             }

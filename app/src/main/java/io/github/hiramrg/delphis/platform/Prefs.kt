@@ -368,10 +368,20 @@ class Prefs(context: Context) {
         set(v) = sp.edit().putBoolean("warn_no_pad", v).apply()
     /** One screen: what opens Delphis' menu in a game: 0 = the Home button (⌂ / Xbox / PS), 1 = ⊖ + Start, 2 = both. */
     var menuShortcut: Int
-        get() = sp.getInt("menu_shortcut", 0).coerceIn(0, 2)
+        get() = sp.getInt("menu_shortcut", 2).coerceIn(0, 2)
         set(v) = sp.edit().putInt("menu_shortcut", v).apply()
-    /** The shortcut as the pill and Settings name it. */
-    val menuShortcutLabel: String get() = when (menuShortcut) { 0 -> "⌂ Home button"; 1 -> "⊖ + Start"; else -> "⌂ or ⊖ + Start" }
+    /** The shortcut as the pill and Settings name it, in the connected controller's own words. */
+    val menuShortcutLabel: String get() {
+        val names = ShortcutNames.forConnected()
+        return when (menuShortcut) { 0 -> names.home; 1 -> names.combo; else -> names.home + " or " + names.combo }
+    }
+    /**
+     * Android 14+: Delphis can't end Dolphin's process, and Dolphin keeps the touch-controls setting it read when
+     * it started. The setting Dolphin was last restarted with (null = unknown), so Delphis knows when to restart it.
+     */
+    var overlayInDolphin: Boolean?
+        get() = if (sp.contains("overlay_in_dolphin")) sp.getBoolean("overlay_in_dolphin", false) else null
+        set(v) = sp.edit().apply { if (v == null) remove("overlay_in_dolphin") else putBoolean("overlay_in_dolphin", v) }.apply()
     /** One screen: the Delphis pill at the top of the game. */
     var pillShown: Boolean
         get() = sp.getBoolean("pill_shown", true)

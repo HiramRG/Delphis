@@ -95,6 +95,13 @@ class MainActivity : ComponentActivity() {
     private val padListener = object : android.hardware.input.InputManager.InputDeviceListener {
         override fun onInputDeviceAdded(deviceId: Int) {
             PadGlyphs.update(oneScreen)
+            // "Add a controller" waiting for it: on to step 3 (its player, then the button check).
+            if (addPadStep in 1..2) DeviceInfo.gamepads().firstOrNull { it.isExternal }?.let { pad ->
+                addPadFound = pad.name; padVendor = pad.vendorId
+                addPadPlayer = io.github.hiramrg.delphis.platform.Pads.detect(prefs).let { pads -> pads.indexOfFirst { it.name == pad.name }.takeIf { it >= 0 }?.plus(1) ?: 1 }
+                addPadStep = 3; noPadPrompt = false
+                return
+            }
             if (!oneScreen || padConnected != null || screen == Screen.ControllerCheck) return
             val pad = DeviceInfo.gamepads().firstOrNull() ?: return
             if (pad.name != prefs.calibratedDeviceName) {
@@ -155,7 +162,64 @@ class MainActivity : ComponentActivity() {
     fun padTouch() { if (padDontShow) prefs.warnNoController = false; noPadPrompt = false }
     fun padBluetooth() {
         if (padDontShow) prefs.warnNoController = false
+        noPadPrompt = false
+        openAddPad()
+    }
+
+    // ---- Settings → Controllers → "Test it" (the in-game menu button)
+    /** null = not tested; "waiting"; otherwise the result line. */
+    var shortcutTest by mutableStateOf<String?>(null)
+    var shortcutTestOk by mutableStateOf(false)
+    private var shortcutTestJob: kotlinx.coroutines.Job? = null
+    fun startShortcutTest() {
+        val names = io.github.hiramrg.delphis.platform.ShortcutNames.forConnected()
+        shortcutTestJob?.cancel()
+        shortcutTestOk = false
+        val started = io.github.hiramrg.delphis.platform.DolphinExitService.startShortcutTest { what ->
+            if (shortcutTest != "waiting") return@startShortcutTest
+            shortcutTestOk = true
+            shortcutTest = if (what == "combo") "✓ Delphis got ${names.combo}: it opens the menu in games."
+                else "✓ Delphis got the ${names.home}: it opens the menu in games."
+            stopShortcutTest()
+        }
+        if (!started) { shortcutTest = "Turn on \"close games\" first (Settings → Diagnostics): it's what catches the button during games."; return }
+        shortcutTest = "waiting"
+        shortcutTestJob = lifecycleScope.launch {
+            kotlinx.coroutines.delay(10_000)
+            if (shortcutTest == "waiting") {
+                // Nothing came through: some tablets keep the Home button for themselves. "Both" leaves the other way in.
+                prefs.menuShortcut = 2
+                shortcutTest = "Nothing arrived. If you pressed the ${names.home}, this device keeps it, so use ${names.combo} (now both work)."
+                stopShortcutTest()
+            }
+        }
+    }
+    private fun stopShortcutTest() { shortcutTestJob?.cancel(); io.github.hiramrg.delphis.platform.DolphinExitService.stopShortcutTest() }
+
+    // ---- "Add a controller" (one screen): 1 which controller, 2 pairing mode, 3 connected → player + check
+    var addPadStep by mutableIntStateOf(0)
+    var addPadBrand by mutableIntStateOf(0)
+    var addPadFound by mutableStateOf<String?>(null)
+    var addPadPlayer by mutableIntStateOf(1)
+    fun openAddPad() { addPadFound = null; addPadStep = 1 }
+    fun addPadClose() { addPadStep = 0 }
+    fun addPadBluetooth() {
         runCatching { startActivity(android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+    private fun addPadKey(event: KeyEvent): Boolean {
+        if (addPadStep == 0) return false
+        val press = event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0
+        val down = event.action == KeyEvent.ACTION_DOWN
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (press) when (addPadStep) {
+                1 -> addPadStep = 2; 2 -> addPadBluetooth(); else -> { addPadClose(); padCheck() }
+            }
+            KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> if (press) { if (addPadStep == 2) addPadStep = 1 else addPadClose() }
+            KeyEvent.KEYCODE_DPAD_LEFT -> if (down && addPadStep == 1) addPadBrand = (addPadBrand - 1).coerceAtLeast(0)
+            KeyEvent.KEYCODE_DPAD_RIGHT -> if (down && addPadStep == 1) addPadBrand = (addPadBrand + 1).coerceAtMost(PadBrand.entries.lastIndex)
+            else -> return false
+        }
+        return true
     }
     fun helperNotNow() { val action = exitHelperPrompt; exitHelperPrompt = null; helperDeclined = true; action?.invoke() }
     fun helperAppInfo() {
@@ -484,6 +548,7 @@ class MainActivity : ComponentActivity() {
                         ::padCheck, ::padLater, ::padTouch, ::padBluetooth,
                     )
                     if (reportOpen) ReportProblemPanel(this@MainActivity)
+                    if (addPadStep > 0) AddControllerPanel(this@MainActivity)
                     if (runningPrompt && !noPadPrompt) io.github.hiramrg.delphis.platform.GameWatch.session?.let { s ->
                         RunningGamePrompt(s.info.title, ::runningBack, ::runningQuit) { runningPrompt = false }
                     }
@@ -514,6 +579,7 @@ class MainActivity : ComponentActivity() {
                 io.github.hiramrg.delphis.platform.MenuSounds.play(io.github.hiramrg.delphis.platform.MenuSounds.Kind.BACK)
         }
         if (reportKey(event)) return true
+        if (addPadKey(event)) return true
         if (popupKey(event)) return true
         // "Build N is ready": Ⓐ Restart & update, Ⓑ Later.
         if (updatePrompt && updateState is UpdateState.Ready) when (event.keyCode) {

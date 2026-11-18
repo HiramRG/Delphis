@@ -758,6 +758,17 @@ open class NowPlayingActivity : ComponentActivity() {
                             Modifier.weight(1f).fillMaxWidth().clip(shape).background(Color(0xFF1F242A)).border(2.dp, Color(0xFF6B5A2E), shape).padding(8.dp),
                             onClose = { showAchievements = false },
                         )
+                    } else if (panelMode && PadGlyphs.touch) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 14.dp) {
+                        // No controller: what's really on screen is Dolphin's touch buttons, not a controller map.
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            CapsLabel("Touch controls")
+                            Text("Dolphin's on-screen buttons", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = LocalWii.current.text)
+                            Text(
+                                "No controller is connected, so you play with the buttons Dolphin draws over the game (${preset.controller.label}). " +
+                                    "Connect a controller and restart the game to play with it instead.",
+                                fontSize = 12.sp, color = LocalWii.current.textDim, lineHeight = 16.sp,
+                            )
+                        }
                     } else if (!preset.isTrackpad || panelMode) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
                         ControlsSwitchable(preset, prefs, s.key, Modifier.fillMaxSize())
                     } else Column(Modifier.weight(1f).fillMaxWidth()) {
@@ -924,9 +935,16 @@ open class NowPlayingActivity : ComponentActivity() {
             }
             // One screen: a controller connected mid-game. Dolphin only picks controllers up when a game starts.
             padJoined?.let { name ->
+                // Which player it becomes on this device: on a phone / tablet it takes over from the touch controls.
+                val joinedAs = remember(name) {
+                    val pads = io.github.hiramrg.delphis.platform.Pads.detect(prefs)
+                    io.github.hiramrg.delphis.core.Players.assign(pads, prefs.playerSetup(s.key)).indexOfFirst { it.name == name }.takeIf { it >= 0 }?.plus(1) ?: 1
+                }
+                val replacesTouch = panelMode && joinedAs == 1
                 OverlayDialog(
-                    title = "$name connected",
-                    body = "Dolphin only picks up controllers when a game starts, so restart the game to play with it (the touch buttons go away then). " +
+                    title = "$name · Player $joinedAs",
+                    body = "Dolphin only picks up controllers when a game starts, so restart the game to play with it" +
+                        (if (replacesTouch) " (the touch controls go away then). " else " as Player $joinedAs. ") +
                         if (autosaveOn()) "Your progress is autosaved first and the game continues from there." else "Any unsaved progress will be lost.",
                     confirm = "Restart game", dismiss = "Later",
                     onDismiss = { padJoined = null },
