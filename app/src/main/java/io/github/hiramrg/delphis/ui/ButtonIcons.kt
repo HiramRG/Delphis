@@ -72,10 +72,10 @@ object PadGlyphs {
     fun letter(key: String): String = when (labels) {
         io.github.hiramrg.delphis.core.ButtonLabels.XBOX -> when (key) {
             "A" -> "B"; "B" -> "A"; "X" -> "Y"; "Y" -> "X"
-            "L1" -> "LB"; "R1" -> "RB"; "L2" -> "LT"; "R2" -> "RT"; "L3" -> "LS"; "R3" -> "RS"
+            "L1" -> "LB"; "R1" -> "RB"; "L2" -> "LT"; "R2" -> "RT"; "L3" -> "LS"; "R3" -> "RS"; "⊖" -> "View"; "⊕" -> "Menu"
             else -> key
         }
-        io.github.hiramrg.delphis.core.ButtonLabels.PLAYSTATION -> when (key) { "A" -> "○"; "B" -> "✕"; "X" -> "△"; "Y" -> "□"; else -> key }
+        io.github.hiramrg.delphis.core.ButtonLabels.PLAYSTATION -> when (key) { "A" -> "○"; "B" -> "✕"; "X" -> "△"; "Y" -> "□"; "⊖" -> "Create"; "⊕" -> "Options"; else -> key }
         else -> key
     }
 

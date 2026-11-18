@@ -162,4 +162,30 @@ object DeviceInfo {
         in KeyEvent.KEYCODE_BUTTON_1..KeyEvent.KEYCODE_BUTTON_16 -> "Button ${keyCode - KeyEvent.KEYCODE_BUTTON_1 + 1}"
         else -> null
     }
+
+    /** What resolution this device should manage, and why (for the Picture panel's Resolution tab). */
+    data class ResolutionAdvice(val scale: Int, val device: String, val chip: String?, val screen: String, val known: Boolean)
+
+    fun resolutionAdvice(ctx: Context): ResolutionAdvice {
+        val chipId = (if (android.os.Build.VERSION.SDK_INT >= 31) android.os.Build.SOC_MODEL else null)
+            ?.takeIf { it.isNotBlank() && it != android.os.Build.UNKNOWN } ?: android.os.Build.HARDWARE.orEmpty()
+        val known = io.github.hiramrg.delphis.core.Resolution.chipScale(chipId)
+        val chipScale = known ?: run {
+            // Not recognised: guess from memory (8 GB and more is usually a recent, fast chip).
+            val mem = android.app.ActivityManager.MemoryInfo().also { ctx.getSystemService(android.app.ActivityManager::class.java)?.getMemoryInfo(it) }
+            if (mem.totalMem >= 7L * 1024 * 1024 * 1024) 2 else 1
+        }
+        val mode = runCatching { ctx.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY).mode }.getOrNull()
+        val dm = ctx.resources.displayMetrics
+        val w = mode?.physicalWidth ?: dm.widthPixels
+        val h = mode?.physicalHeight ?: dm.heightPixels
+        val short = minOf(w, h)
+        val long = maxOf(w, h)
+        val name = runCatching { android.provider.Settings.Global.getString(ctx.contentResolver, "device_name") }.getOrNull()
+            ?.takeIf { it.isNotBlank() } ?: deviceLabel()
+        return ResolutionAdvice(
+            io.github.hiramrg.delphis.core.Resolution.recommend(chipScale, short), name,
+            io.github.hiramrg.delphis.core.Resolution.chipFamily(chipId), "$long × $short", known != null,
+        )
+    }
 }

@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
@@ -246,10 +247,23 @@ open class NowPlayingActivity : ComponentActivity() {
         if (!panelMode) blockSystemGestures()
     }
 
+    /**
+     * One screen: the menu's controller shortcuts for what's on screen right now (keys in the Thor's layout:
+     * B = bottom, A = right, Y = left, X = top), kept up to date by the composition.
+     */
+    private var panelKeys: Map<Int, () -> Unit> = emptyMap()
+
     override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
         if (!panelMode) return super.dispatchKeyEvent(raw)
         // One screen: controllers that don't report standard keys (e.g. a Switch Pro Controller) are translated.
         val event = io.github.hiramrg.delphis.platform.PadKeys.translate(raw, prefs, true)
+        panelKeys[event.keyCode]?.let { action ->
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                CrashLog.event("menu shortcut ${KeyEvent.keyCodeToString(event.keyCode)}")
+                action()
+            }
+            return true
+        }
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 &&
             (event.keyCode == KeyEvent.KEYCODE_BUTTON_L1 || event.keyCode == KeyEvent.KEYCODE_BUTTON_R1)) {
             tabStep = (tabStep.first + 1) to (if (event.keyCode == KeyEvent.KEYCODE_BUTTON_L1) -1 else 1)
@@ -521,6 +535,7 @@ open class NowPlayingActivity : ComponentActivity() {
         val dimLevel = remember { prefs.brightnessPercent }
         var showBrightness by remember { mutableStateOf(false) }
         var confirmExit by remember { mutableStateOf(false) }
+        var exitDontAsk by remember { mutableStateOf(false) }
         // Set when a change needs the game restarted; shows the confirmation first.
         var restartAction by remember { mutableStateOf<(() -> Unit)?>(null) }
         // "Restart" from the action row (no new controls): the confirmation says so.
@@ -554,7 +569,12 @@ open class NowPlayingActivity : ComponentActivity() {
         val runningLook = remember(startedAt) { lookGid?.let { prefs.lookFor(it) } }
         var pictureTab by remember { mutableIntStateOf(0) }
         var pictureBefore by remember { mutableStateOf<Pair<io.github.hiramrg.delphis.core.GameScreen.Choice?, io.github.hiramrg.delphis.core.Looks.Look?>?>(null) }
-        fun openPicture(tab: Int) { pictureBefore = screenChoice to gameLook; pictureTab = tab; showBrightness = false; showPicture = true }
+        // Resolution: the Picture panel's third tab (needs a restart).
+        var gameRes by remember { mutableStateOf(gid?.let { prefs.resolutionFor(it) }) }
+        val runningRes = remember(startedAt) { gid?.let { prefs.resolutionFor(it) } }
+        var resBefore by remember { mutableStateOf(gameRes) }
+        val resAdvice = remember { io.github.hiramrg.delphis.platform.DeviceInfo.resolutionAdvice(this@NowPlayingActivity) }
+        fun openPicture(tab: Int) { pictureBefore = screenChoice to gameLook; resBefore = gameRes; pictureTab = tab; showBrightness = false; showPicture = true }
         val sideColour by produceState(android.graphics.Color.rgb(75, 58, 143), screenGid) {
             screenGid?.let { value = io.github.hiramrg.delphis.platform.SideFill.colourOf(io.github.hiramrg.delphis.platform.CoverArt(this@NowPlayingActivity).load(it)) }
         }
@@ -674,6 +694,7 @@ open class NowPlayingActivity : ComponentActivity() {
             Column(Modifier.fillMaxSize().alpha(contentAlpha).padding(start = 10.dp, end = 10.dp, top = 28.dp, bottom = 6.dp)) {
                 // ---------------- header: the same on the Thor's bottom screen and the one-screen menu (cover, game,
                 // controls in use; ▶ Resume over the game on one screen, ☀ on the Thor), then the tabs.
+                val changeFocus = remember { androidx.compose.ui.focus.FocusRequester() }
                 val padName = if (panelMode) io.github.hiramrg.delphis.platform.rememberPads(prefs).firstOrNull()?.name else null
                 Row(Modifier.fillMaxWidth().alpha(fade), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     GameThumb(gid, s.info.platform)
@@ -690,7 +711,8 @@ open class NowPlayingActivity : ComponentActivity() {
                     if (panelMode) {
                         val resumeFocus = remember { androidx.compose.ui.focus.FocusRequester() }
                         LaunchedEffect(openSignal) { delay(150); runCatching { resumeFocus.requestFocus() } }
-                        PanelBtn("▶ Resume", "B", false, Modifier.focusRequester(resumeFocus)) { resumeGame() }
+                        // D-pad down goes straight to the action buttons instead of stopping at the map's toggle.
+                        PanelBtn("▶ Resume", "B", false, Modifier.focusRequester(resumeFocus).focusProperties { if (mode == Mode.VIEW && !(preset.isTrackpad && padView)) down = changeFocus }) { resumeGame() }
                     } else {
                         // Trackpad on screen: the action row is replaced by the pad's controls, so Quit stays up here.
                         if (preset.isTrackpad && padView && mode == Mode.VIEW) TopChip("Quit") { if (prefs.skipExitWarning) closingGame { backToMainMenu() } else confirmExit = true }
@@ -704,7 +726,7 @@ open class NowPlayingActivity : ComponentActivity() {
                 val tabs = buildList {
                     add(0)
                     if (achievements != null) add(1)
-                    if (screenChoice != null || gameLook != null) add(2)
+                    if (screenChoice != null || gameLook != null || gameRes != null) add(2)
                 }
                 val tab = when { showPicture -> 2; showAchievements -> 1; else -> 0 }
                 fun selectTab(t: Int) {
@@ -855,17 +877,39 @@ open class NowPlayingActivity : ComponentActivity() {
                     }
                 } else if (mode == Mode.VIEW) {
                     // The same actions on the Thor and on one screen: change or edit the controls, restart, quit.
-                    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PanelBtn("Change", null, true, Modifier.weight(1f)) { showBrightness = false; mode = Mode.CHANGE }
-                        PanelBtn("✎ Edit", null, false, Modifier.weight(0.85f)) { showBrightness = false; mode = Mode.EDIT }
-                        PanelBtn("Restart", null, false, Modifier.weight(1f)) {
+                    // One screen: each shows its own controller button, so they sit in two rows to keep every label whole.
+                    val change: @Composable (Modifier) -> Unit = { m -> PanelBtn("Change", if (panelMode) "Y" else null, true, m.focusRequester(changeFocus)) { showBrightness = false; mode = Mode.CHANGE } }
+                    val edit: @Composable (Modifier) -> Unit = { m -> PanelBtn("✎ Edit", null, false, m) { showBrightness = false; mode = Mode.EDIT } }
+                    val restart: @Composable (Modifier) -> Unit = { m ->
+                        PanelBtn("Restart", if (panelMode) "⊖" else null, false, m) {
                             showBrightness = false; plainRestart = true
                             restartAction = { applyAndRestart(s, preset, remember = false) }
                         }
-                        PanelBtn("Quit game", null, false, Modifier.weight(1.2f), warn = true) {
+                    }
+                    val quit: @Composable (Modifier) -> Unit = { m ->
+                        PanelBtn("Quit game", if (panelMode) "X" else null, false, m, warn = true) {
                             showBrightness = false
-                            if (prefs.skipExitWarning) closingGame { backToMainMenu() } else confirmExit = true
+                            if (prefs.skipExitWarning) closingGame { backToMainMenu() } else { exitDontAsk = false; confirmExit = true }
                         }
+                    }
+                    if (panelMode) {
+                        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            change(Modifier.weight(1f)); edit(Modifier.weight(0.85f))
+                        }
+                        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            restart(Modifier.weight(1f)); quit(Modifier.weight(1.1f))
+                        }
+                        if (!PadGlyphs.touch) Row(
+                            Modifier.fillMaxWidth().padding(top = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
+                        ) {
+                            KeyIcon("A", size = 16.dp)
+                            Text("or", fontSize = 11.sp, color = LocalWii.current.textDim)
+                            KeyIcon("⊕", size = 16.dp)
+                            Text("back to the game", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LocalWii.current.textDim)
+                        }
+                    } else Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        change(Modifier.weight(1f)); edit(Modifier.weight(0.85f)); restart(Modifier.weight(1f)); quit(Modifier.weight(1.2f))
                     }
                 }
             }
@@ -890,16 +934,18 @@ open class NowPlayingActivity : ComponentActivity() {
 
             // Picture: ▭ Screen (GameCube; the sides change right away, shape / 16:9 fill need a restart)
             // and ✦ Look (needs a restart). Touch only here: in game the Thor's buttons belong to Dolphin.
-            if (showPicture && (screenChoice != null || gameLook != null)) {
+            if (showPicture && (screenChoice != null || gameLook != null || gameRes != null)) {
                 val sc = screenChoice
                 val needsRestart = (runningScreen != null && sc != null && (sc.shape != runningScreen.shape ||
                     (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE && sc.fill != runningScreen.fill))) ||
-                    (gameLook != null && gameLook != runningLook)
+                    (gameLook != null && gameLook != runningLook) || (gameRes != null && gameRes != runningRes)
                 PicturePanel(
                     s.info.title, pictureTab, { pictureTab = it },
                     sc, screenGid, prefs.gcUseHack, sideColour, { ch -> screenChoice = ch; screenGid?.let { prefs.setScreenFor(it, ch) } },
                     gameLook, { l -> gameLook = l; lookGid?.let { prefs.setLookFor(it, l) } },
+                    res = gameRes, onRes = { l -> gameRes = l; gid?.let { prefs.setResolutionFor(it, l) } }, advice = resAdvice,
                     onCancel = {
+                        resBefore?.let { r -> gameRes = r; gid?.let { prefs.setResolutionFor(it, r) } }
                         pictureBefore?.let { (bs, bl) ->
                             if (bs != null) { screenChoice = bs; screenGid?.let { prefs.setScreenFor(it, bs) } }
                             if (bl != null) { gameLook = bl; lookGid?.let { prefs.setLookFor(it, bl) } }
@@ -917,7 +963,32 @@ open class NowPlayingActivity : ComponentActivity() {
             }
 
             // In-window dialogs (no separate dialog window, so Dolphin keeps gamepad focus).
-            if (confirmExit) ExitDialog(onDismiss = { confirmExit = false }) { dontAsk ->
+            // One screen: a button for every action, so nobody has to steer the focus with a stick.
+            if (panelMode) SideEffect {
+                val quit = { showBrightness = false; if (prefs.skipExitWarning) closingGame { backToMainMenu() } else { exitDontAsk = false; confirmExit = true } }
+                val restart = { showBrightness = false; plainRestart = true; restartAction = { applyAndRestart(s, preset, remember = false) } }
+                val pending = restartAction
+                panelKeys = when {
+                    confirmExit -> mapOf(
+                        KeyEvent.KEYCODE_BUTTON_B to { confirmExit = false; if (exitDontAsk) prefs.skipExitWarning = true; closingGame { backToMainMenu() } },
+                        KeyEvent.KEYCODE_BUTTON_A to { confirmExit = false },
+                        KeyEvent.KEYCODE_BUTTON_Y to { exitDontAsk = !exitDontAsk },
+                    )
+                    pending != null -> mapOf(
+                        KeyEvent.KEYCODE_BUTTON_B to { restartAction = null; pending() },
+                        KeyEvent.KEYCODE_BUTTON_A to { restartAction = null },
+                    )
+                    mode != Mode.VIEW || showPicture || showBrightness -> emptyMap()
+                    else -> mapOf(
+                        KeyEvent.KEYCODE_BUTTON_A to { resumeGame() },
+                        KeyEvent.KEYCODE_BUTTON_START to { resumeGame() },
+                        KeyEvent.KEYCODE_BUTTON_Y to { showBrightness = false; mode = Mode.CHANGE },
+                        KeyEvent.KEYCODE_BUTTON_X to quit,
+                        KeyEvent.KEYCODE_BUTTON_SELECT to restart,
+                    )
+                }
+            }
+            if (confirmExit) ExitDialog(exitDontAsk, { exitDontAsk = it }, onDismiss = { confirmExit = false }) { dontAsk ->
                 confirmExit = false
                 if (dontAsk) prefs.skipExitWarning = true
                 closingGame { backToMainMenu() }
@@ -1054,8 +1125,7 @@ open class NowPlayingActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun ExitDialog(onDismiss: () -> Unit, onConfirm: (Boolean) -> Unit) {
-        var dontAsk by remember { mutableStateOf(false) }
+    private fun ExitDialog(dontAsk: Boolean, onDontAsk: (Boolean) -> Unit, onDismiss: () -> Unit, onConfirm: (Boolean) -> Unit) {
         OverlayDialog(
             title = "Back to main menu?",
             body = "This will close the game and Dolphin. " +
@@ -1063,7 +1133,10 @@ open class NowPlayingActivity : ComponentActivity() {
             confirm = "Close game", dismiss = "Keep playing",
             onDismiss = onDismiss, onConfirm = { onConfirm(dontAsk) },
         ) {
-            DontAskRow("Don't show this again", dontAsk) { dontAsk = it }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                DontAskRow("Don't show this again", dontAsk, onDontAsk)
+                if (panelMode) KeyIcon("Y")
+            }
         }
     }
 
@@ -1077,8 +1150,8 @@ open class NowPlayingActivity : ComponentActivity() {
             PopupPanel(
                 listOfNotNull("In game", GameWatch.session?.info?.title).joinToString(" · "), title, Modifier.widthIn(max = 420.dp),
                 buttons = {
-                    PanelBtn(dismiss, null, false, onClick = onDismiss)
-                    PanelBtn(confirm, null, true, onClick = onConfirm)
+                    PanelBtn(dismiss, if (panelMode) "A" else null, false, onClick = onDismiss)
+                    PanelBtn(confirm, if (panelMode) "B" else null, true, onClick = onConfirm)
                 },
             ) {
                 Text(body, fontSize = 12.5.sp, lineHeight = 16.sp, color = LocalWii.current.textDim)

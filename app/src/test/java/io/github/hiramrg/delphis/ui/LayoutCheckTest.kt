@@ -135,6 +135,9 @@ class LayoutCheckTest {
             show(act, size, "Home") { act.screen = Screen.Home }
             show(act, size, "Game page") { act.openGame(games[0]) }
             show(act, size, "Game page (long title)") { act.openGame(games[1]) }
+            show(act, size, "Game page · Picture → Sharpness", after = { TestHooks.pictureTab = null; act.screen = Screen.Home }) {
+                TestHooks.pictureTab = 2; act.screen = Screen.Home; settle(100); act.openGame(games[0])
+            }
             for (s in SettingsSection.entries) {
                 if (size.oneScreen && s == SettingsSection.BOTTOM) continue
                 show(act, size, "Settings → ${s.label}") { act.screen = Screen.Settings; act.settingsSection = s }

@@ -912,6 +912,8 @@ class MainActivity : ComponentActivity() {
                     if (preset.controller == io.github.hiramrg.delphis.core.EmulatedController.GAMECUBE) bridge.applyScreen(gameId, prefs.screenFor(gameId))
                     // Looks: the game's post-processing shader (Wii and GameCube).
                     if (prefs.looksEnabled) bridge.applyLook(gameId, prefs.lookFor(gameId))
+                    // How sharp: Dolphin's internal resolution for this game.
+                    bridge.applyResolution(gameId, prefs.resolutionFor(gameId))
                 }
                 else bridge.applyGlobally(p1, profile)
             }

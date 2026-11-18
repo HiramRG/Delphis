@@ -87,6 +87,17 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         }.onFailure { CrashLog.event("screen settings not written: ${it.message}") }
     }
 
+    /** Writes the game's resolution into its Dolphin settings file (Dolphin's own setting = only Delphis' value removed). */
+    fun applyResolution(gameId: String, level: io.github.hiramrg.delphis.core.Resolution.Level) {
+        val tree = prefs.dolphinTreeUri ?: return
+        runCatching {
+            val iniPath = DolphinConfigWriter.gameIniPath(gameId)
+            val existing = readText(tree, iniPath) ?: ""
+            val updated = io.github.hiramrg.delphis.core.Resolution.applyToGameIni(existing, level)
+            if (updated != existing) { writeText(tree, iniPath, updated); CrashLog.event("resolution for $gameId: ${level.label}") }
+        }.onFailure { CrashLog.event("resolution not written: ${it.message}") }
+    }
+
     /** Copies the look's shader into Dolphin's Shaders folder (if needed) and picks it in the game's settings file. */
     fun applyLook(gameId: String, look: io.github.hiramrg.delphis.core.Looks.Look) {
         val tree = prefs.dolphinTreeUri ?: return
@@ -325,26 +336,34 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         kotlinx.coroutines.delay(400)
         runCatching { am.killBackgroundProcesses(pkg) }
         kotlinx.coroutines.delay(900)
-        // Android 14+ no longer lets one app end another's process, and Dolphin only reads its touch-controls
-        // setting when it starts: when that setting has to change, Dolphin's card is removed from Recent apps
-        // (Android then ends it), the same way Delphis closes Dolphin when you exit.
-        val want = overlayWanted
-        if (want != null && android.os.Build.VERSION.SDK_INT >= 34 && prefs.overlayInDolphin != want) {
-            val label = runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault("Dolphin")
-            val closed = runCatching { DolphinExitService.dismissFromRecents(label) }.getOrDefault(false)
-            CrashLog.event("Dolphin restarted for touch controls ${if (want) "on" else "off"}: ${if (closed) "closed from Recent apps" else "no Recent apps card (not running?)"}")
-            prefs.overlayInDolphin = want
-            kotlinx.coroutines.delay(600)
-        }
         CoverActivity.shown = null
         // Dolphin is hidden behind the cover, so there's no way to see whether that worked.
         return CloseResult.UNVERIFIED
+    }
+
+    /**
+     * Android 14+ no longer lets one app end another's process, and Dolphin only reads its touch-controls
+     * setting when it starts. Leaving a game only takes Dolphin back to its game list, with the old setting
+     * still in memory. So when the setting has to change, Dolphin's card is removed from Recent apps
+     * (Android then ends it) before the game starts, whether or not a game was running.
+     */
+    private suspend fun restartForTouchSetting() {
+        val want = overlayWanted ?: return
+        if (android.os.Build.VERSION.SDK_INT < 34 || prefs.overlayInDolphin == want) return
+        val pkg = installedPackage() ?: return
+        val label = runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault("Dolphin")
+        val closed = runCatching { DolphinExitService.dismissFromRecents(label) }.getOrDefault(false)
+        CrashLog.event("Dolphin restarted for touch controls ${if (want) "on" else "off"}: ${if (closed) "closed from Recent apps" else "no Recent apps card (not running?)"}")
+        // Not found usually means Dolphin isn't running, so it reads the new setting when it starts.
+        prefs.overlayInDolphin = want
+        kotlinx.coroutines.delay(if (closed) 900 else 200)
     }
 
     /** Starts the game in a fresh Dolphin, so the newly written controls are always loaded. */
     suspend fun launchFresh(gameUri: Uri, displayId: Int?, resumeGameId: String? = null, title: String? = null, gameId: String? = null): Boolean {
         try {
             closeDolphin(displayId, "Starting game…")
+            restartForTouchSetting()
             DolphinExitService.showLoading(
                 LoadingOverlay.Phase.STARTING, title, gameId,
                 if (resumeGameId != null) "Picking up where you left off…" else "Getting the game ready…", displayId,
@@ -465,6 +484,9 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         runCatching {
             val existing = readText(tree, DolphinConfigWriter.dolphinIniPath) ?: ""
             val updated = DolphinConfigWriter.touchOverlay(existing, on)
+            // The file disagreed: whatever Dolphin last saved there (its own menu writes it too) may be what it has
+            // in memory, so the next start makes sure Dolphin is restarted.
+            if (updated != existing) prefs.overlayInDolphin = null
             if (updated != existing) { writeText(tree, DolphinConfigWriter.dolphinIniPath, updated); CrashLog.event("Dolphin's touch overlay turned ${if (on) "on" else "off"}") }
         }.onFailure { CrashLog.event("couldn't change Dolphin's touch overlay: ${it.message}") }
     }

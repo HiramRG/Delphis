@@ -1452,7 +1452,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     // GameCube: how the 4:3 picture fills the 16:9 screen (written to Dolphin when the game starts).
     val screenGid = game.info.gameId?.takeIf { game.info.platform == io.github.hiramrg.delphis.core.Platform.GAMECUBE }
     var screen by remember(game.key) { mutableStateOf(screenGid?.let { act.prefs.screenFor(it) }) }
-    var showScreen by remember { mutableStateOf(false) }
+    var showScreen by remember { mutableStateOf(io.github.hiramrg.delphis.platform.TestHooks.pictureTab != null) }
     val coverColour by produceState(android.graphics.Color.rgb(75, 58, 143), screenGid) {
         screenGid?.let { value = io.github.hiramrg.delphis.platform.SideFill.colourOf(act.covers.load(it)) }
     }
@@ -1463,11 +1463,18 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     val lookGid = game.info.gameId?.takeIf { act.prefs.looksEnabled }
     var look by remember(game.key) { mutableStateOf(lookGid?.let { act.prefs.lookFor(it) }) }
     var lookBefore by remember { mutableStateOf(look) }
-    var pictureTab by remember { mutableIntStateOf(0) }
+    var pictureTab by remember { mutableIntStateOf(io.github.hiramrg.delphis.platform.TestHooks.pictureTab ?: 0) }
     fun setLook(l: io.github.hiramrg.delphis.core.Looks.Look) { look = l; lookGid?.let { act.prefs.setLookFor(it, l) } }
-    fun openScreen() { screenBefore = screen; lookBefore = look; pictureTab = if (screen == null) 1 else 0; showScreen = true }
-    fun cancelScreen() { screenBefore?.let { setScreen(it) }; lookBefore?.let { setLook(it) }; showScreen = false }
-    val hasPicture = screen != null || look != null
+    // Resolution (how sharp), per game: the Picture panel's third tab.
+    val resGid = game.info.gameId
+    var res by remember(game.key) { mutableStateOf(resGid?.let { act.prefs.resolutionFor(it) }) }
+    var resBefore by remember { mutableStateOf(res) }
+    val resAdvice = remember { io.github.hiramrg.delphis.platform.DeviceInfo.resolutionAdvice(act) }
+    fun setRes(l: io.github.hiramrg.delphis.core.Resolution.Level) { res = l; resGid?.let { act.prefs.setResolutionFor(it, l) } }
+    val picTabs = pictureTabs(screen != null, look != null, res != null)
+    fun openScreen() { screenBefore = screen; lookBefore = look; resBefore = res; pictureTab = picTabs.first(); showScreen = true }
+    fun cancelScreen() { screenBefore?.let { setScreen(it) }; lookBefore?.let { setLook(it) }; resBefore?.let { setRes(it) }; showScreen = false }
+    val hasPicture = screen != null || look != null || res != null
 
     // Physical buttons: A = use the preset under the ring, or Play if it's already in use; Start = Play;
     // D-pad = move the ring, X = Edit,
@@ -1496,14 +1503,23 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         if (showScreen && hasPicture) {
             // Picture panel open: L1 / R1 = Screen / Look tab; Screen: Ⓨ = 4:3 / 16:9, ◀ ▶ = card;
             // Look: the D-pad moves on the grid. Ⓐ Done, Ⓑ Cancel; nothing else reaches the page.
-            val onLook = look != null && (pictureTab == 1 || sc == null)
+            val shownTab = if (pictureTab in picTabs) pictureTab else picTabs.first()
+            val onLook = shownTab == 1
+            val onRes = shownTab == 2
             val lk = look
+            val rs = res
+            if (onRes && rs != null && e.action == KeyEvent.ACTION_DOWN) when (e.keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT -> { setRes(io.github.hiramrg.delphis.core.Resolution.step(rs, -1)); return@rememberUpdatedState true }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> { setRes(io.github.hiramrg.delphis.core.Resolution.step(rs, 1)); return@rememberUpdatedState true }
+                KeyEvent.KEYCODE_DPAD_UP -> { setRes(io.github.hiramrg.delphis.core.Resolution.step(rs, -3)); return@rememberUpdatedState true }
+                KeyEvent.KEYCODE_DPAD_DOWN -> { setRes(io.github.hiramrg.delphis.core.Resolution.step(rs, 3)); return@rememberUpdatedState true }
+            }
             if (e.action == KeyEvent.ACTION_DOWN) when (e.keyCode) {
-                KeyEvent.KEYCODE_BUTTON_L1 -> if (sc != null) pictureTab = 0
-                KeyEvent.KEYCODE_BUTTON_R1 -> if (look != null) pictureTab = 1
-                KeyEvent.KEYCODE_BUTTON_Y -> if (!onLook && sc != null && e.repeatCount == 0) setScreen(sc.copy(shape = if (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD else io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE))
-                KeyEvent.KEYCODE_DPAD_LEFT -> if (onLook && lk != null) setLook(lookStep(lk, -1)) else if (sc != null) setScreen(screenStep(sc, -1))
-                KeyEvent.KEYCODE_DPAD_RIGHT -> if (onLook && lk != null) setLook(lookStep(lk, 1)) else if (sc != null) setScreen(screenStep(sc, 1))
+                KeyEvent.KEYCODE_BUTTON_L1 -> if (e.repeatCount == 0) picTabs.getOrNull(picTabs.indexOf(shownTab) - 1)?.let { pictureTab = it }
+                KeyEvent.KEYCODE_BUTTON_R1 -> if (e.repeatCount == 0) picTabs.getOrNull(picTabs.indexOf(shownTab) + 1)?.let { pictureTab = it }
+                KeyEvent.KEYCODE_BUTTON_Y -> if (!onLook && !onRes && sc != null && e.repeatCount == 0) setScreen(sc.copy(shape = if (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD else io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE))
+                KeyEvent.KEYCODE_DPAD_LEFT -> if (onLook && lk != null) setLook(lookStep(lk, -1)) else if (!onRes && sc != null) setScreen(screenStep(sc, -1))
+                KeyEvent.KEYCODE_DPAD_RIGHT -> if (onLook && lk != null) setLook(lookStep(lk, 1)) else if (!onRes && sc != null) setScreen(screenStep(sc, 1))
                 KeyEvent.KEYCODE_DPAD_UP -> if (onLook && lk != null) setLook(lookStep(lk, -3))
                 KeyEvent.KEYCODE_DPAD_DOWN -> if (onLook && lk != null) setLook(lookStep(lk, 3))
                 KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> if (e.repeatCount == 0) showScreen = false
@@ -1571,7 +1587,11 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                 }
                 // One Picture chip for the screen (GameCube) and the look: "▭ 16:9 · ✦ CRT".
                 if (hasPicture) {
-                    val parts = listOfNotNull(screen?.let { if (look != null) "▭ " + (if (it.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) "16:9" else "4:3") else "▭ " + screenChipLabel(it, screenGid, act.prefs.gcUseHack) }, look?.let { "✦ " + it.label })
+                    val parts = listOfNotNull(
+                        screen?.let { if (look != null) "▭ " + (if (it.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) "16:9" else "4:3") else "▭ " + screenChipLabel(it, screenGid, act.prefs.gcUseHack) },
+                        look?.let { "✦ " + it.label },
+                        res?.takeIf { it != io.github.hiramrg.delphis.core.Resolution.Level.DOLPHIN }?.let { "▣ " + it.short },
+                    ).ifEmpty { listOf("▣ Picture") }
                     GameChip(parts.joinToString(" · "), if (multiplayer) "L3" else "⊖") { openScreen() }
                 }
                 Spacer(Modifier.weight(1f))
@@ -1649,6 +1669,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         sc, screenGid, act.prefs.gcUseHack, coverColour, { setScreen(it) },
         look, { setLook(it) },
         onCancel = { cancelScreen() }, onDone = { showScreen = false },
+        res = res, onRes = { setRes(it) }, advice = resAdvice,
     )
     }
 }

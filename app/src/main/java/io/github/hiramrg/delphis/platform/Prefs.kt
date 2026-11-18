@@ -324,6 +324,10 @@ class Prefs(context: Context) {
     var defaultLook: io.github.hiramrg.delphis.core.Looks.Look
         get() = io.github.hiramrg.delphis.core.Looks.byName(sp.getString("look_default", null)) ?: io.github.hiramrg.delphis.core.Looks.Look.ORIGINAL
         set(v) = sp.edit().putString("look_default", v.name).apply()
+    /** The game's resolution (Dolphin's own setting until one is picked). */
+    fun resolutionFor(gameId: String): io.github.hiramrg.delphis.core.Resolution.Level =
+        io.github.hiramrg.delphis.core.Resolution.byName(sp.getString("res_$gameId", null)) ?: io.github.hiramrg.delphis.core.Resolution.Level.DOLPHIN
+    fun setResolutionFor(gameId: String, level: io.github.hiramrg.delphis.core.Resolution.Level) = sp.edit().putString("res_$gameId", level.name).apply()
     fun lookFor(gameKey: String): io.github.hiramrg.delphis.core.Looks.Look =
         io.github.hiramrg.delphis.core.Looks.byName(sp.getString("look_$gameKey", null)) ?: defaultLook
     fun setLookFor(gameKey: String, look: io.github.hiramrg.delphis.core.Looks.Look) = sp.edit().putString("look_$gameKey", look.name).apply()

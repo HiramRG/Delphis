@@ -160,26 +160,36 @@ fun BoxScope.PicturePanel(
     choice: Choice?, gameId: String?, useHack: Boolean, colour: Int, onPick: (Choice) -> Unit,
     look: io.github.hiramrg.delphis.core.Looks.Look?, onLook: (io.github.hiramrg.delphis.core.Looks.Look) -> Unit,
     onCancel: () -> Unit, onDone: () -> Unit, doneLabel: String = "Done", note: String? = null, compact: Boolean = false,
+    res: io.github.hiramrg.delphis.core.Resolution.Level? = null, onRes: (io.github.hiramrg.delphis.core.Resolution.Level) -> Unit = {},
+    advice: io.github.hiramrg.delphis.platform.DeviceInfo.ResolutionAdvice? = null,
 ) {
     val c = LocalWii.current
     Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.6f)).clickable(onClick = onCancel))
-    val showLook = look != null && (tab == 1 || choice == null)
+    val tabs = pictureTabs(choice != null, look != null, res != null)
+    val shown = if (tab in tabs) tab else tabs.first()
+    val showLook = shown == 1
+    val showRes = shown == 2
     PopupPanel(
         "Picture · $gameTitle",
-        if (showLook) "Look · how should the picture look?" else if (choice!!.shape == Shape.WIDE) "Screen · 16:9: stretch it or show more of the world?" else "Screen · 4:3: what goes in the sides?",
+        when {
+            showRes -> "Resolution · how sharp should it be?"
+            showLook -> "Look · how should the picture look?"
+            choice!!.shape == Shape.WIDE -> "Screen · 16:9: stretch it or show more of the world?"
+            else -> "Screen · 4:3: what goes in the sides?"
+        },
         Modifier.align(if (compact) Alignment.TopCenter else Alignment.Center).padding(top = if (compact) 6.dp else 0.dp)
             .fillMaxWidth(if (compact) 0.97f else 0.9f).clickable(enabled = false) {},
-        corner = if (choice != null && look != null) ({
+        corner = if (tabs.size > 1) ({
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (!compact) KeyIcon("L1")
-                Segmented(listOf(0 to "▭ Screen", 1 to "✦ Look"), if (showLook) 1 else 0, onTab)
+                Segmented(tabs.map { it to when (it) { 0 -> "▭ Screen"; 1 -> "✦ Look"; else -> "▣ Sharpness" } }, shown, onTab)
                 if (!compact) KeyIcon("R1")
             }
         }) else null,
         buttons = {
             if (note != null) Text(note, fontSize = 11.sp, color = c.textDim, modifier = Modifier.weight(1f), lineHeight = 14.sp)
             else if (!compact) Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                KeyIcon(if (showLook) "DPAD" else "DPAD_LR"); Text("Choose", fontSize = 12.sp, color = c.textDim)
+                KeyIcon(if (showLook || showRes) "DPAD" else "DPAD_LR"); Text("Choose", fontSize = 12.sp, color = c.textDim)
             }
             PanelBtn("Cancel", if (compact) null else "B", false, onClick = onCancel)
             PanelBtn(doneLabel, if (compact) null else "A", true, onClick = onDone)
@@ -189,7 +199,13 @@ fun BoxScope.PicturePanel(
         // tabs doesn't make anything jump. Screen's cards fill it in one row, Look's six in two rows.
         val area = if (compact) 150.dp else 190.dp
         Row(Modifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (!showLook) {
+            if (showRes) {
+                CapsLabel("Applies when the game starts", Modifier.weight(1f))
+                if (advice != null) Text(
+                    "★ ${io.github.hiramrg.delphis.core.Resolution.forScale(advice.scale).short} suits this device", fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold, color = Color(0xFF6BCB77), maxLines = 1,
+                )
+            } else if (!showLook) {
                 CapsLabel(if (choice!!.shape == Shape.WIDE) "16:9 fill" else "Sides · change right away", Modifier.weight(1f))
                 Segmented(listOf(Shape.STANDARD to "4:3", Shape.WIDE to "16:9"), choice.shape, { onPick(choice.copy(shape = it)) })
                 if (!compact) KeyIcon("Y")
@@ -198,7 +214,19 @@ fun BoxScope.PicturePanel(
                 if (!compact) Text("Only the final picture: same game speed", fontSize = 11.sp, color = c.textDim, maxLines = 1)
             }
         }
-        if (!showLook) {
+        if (showRes) {
+            // Narrow (the in-game menu): two per row, without the descriptions, so every name fits.
+            Column(Modifier.fillMaxWidth().height(if (compact) 186.dp else area), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                io.github.hiramrg.delphis.core.Resolution.Level.entries.chunked(if (compact) 2 else 3).forEach { row ->
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { l -> ResolutionCard(l, l == res, advice?.scale, !compact, Modifier.weight(1f).fillMaxHeight()) { onRes(l) } }
+                    }
+                }
+            }
+            if (advice != null) Text(
+                resolutionWhy(advice), fontSize = 11.sp, lineHeight = 14.sp, color = c.textDim,
+            )
+        } else if (!showLook) {
             BoxWithConstraints(Modifier.fillMaxWidth().height(area)) {
                 val w = (maxWidth - 16.dp) / 3
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { ScreenChoices(choice!!, gameId, useHack, colour, w, showSub = !compact, cardH = area, onPick = onPick) }
@@ -211,6 +239,43 @@ fun BoxScope.PicturePanel(
                     }
                 }
             }
+        }
+    }
+}
+
+/** The Picture panel's tabs that apply: 0 Screen (GameCube), 1 Look, 2 Resolution. */
+fun pictureTabs(screen: Boolean, look: Boolean, res: Boolean): List<Int> =
+    listOfNotNull(0.takeIf { screen }, 1.takeIf { look }, 2.takeIf { res }).ifEmpty { listOf(0) }
+
+/** Why Delphis suggests the level it does, in one or two short sentences. */
+fun resolutionWhy(a: io.github.hiramrg.delphis.platform.DeviceInfo.ResolutionAdvice): String {
+    val level = io.github.hiramrg.delphis.core.Resolution.forScale(a.scale).short
+    val chip = if (a.known && a.chip != null) "${a.chip} chip, " else ""
+    return "Sharper pictures work the graphics chip harder. For your ${a.device} (${chip}${a.screen} screen) Delphis suggests $level" +
+        (if (a.known) "" else ", a guess since it doesn't know this chip") + ". If the game stutters or gets hot, go one step down."
+}
+
+@Composable
+private fun ResolutionCard(l: io.github.hiramrg.delphis.core.Resolution.Level, on: Boolean, recommended: Int?, detail: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(12.dp)
+    val fit = recommended?.let { io.github.hiramrg.delphis.core.Resolution.fit(l, it) }
+    Column(
+        modifier.focusRing(shape).clip(shape).background(if (on) (if (c.dark) Color(0xFF173444) else c.accentSoft) else (if (c.dark) Color(0xFF20252B) else c.card))
+            .border(if (on) 3.dp else 2.dp, if (on) Sel else c.cardBorder, shape).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(l.label, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, modifier = Modifier.weight(1f, fill = false), onTextLayout = { TextFit.check(l.label, it) })
+            if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF6BCB77))
+        }
+        if (detail) Text(l.detail, fontSize = 10.5.sp, color = c.textDim, maxLines = 1, lineHeight = 13.sp)
+        when (fit) {
+            io.github.hiramrg.delphis.core.Resolution.Fit.RECOMMENDED -> CostTag(fit.label, Color(0xFF6BCB77), Color(0xFF1F3B2A))
+            io.github.hiramrg.delphis.core.Resolution.Fit.MAYBE -> CostTag(fit.label, Color(0xFFF5C542), Color(0xFF3D331A))
+            io.github.hiramrg.delphis.core.Resolution.Fit.SLOW -> CostTag(fit.label, Color(0xFFFF8A80), Color(0xFF3D1F1F))
+            io.github.hiramrg.delphis.core.Resolution.Fit.FAST -> CostTag(fit.label, c.textDim, if (c.dark) Color(0xFF2A3038) else c.cardBorder)
+            null -> {}
         }
     }
 }

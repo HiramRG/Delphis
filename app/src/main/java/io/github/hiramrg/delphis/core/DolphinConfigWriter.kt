@@ -271,10 +271,10 @@ object DolphinConfigWriter {
     }
 
     /** Removes the companion's override from a game INI (used by "Restore Dolphin defaults"). */
-    fun clearGameIni(existing: String): String = IniEditor(existing).apply {
+    fun clearGameIni(existing: String): String = Resolution.applyToGameIni(IniEditor(existing).apply {
         remove("Controls", "WiimoteProfile1")
         remove("Controls", "PadProfile1")
-    }.toString()
+    }.toString(), Resolution.Level.DOLPHIN)
 }
 
 /** Minimal line-preserving INI editor: enough for Dolphin's simple `key = value` files. */
