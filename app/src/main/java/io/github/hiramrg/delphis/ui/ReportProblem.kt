@@ -104,7 +104,7 @@ fun ReportProblemPanel(act: MainActivity) {
                     if (game != null) Text("Last game: $game", fontSize = 11.5.sp, color = c.textDim, maxLines = 2)
                     Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         PanelBtn("Cancel", "B", false, Modifier.weight(1f)) { act.reportOpen = false }
-                        PanelBtn("Open the report on GitHub", "A", true, Modifier.weight(1.8f)) { act.sendReport() }
+                        PanelBtn("Open on GitHub", "A", true, Modifier.weight(1.8f)) { act.sendReport() }
                     }
                 }
                 Column(

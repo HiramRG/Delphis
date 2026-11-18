@@ -692,27 +692,28 @@ private fun GameInfoCard(act: MainActivity, g: GameEntry, focused: Boolean, cont
         }
         // About the game.
         Column(Modifier.weight(1.25f).fillMaxHeight()) {
-            Text(label.uppercase(), fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp, color = c.accentText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // (Explicit line heights: Material's 24 sp would push the hint line out of the card.)
+            FitText(label.uppercase(), TextStyle(fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp, color = c.accentText, lineHeight = 13.sp), maxLines = 1)
             Spacer(Modifier.height(4.dp))
             CardTitle(g.info.title)
             Spacer(Modifier.weight(1f))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PlatformTag(g.info.platform, small = true)
-                Text("🕒 " + if (playMs > 60_000) formatPlayTime(playMs) + " played" else "Not played yet", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 1)
+                Text("🕒 " + if (playMs > 60_000) formatPlayTime(playMs) + " played" else "Not played yet", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 1, lineHeight = 16.sp)
             }
             Spacer(Modifier.height(7.dp))
             if (ach != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text("🏆 ${ach.unlocked} / ${ach.total}", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 1)
+                Text("🏆 ${ach.unlocked} / ${ach.total}", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 1, lineHeight = 16.sp)
                 Box(Modifier.weight(1f).height(5.dp).clip(RoundedCornerShape(50)).background(c.cardBorder)) {
                     Box(Modifier.fillMaxHeight().fillMaxWidth((ach.percent / 100f).coerceIn(0.02f, 1f)).clip(RoundedCornerShape(50)).background(Color(0xFFF5C542)))
                 }
-                Text("${ach.percent}%", fontSize = 11.sp, color = c.textDim, maxLines = 1)
+                Text("${ach.percent}%", fontSize = 11.sp, color = c.textDim, maxLines = 1, lineHeight = 15.sp)
                 if (ach.savedAt != null) OfflineTag()
                 KeyIcon("R3", size = 16.dp)
-            } else Text("🏆 No achievements for this game", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1)
-            Box(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(1.dp).background(c.cardBorder.copy(alpha = 0.6f)))
+            } else Text("🏆 No achievements for this game", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1, lineHeight = 16.sp)
+            Box(Modifier.padding(vertical = 7.dp).fillMaxWidth().height(1.dp).background(c.cardBorder.copy(alpha = 0.6f)))
             val suggestion = act.homeRow == HomeRow.FAVORITES && g.key !in favorites
-            HintText(PadGlyphs.or(if (suggestion) "Ⓐ Add to favorites  Ⓧ Game page" else "Ⓐ Play  Ⓧ Game page", "Tap to play"), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = if (focused) c.text else c.textDim)
+            HintText(PadGlyphs.or(if (suggestion) "Ⓐ Add to favorites  Ⓧ Game page" else "Ⓐ Play  Ⓧ Game page", "Tap to play"), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = if (focused) c.text else c.textDim, lineHeight = 19.sp)
         }
         // Ready to play: what loads when you press Play.
         val pshape = RoundedCornerShape(14.dp)
@@ -720,7 +721,7 @@ private fun GameInfoCard(act: MainActivity, g: GameEntry, focused: Boolean, cont
             Modifier.weight(1f).fillMaxHeight().clip(pshape).background(if (c.dark) Color(0xFF1D2127) else c.bg).border(1.5.dp, c.cardBorder.copy(alpha = 0.7f), pshape).padding(12.dp),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("✓ READY TO PLAY", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp, color = c.green, maxLines = 1)
+            Text("✓ READY TO PLAY", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp, color = c.green, maxLines = 1, lineHeight = 13.sp)
             ReadyRow(Icons.Outlined.SportsEsports, "Controls", preset?.name ?: "Choose on the game page", edited = preset != null && act.store.isEdited(preset.id))
             ReadyRow(Icons.Outlined.Restore, "Starts from", if (autosave) "Your autosave" else "The start")
             ReadyRow(Icons.Outlined.Crop169, "Screen", screenGid?.let { screenChipLabel(act.prefs.screenFor(it), it, act.prefs.gcUseHack) } ?: "16:9")
@@ -737,7 +738,7 @@ private fun ReadyRow(icon: androidx.compose.ui.graphics.vector.ImageVector, labe
             Icon(icon, null, tint = c.accentText, modifier = Modifier.size(17.dp))
         }
         Column {
-            Text(label.uppercase(), fontSize = 9.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp, color = c.textDim, maxLines = 1)
+            Text(label.uppercase(), fontSize = 9.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp, color = c.textDim, maxLines = 1, lineHeight = 12.sp)
             Text(
                 androidx.compose.ui.text.buildAnnotatedString {
                     append(withOrangeTags(value, c.orange))
@@ -1548,7 +1549,8 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             Box(Modifier.weight(1f, fill = false).aspectRatio(0.72f).clip(RoundedCornerShape(14.dp))) {
                 Cover(act, game, act.prefs.showCovers, Modifier.fillMaxSize(), titleSize = 14)
             }
-            Text(game.info.title, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 19.sp)
+            // Two lines when it fits, otherwise one line that scrolls (never cut).
+            FitText(game.info.title, TextStyle(fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 19.sp, color = c.text))
             Text(platformLabel(game.info.platform) + " · " + playSummary(act, game), fontSize = 11.sp, color = c.textDim, maxLines = 2)
             if (rememberHasAutosave(act, game)) Text("▶ Resumes from autosave", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, maxLines = 1)
             else if (canAutosave && !gameAutosave && io.github.hiramrg.delphis.core.AutosaveRules.offByDefault(gameId)) Text(
@@ -1588,15 +1590,16 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                             p.browsing -> HintText(PadGlyphs.or("Ⓐ USE THESE CONTROLS", "TAP TO USE THESE CONTROLS"), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, letterSpacing = 1.sp)
                             else -> SelectedControlsTitle(10.sp)
                         }
-                        Text(
+                        // A long name scrolls rather than being cut.
+                        FitText(
                             if (shown == null) androidx.compose.ui.text.AnnotatedString(p.suggestion.question)
                             else androidx.compose.ui.text.buildAnnotatedString {
                                 append(withOrangeTags(shown.name, c.orange))
                                 if (p.isEdited(shown)) withStyle(androidx.compose.ui.text.SpanStyle(color = EditedAmber)) { append("  ●") }
                             },
-                            fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            TextStyle(fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = c.text), maxLines = 1,
                         )
-                        shown?.let { Text(it.controller.label, fontSize = 11.sp, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        shown?.let { FitText(it.controller.label, TextStyle(fontSize = 11.sp, color = c.textDim), maxLines = 1) }
                     }
                     PanelBtn(if (showList) "Done" else "Change", "Y", false, Modifier.then(if (showList) Modifier.border(2.dp, c.accent, RoundedCornerShape(50)) else Modifier)) { showList = !showList }
                     PanelBtn("✎ Edit", "X", false, enabled = p.editTarget != null) { p.editing = true }

@@ -456,6 +456,24 @@ fun Modifier.scrollingLine(initialDelayMillis: Int = 1200, repeatDelayMillis: In
         else Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = initialDelayMillis, repeatDelayMillis = repeatDelayMillis, velocity = velocity),
     )
 
+/** Words that wrap to [maxLines] when they fit, otherwise one line that scrolls slowly: never cut. */
+@Composable
+fun FitText(text: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier, maxLines: Int = 2) =
+    FitText(androidx.compose.ui.text.AnnotatedString(text), style, modifier, maxLines)
+
+@Composable
+fun FitText(text: androidx.compose.ui.text.AnnotatedString, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier, maxLines: Int = 2) {
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val maxW = constraints.maxWidth
+        val fits = remember(text, style, maxW, maxLines) {
+            !measurer.measure(text, style, maxLines = maxLines, constraints = androidx.compose.ui.unit.Constraints(maxWidth = maxW)).hasVisualOverflow
+        }
+        if (fits) Text(text, style = style, maxLines = maxLines)
+        else Text(text, style = style, maxLines = 1, softWrap = false, modifier = Modifier.fillMaxWidth().scrollingLine())
+    }
+}
+
 /** Marks text that scrolls on purpose (the layout check reads it whole, not as cut off). */
 val MarqueeText = androidx.compose.ui.semantics.SemanticsPropertyKey<Boolean>("DelphisMarquee")
 

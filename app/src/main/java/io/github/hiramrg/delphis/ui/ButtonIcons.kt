@@ -201,14 +201,14 @@ fun hasKeys(text: String) = tokens(text).any { it.first }
 fun HintText(
     text: String, modifier: Modifier = Modifier, fontSize: TextUnit = 12.sp,
     color: Color = LocalWii.current.textDim, fontWeight: FontWeight? = null, textAlign: TextAlign? = null,
-    letterSpacing: TextUnit = TextUnit.Unspecified,
+    letterSpacing: TextUnit = TextUnit.Unspecified, lineHeight: TextUnit = TextUnit.Unspecified,
 ) {
     // Touch controls: no button icons; what's left is tidied ("↺ Earlier autosaves · R2" → "↺ Earlier autosaves").
     if (PadGlyphs.touch) {
         val words = touchWords(text)
         if (words.any { it.isLetter() }) Text(
             words, modifier, color = color, fontSize = fontSize, fontWeight = fontWeight, textAlign = textAlign,
-            letterSpacing = letterSpacing, maxLines = 2, onTextLayout = { TextFit.check(words, it) },
+            letterSpacing = letterSpacing, lineHeight = lineHeight, maxLines = 2, onTextLayout = { TextFit.check(words, it) },
         )
         return
     }
@@ -229,7 +229,7 @@ fun HintText(
             }
         }
     }
-    Text(annotated, modifier, color = color, fontSize = fontSize, fontWeight = fontWeight, textAlign = textAlign, letterSpacing = letterSpacing, inlineContent = inline, maxLines = 2, onTextLayout = { TextFit.check(text, it) })
+    Text(annotated, modifier, color = color, fontSize = fontSize, fontWeight = fontWeight, textAlign = textAlign, letterSpacing = letterSpacing, lineHeight = lineHeight, inlineContent = inline, maxLines = 2, onTextLayout = { TextFit.check(text, it) })
 }
 
 /** Splits a button label "Ⓐ Play" into ("Play", "A"); labels without a button glyph give null. */
