@@ -208,56 +208,6 @@ fun BoxScope.PicturePanel(
                     fontWeight = FontWeight.Bold, color = Color(0xFF6BCB77), maxLines = 1,
                 )
             } else if (!showLook) {
-                CapsLabel(if (choice!!.shape == Shape.WIDE) "16:9 fill" else "Sides · change right away", Modifier.weight(1f))
-                Segmented(listOf(Shape.STANDARD to "4:3", Shape.WIDE to "16:9"), choice.shape, { onPick(choice.copy(shape = it)) })
-                if (keys) KeyIcon("Y")
-            } else {
-                CapsLabel("Applies when the game starts", Modifier.weight(1f))
-                if (!compact) Text("Only the final picture: same game speed", fontSize = 11.sp, color = c.textDim, maxLines = 1)
-            }
-        }
-        if (showRes) {
-            if (compact) {
-                // The in-game menu: one line per level, its tag on the right, so everything fits the panel.
-                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    io.github.hiramrg.delphis.core.Resolution.Level.entries.forEach { l -> ResolutionLine(l, l == res, advice?.scale) { onRes(l) } }
-                }
-            } else {
-                Column(Modifier.fillMaxWidth().height(area), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    io.github.hiramrg.delphis.core.Resolution.Level.entries.chunked(3).forEach { row ->
-                        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            row.forEach { l -> ResolutionCard(l, l == res, advice?.scale, true, Modifier.weight(1f).fillMaxHeight()) { onRes(l) } }
-                        }
-                    }
-                }
-                // Short screens (a phone held sideways) keep only the ★ line above: the reason would push the buttons off.
-                if (advice != null && androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp >= 480) Text(
-                    resolutionWhy(advice), fontSize = 11.sp, lineHeight = 14.sp, color = c.textDim,
-                )
-            }
-        } else if (!showLook) {
-                CapsLabel(if (choice!!.shape == Shape.WIDE) "16:9 fill" else "Sides · change right away", Modifier.weight(1f))
-                Segmented(listOf(Shape.STANDARD to "4:3", Shape.WIDE to "16:9"), choice.shape, { onPick(choice.copy(shape = it)) })
-                if (keys) KeyIcon("Y")
-            } else {
-                CapsLabel("Applies when the game starts", Modifier.weight(1f))
-                if (!compact) Text("Only the final picture: same game speed", fontSize = 11.sp, color = c.textDim, maxLines = 1)
-            }
-        }
-        if (showRes) {
-            // Narrow (the in-game menu): two per row, without the descriptions, so every name fits.
-            Column(Modifier.fillMaxWidth().height(if (compact) 186.dp else area), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                io.github.hiramrg.delphis.core.Resolution.Level.entries.chunked(if (compact) 2 else 3).forEach { row ->
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEach { l -> ResolutionCard(l, l == res, advice?.scale, !compact, Modifier.weight(1f).fillMaxHeight()) { onRes(l) } }
-                    }
-                }
-            }
-            // Short screens (a phone held sideways) keep only the ★ line above: the reason would push the buttons off.
-            if (advice != null && androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp >= 480) Text(
-                resolutionWhy(advice), fontSize = 11.sp, lineHeight = 14.sp, color = c.textDim,
-            )
-        } else if (!showLook) {
             BoxWithConstraints(Modifier.fillMaxWidth().height(area)) {
                 val w = (maxWidth - 16.dp) / 3
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { ScreenChoices(choice!!, gameId, useHack, colour, w, showSub = !compact, cardH = area, onPick = onPick) }
