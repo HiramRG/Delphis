@@ -107,9 +107,10 @@ class DolphinExitService : AccessibilityService() {
                 s.menuShortcut(true)
                 s.shortcut = prefs.menuShortcut
                 CrashLog.event("one screen game: pill ${if (prefs.pillShown) "on" else "off"}, shortcut ${prefs.menuShortcutLabel}, key filter ${if (s.filterActive()) "on" else "NOT on"}")
-                if (prefs.pillShown) s.pill.start(showFull, prefs.pillOpacity, controller, prefs.menuShortcutLabel) else s.pill.stop()
+                s.pillArgs = if (prefs.pillShown) PillArgs(showFull, prefs.pillOpacity, controller, prefs.menuShortcutLabel) else null
+                s.pill.stop()
                 s.handler.removeCallbacks(s.pillCheck)
-                s.handler.postDelayed(s.pillCheck, 1000)
+                s.handler.post(s.pillCheck)
             }
         }
 
@@ -123,7 +124,8 @@ class DolphinExitService : AccessibilityService() {
         /** One screen: the game was closed. */
         fun gameEnded() {
             val s = instance ?: return
-            s.handler.post { s.handler.removeCallbacks(s.pillCheck); s.pill.stop(); s.menuShortcut(false) }
+            CrashLog.event("one screen game ended (session ${GameWatch.session != null})")
+            s.handler.post { s.handler.removeCallbacks(s.pillCheck); s.pill.stop(); s.pillArgs = null; s.menuShortcut(false) }
         }
 
         fun hideLoading(delayMs: Long = 0) { instance?.let { s -> s.handler.post { s.loading.hide(delayMs) } } }
@@ -184,9 +186,23 @@ class DolphinExitService : AccessibilityService() {
     private val sideFill by lazy { SideFill(this) }
     private val pill by lazy { DelphisPill(this) { openInGameMenu() } }
     /** While the pill is up: shown only while Dolphin's game is in front (not Delphis' menu, Home or another app). */
+    private data class PillArgs(val showFull: Boolean, val opacity: Int, val controller: String, val shortcut: String)
+    /** What the pill shows for the running game (null = pill off). */
+    private var pillArgs: PillArgs? = null
+    /**
+     * While a one-screen game runs (until [gameEnded]): keeps the pill attached (puts it back if anything
+     * removed it) and shows it only while the game is in front. Every change is logged for Diagnostics.
+     */
     private val pillCheck: Runnable = object : Runnable {
         override fun run() {
-            if (!pill.showing) return
+            val args = pillArgs
+            if (args == null || !shortcutOn) return
+            if (!pill.showing) {
+                val ok = pill.start(args.showFull, args.opacity, args.controller, args.shortcut)
+                CrashLog.event(if (ok) "pill attached" else "pill couldn't be attached")
+                if (ok) pillArgs = args.copy(showFull = false) // the full pill only the first time
+                if (!ok) { handler.postDelayed(this, 3000); return }
+            }
             val state = gameState()
             if (state != lastPillState) { lastPillState = state; CrashLog.event("pill: $state") }
             pill.setVisible(state == "in front")

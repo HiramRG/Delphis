@@ -57,13 +57,13 @@ object CrashLog {
 
     fun read(): String? = runCatching { file?.takeIf { it.exists() }?.readText() }.getOrNull()
 
-    /** A short timestamped line in the event log (kept to the last 15 lines). */
+    /** A short timestamped line in the event log (kept to the last 30 lines). */
     fun event(text: String) {
         runCatching {
             val f = File(file?.parentFile ?: return, "events.txt")
             val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
             val lines = (if (f.exists()) f.readLines() else emptyList()) + "$time  $text"
-            f.writeText(lines.takeLast(15).joinToString("\n"))
+            f.writeText(lines.takeLast(30).joinToString("\n"))
         }
     }
 
