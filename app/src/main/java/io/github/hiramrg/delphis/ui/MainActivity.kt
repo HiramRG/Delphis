@@ -11,6 +11,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.nativeKeyCode
@@ -81,6 +82,8 @@ class MainActivity : ComponentActivity() {
     var foundPrompt by mutableStateOf(false)
     /** True when Delphis runs on one screen (phones, tablets, or Screen mode "One"). */
     var oneScreen by mutableStateOf(false)
+    /** Settings → Display → Interface size (one screen): 0 Automatic, 1 Normal. */
+    var uiSize by mutableIntStateOf(0)
     /** One screen: the "No controller found" pop-up, and the controller that connected while it was open. */
     var noPadPrompt by mutableStateOf(false)
     var padConnected by mutableStateOf<String?>(null)
@@ -377,6 +380,7 @@ class MainActivity : ComponentActivity() {
         updater = Updater(this)
         checkForUpdates(silent = true)
         themeMode = prefs.themeMode
+        uiSize = prefs.uiSize
         io.github.hiramrg.delphis.platform.MenuSounds.init(this, prefs.menuSounds)
         // Release notes: once after an update; a fresh install just marks them as seen.
         val pkg = runCatching { packageManager.getPackageInfo(packageName, 0) }.getOrNull()
@@ -409,6 +413,10 @@ class MainActivity : ComponentActivity() {
             val dark = when (themeMode) { "dark" -> true; "auto" -> systemDark; else -> false }
             androidx.compose.runtime.SideEffect { darkTheme = dark }
             WiiTheme(dark) {
+                // Interface size (one screen): a big screen draws everything bigger, the way the Thor's is filled.
+                androidx.compose.foundation.layout.BoxWithConstraints(androidx.compose.ui.Modifier.fillMaxSize()) {
+                val uiScale = if (oneScreen) UiScale.factor(uiSize, maxWidth.value, maxHeight.value) else 1f
+                ScaledUi(uiScale) {
                 BackHandler(enabled = screen != Screen.Home && screen != Screen.Setup) {
                     screen = when (screen) {
                         Screen.Diagnostics, Screen.GyroTest, Screen.ControllerCheck -> if (isSetUp()) Screen.Settings else Screen.Setup
@@ -480,6 +488,8 @@ class MainActivity : ComponentActivity() {
                         RunningGamePrompt(s.info.title, ::runningBack, ::runningQuit) { runningPrompt = false }
                     }
                     NoticeHost()
+                }
+                }
                 }
             }
         }

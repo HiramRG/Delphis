@@ -47,7 +47,7 @@ fun WhatsNewDialog(version: String, onDismiss: () -> Unit) {
     val c = LocalWii.current
     val focus = remember { FocusRequester() }
     val scroll = rememberScrollState()
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    ScaledDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         PopupPanel(
             "What's new" + if (version.isNotBlank()) " · version $version" else "", "What's new in Delphis",
             Modifier.width(480.dp).heightIn(max = 350.dp)

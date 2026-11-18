@@ -2369,6 +2369,15 @@ private fun ScreensSettings(act: MainActivity) {
             ToggleRow("Touch controls when no controller is connected", "Shows Dolphin's on-screen buttons; they hide when you connect one.", touch) { touch = it; prefs.touchWhenNoController = it }
             RowDivider()
             ToggleRow("Warn when no controller is found", "Asks when you open Delphis without one.", warn) { warn = it; prefs.warnNoController = it }
+            RowDivider()
+            val bigger = remember(act.uiSize) { UiScale.factor(0, act.resources.displayMetrics.widthPixels / act.resources.displayMetrics.density, act.resources.displayMetrics.heightPixels / act.resources.displayMetrics.density) }
+            SettingRow(
+                "Interface size",
+                "Automatic makes Delphis fill a big screen the way it fills the Thor's, so it looks the same everywhere. " +
+                    if (bigger > 1f) "On this screen: ${UiScale.label(bigger)}." else "This screen is already the Thor's size, so nothing changes.",
+            ) {
+                Segmented(listOf(0 to "Automatic", 1 to "Normal"), act.uiSize, { act.uiSize = it; prefs.uiSize = it })
+            }
         }
     }
     if (one) {

@@ -147,7 +147,7 @@ fun AchievementsDialog(p: GameProgress, onDismiss: () -> Unit) {
     val focus = remember { FocusRequester() }
     val state = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    ScaledDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         val shape = RoundedCornerShape(20.dp)
         AchievementList(
             p,
@@ -336,7 +336,7 @@ private fun RaSignInPanel(act: MainActivity, startUser: String, needToken: Boole
             onDone(profile)
         }
     }
-    androidx.compose.ui.window.Dialog(onDismissRequest = onCancel, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+    ScaledDialog(onDismissRequest = onCancel, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         PopupPanel(
             "RetroAchievements",
             when { needToken && needKey -> "Sign in Dolphin and Delphis"; needToken -> "Sign in Dolphin"; else -> "Connect Delphis" },

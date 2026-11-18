@@ -226,7 +226,7 @@ fun DontAskRow(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
 @Composable
 fun ConfirmDialog(caps: String?, title: String, sub: String?, confirm: String, cancel: String = "Cancel", onCancel: () -> Unit, onConfirm: () -> Unit) {
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
-    androidx.compose.ui.window.Dialog(onDismissRequest = onCancel, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+    ScaledDialog(onDismissRequest = onCancel, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         ConfirmPanel(
             caps, title, sub, confirm,
             androidx.compose.ui.Modifier.width(440.dp).then(

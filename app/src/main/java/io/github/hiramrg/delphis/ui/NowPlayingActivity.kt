@@ -116,6 +116,9 @@ open class NowPlayingActivity : ComponentActivity() {
     /** Bumped each time the one-screen menu opens, to put the cursor on ▶ Resume. */
     private var openSignal by mutableIntStateOf(0)
 
+    /** One screen: the Interface size factor (Settings → Display) for the panel. */
+    private var uiScale = 1f
+
     /** One screen: L1 / R1 switch the menu's tabs (sequence, direction). */
     private var tabStep by mutableStateOf(0 to 0)
 
@@ -204,7 +207,9 @@ open class NowPlayingActivity : ComponentActivity() {
             // A panel on the right of the game; a tap on the dimmed game beside it resumes.
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH)
             val dm = resources.displayMetrics
-            val width = minOf((470 * dm.density).toInt(), (dm.widthPixels * 0.66f).toInt())
+            // Interface size: on a big screen the panel is drawn bigger, like the rest of Delphis.
+            uiScale = UiScale.forScreen(this, prefs)
+            val width = minOf((470 * dm.density * uiScale).toInt(), (dm.widthPixels * 0.66f).toInt())
             window.setLayout(width, WindowManager.LayoutParams.MATCH_PARENT)
             window.setGravity(Gravity.END)
         } else window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
@@ -230,7 +235,7 @@ open class NowPlayingActivity : ComponentActivity() {
         setContent {
             WiiTheme(dark = true) {
                 session?.let { s ->
-                    if (panelMode) {
+                    if (panelMode) ScaledUi(uiScale) {
                         val c = LocalWii.current
                         val shape = RoundedCornerShape(20.dp)
                         Box(Modifier.fillMaxSize().padding(8.dp).clip(shape).background(c.bg).border(2.dp, c.accent, shape)) { NowPlaying(s) }

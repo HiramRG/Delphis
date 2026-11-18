@@ -354,6 +354,10 @@ class Prefs(context: Context) {
     var screenMode: Int
         get() = sp.getInt("screen_mode", 0).coerceIn(0, 2)
         set(v) = sp.edit().putInt("screen_mode", v).apply()
+    /** One screen: Interface size. 0 = Automatic (a big screen is filled the way the Thor's is), 1 = Normal (no scaling). */
+    var uiSize: Int
+        get() = sp.getInt("ui_size", 0).coerceIn(0, 1)
+        set(v) = sp.edit().putInt("ui_size", v.coerceIn(0, 1)).apply()
     /** One screen: Dolphin's on-screen buttons while no controller is connected. */
     var touchWhenNoController: Boolean
         get() = sp.getBoolean("touch_no_pad", true)

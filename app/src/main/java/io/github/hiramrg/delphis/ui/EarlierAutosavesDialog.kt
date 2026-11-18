@@ -63,7 +63,7 @@ fun EarlierAutosavesDialog(backups: List<AutosaveBackup>, onDismiss: () -> Unit,
     val c = LocalWii.current
     val focus = remember { FocusRequester() }
     var index by remember { mutableIntStateOf(0) }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    ScaledDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         PopupPanel(
             "Earlier autosaves", "Go back to an earlier autosave?",
             Modifier.width(440.dp)
