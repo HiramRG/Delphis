@@ -77,6 +77,30 @@ class MainActivity : ComponentActivity() {
     var updatePrompt by mutableStateOf(false)
     /** "A new version is ready to download" pop-up (Ⓐ Download / Ⓑ Later), shown once per new build. */
     var foundPrompt by mutableStateOf(false)
+    /** True when Delphis runs on one screen (phones, tablets, or Screen mode "One"). */
+    var oneScreen by mutableStateOf(false)
+    /** One screen: the "No controller found" pop-up, and the controller that connected while it was open. */
+    var noPadPrompt by mutableStateOf(false)
+    var padConnected by mutableStateOf<String?>(null)
+    private val padListener = object : android.hardware.input.InputManager.InputDeviceListener {
+        override fun onInputDeviceAdded(deviceId: Int) {
+            if (!noPadPrompt || padConnected != null) return
+            val pad = DeviceInfo.gamepads().firstOrNull() ?: return
+            padConnected = pad.name
+            window.decorView.postDelayed({ noPadPrompt = false; padConnected = null }, 2000)
+        }
+        override fun onInputDeviceRemoved(deviceId: Int) = Unit
+        override fun onInputDeviceChanged(deviceId: Int) = onInputDeviceAdded(deviceId)
+    }
+
+    /** Settings → Display → Screen mode changed: landscape on one screen, and the bottom-screen menu on or off. */
+    fun screenModeChanged() {
+        oneScreen = DeviceInfo.oneScreen(this)
+        requestedOrientation = if (oneScreen) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        MenuCompanion.close()
+        if (!oneScreen) window.decorView.postDelayed({ if (!isFinishing) MenuCompanion.show(this) }, 400)
+    }
     /** Bottom screen on Home: "controls" or "progress" (L3 flips it), and L2 flips its controls Thor | List. */
     var bottomView by mutableStateOf("controls")
     var homeControlsToggle by mutableIntStateOf(0)
@@ -212,6 +236,11 @@ class MainActivity : ComponentActivity() {
         } else if (prefs.whatsNewSeen < io.github.hiramrg.delphis.core.WhatsNew.RELEASE) {
             prefs.whatsNewSeen = io.github.hiramrg.delphis.core.WhatsNew.RELEASE
         }
+        // One screen (phones, tablets): Delphis is laid out for landscape, like the Thor's top screen.
+        oneScreen = DeviceInfo.oneScreen(this)
+        if (oneScreen) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        getSystemService(android.hardware.input.InputManager::class.java).registerInputDeviceListener(padListener, android.os.Handler(android.os.Looper.getMainLooper()))
+        if (oneScreen && prefs.warnNoController && isSetUp() && DeviceInfo.gamepads().isEmpty()) noPadPrompt = true
         games = library.cached()
         if (!isSetUp()) screen = Screen.Setup
         else if (games.isEmpty()) rescan()
@@ -270,6 +299,14 @@ class MainActivity : ComponentActivity() {
                         androidx.compose.runtime.LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
                     }
                 }
+                if (noPadPrompt && whatsNewVersion == null) NoControllerPrompt(
+                    padConnected,
+                    onTouch = { dontShow -> if (dontShow) prefs.warnNoController = false; noPadPrompt = false },
+                    onBluetooth = { dontShow ->
+                        if (dontShow) prefs.warnNoController = false
+                        runCatching { startActivity(android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    },
+                )
                 whatsNewVersion?.let { v ->
                     WhatsNewDialog(v) {
                         whatsNewVersion = null
@@ -542,6 +579,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        runCatching { getSystemService(android.hardware.input.InputManager::class.java).unregisterInputDeviceListener(padListener) }
         if (isFinishing) { MenuCompanion.close(); io.github.hiramrg.delphis.platform.MenuMusic.release() }
         super.onDestroy()
     }
@@ -576,11 +614,18 @@ class MainActivity : ComponentActivity() {
             GameLauncher.run(ctx) {
                 val applied = applyPreset(app, bridge, prefs, entry.info.gameId, preset)
                 val roles = DeviceInfo.screenRoles(app, prefs.swapScreens)
+                val session = GameSession(entry.uri, entry.fileName, entry.info, preset.id, applied, returnTo)
                 if (roles.bottomDisplayId != null) {
-                    val session = GameSession(entry.uri, entry.fileName, entry.info, preset.id, applied, returnTo)
                     val intent = session.writeTo(Intent(app, NowPlayingActivity::class.java))
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     val opts = ActivityOptions.makeBasic().setLaunchDisplayId(roles.bottomDisplayId).toBundle()
+                    runCatching { app.startActivity(intent, opts) }
+                } else {
+                    // One screen: the same view becomes Delphis' in-game menu. It opens first and Dolphin, launched
+                    // next, covers it; the Delphis pill or ⊖ + Start bring it over the game.
+                    val intent = session.writeTo(Intent(app, InGameMenuActivity::class.java))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    val opts = ActivityOptions.makeBasic().setLaunchDisplayId(roles.topDisplayId).toBundle()
                     runCatching { app.startActivity(intent, opts) }
                 }
                 val resumeId = entry.info.gameId?.takeIf {
@@ -596,7 +641,8 @@ class MainActivity : ComponentActivity() {
         suspend fun applyPreset(ctx: android.content.Context, bridge: DolphinBridge, prefs: Prefs, gameId: String?, preset: Preset): Boolean {
             val result = withContext(Dispatchers.IO) {
                 if (prefs.autoSaveResume) bridge.ensureSaveStatesEnabled()
-                bridge.ensureTouchOverlayOff()
+                // One screen and no controller: Dolphin's own touch buttons (the Thor never needs them).
+                bridge.setTouchOverlay(DeviceInfo.oneScreen(ctx) && prefs.touchWhenNoController && DeviceInfo.gamepads().isEmpty())
                 // Only Delphis' achievement badge: hide Dolphin's own while Delphis can show its badge (online,
                 // signed in, pop-ups on). Offline Delphis can't see unlocks, so Dolphin's messages come back.
                 val online = runCatching {

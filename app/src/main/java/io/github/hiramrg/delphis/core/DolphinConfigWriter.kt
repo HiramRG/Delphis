@@ -227,8 +227,11 @@ object DolphinConfigWriter {
      * real buttons, and Delphis' touch buttons and trackpad don't use it. An early trackpad build turned
      * it on and hid only the Wii buttons, which left GameCube games showing Dolphin's buttons.
      */
-    fun touchOverlayOff(existing: String): String = IniEditor(existing).apply {
-        set("Android", mapOf("ShowInputOverlay" to "False"))
+    fun touchOverlayOff(existing: String): String = touchOverlay(existing, false)
+
+    /** One screen with no controller: Dolphin's own on-screen buttons come back. */
+    fun touchOverlay(existing: String, on: Boolean): String = IniEditor(existing).apply {
+        set("Android", mapOf("ShowInputOverlay" to if (on) "True" else "False"))
     }.toString()
 
     /** Config/DSUClient.ini with Delphis' trackpad server added to Dolphin's DSU servers (keeping any others). */

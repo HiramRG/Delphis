@@ -22,7 +22,13 @@ class GamePicker(private val act: MainActivity, val game: GameEntry) {
      */
     var multiplayer by mutableStateOf(false)
         private set
-    private fun offered(list: List<Preset>) = if (multiplayer) list.filter { !Players.usesThorOnly(it) } else list
+    /** One screen: there's no bottom-screen trackpad, so trackpad presets aren't offered. */
+    private val oneScreen = io.github.hiramrg.delphis.platform.DeviceInfo.oneScreen(act)
+    private fun offered(list: List<Preset>) = when {
+        multiplayer -> list.filter { !Players.usesThorOnly(it) }
+        oneScreen -> list.filter { !it.isTrackpad }
+        else -> list
+    }
     /** The game's suggestions (edited versions in place of their originals). */
     val choices: List<Preset> get() { version; return offered(act.store.withEdits(game.key, suggestion.choices)) }
     val alternatives: List<Preset> get() { version; return offered(act.store.withEdits(game.key, suggestion.alternatives)) }

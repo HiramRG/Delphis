@@ -65,7 +65,8 @@ object Pads {
         val players = players(prefs, gameKey).ifEmpty { listOf(null) }
         // Gyro, tilt and trackpad only when the Thor plays alone; otherwise everyone gets the plain version.
         val solo = players.size == 1 && players[0]?.builtIn != false
-        val p = if (solo) preset else Players.multiplayerPreset(preset)
+        // One screen: no bottom-screen trackpad, so a trackpad preset plays as its plain version.
+        val p = if (solo && !(preset.isTrackpad && DeviceInfo.oneScreen(prefs.context))) preset else Players.multiplayerPreset(preset)
         return players.map { pad -> p to profileFor(pad, prefs) }
     }
 }

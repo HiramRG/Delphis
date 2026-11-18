@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
@@ -79,13 +80,33 @@ import io.github.hiramrg.delphis.core.BottomScreen
 /** Narrowest back-gesture zone assumed when Android reports none (immersive mode on some firmwares). */
 private val EDGE_MIN = 28.dp
 
-class NowPlayingActivity : ComponentActivity() {
+open class NowPlayingActivity : ComponentActivity() {
     companion object {
         /** Set when the game came back from the background and this screen is shown again. */
         const val EXTRA_RESUMED = "delphis.resumed"
     }
 
     private enum class Mode { VIEW, CHANGE, EDIT }
+
+    /**
+     * One screen (phones, tablets; see [InGameMenuActivity]): this view is Delphis' in-game menu, a panel
+     * over the game. It takes the controller's focus while open, Ⓑ / ▶ Resume hide it again, and nothing
+     * that belongs to the Thor's bottom screen (brightness, dimming, low refresh rate) is used.
+     */
+    protected open val panelMode: Boolean = false
+
+    /** One screen: hide the menu and give the game back the screen and the controller. */
+    protected fun resumeGame() {
+        moveTaskToBack(true)
+    }
+
+    /** Bumped each time the one-screen menu opens, to put the cursor on ▶ Resume. */
+    private var openSignal by mutableIntStateOf(0)
+
+    override fun onResume() {
+        super.onResume()
+        if (panelMode) openSignal++
+    }
 
     private lateinit var prefs: Prefs
     private lateinit var bridge: DolphinBridge
@@ -143,17 +164,40 @@ class NowPlayingActivity : ComponentActivity() {
         registerReceiver(screenReceiver, android.content.IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_USER_PRESENT)
         })
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+        if (panelMode) {
+            // A panel on the right of the game; a tap on the dimmed game beside it resumes.
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH)
+            val dm = resources.displayMetrics
+            val width = minOf((470 * dm.density).toInt(), (dm.widthPixels * 0.66f).toInt())
+            window.setLayout(width, WindowManager.LayoutParams.MATCH_PARENT)
+            window.setGravity(Gravity.END)
+        } else window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
-        preferLowRefreshRate()
+        if (!panelMode) preferLowRefreshRate()
         session = GameSession.from(intent)
         watch(session)
-        setContent { WiiTheme(dark = true) { session?.let { NowPlaying(it) } } }
-        blockSystemGestures()
+        setContent {
+            WiiTheme(dark = true) {
+                session?.let { s ->
+                    if (panelMode) {
+                        val c = LocalWii.current
+                        val shape = RoundedCornerShape(20.dp)
+                        Box(Modifier.fillMaxSize().padding(8.dp).clip(shape).background(c.bg).border(2.dp, c.accent, shape)) { NowPlaying(s) }
+                    } else NowPlaying(s)
+                }
+            }
+        }
+        if (!panelMode) blockSystemGestures()
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        // One screen: a tap on the game beside the menu resumes it.
+        if (panelMode && event.action == MotionEvent.ACTION_OUTSIDE) { resumeGame(); return true }
+        return super.onTouchEvent(event)
     }
 
     /**
@@ -185,7 +229,7 @@ class NowPlayingActivity : ComponentActivity() {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        if (focusSink != null) return
+        if (panelMode || focusSink != null) return
         val sink = object : View(this) {
             override fun dispatchKeyEvent(event: KeyEvent): Boolean = onSinkKey(event)
             override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean = onSinkMotion(event)
@@ -258,6 +302,7 @@ class NowPlayingActivity : ComponentActivity() {
 
     /** Lets the rest of the app know which game is running, to spot it stopping unexpectedly. */
     private fun watch(s: GameSession?) {
+        if (panelMode && s != null) DolphinExitService.gameStarted(this, s.key)
         GameWatch.session = s
         GameWatch.unexpectedStop.value = false
         GameWatch.suspended.value = false
@@ -273,6 +318,7 @@ class NowPlayingActivity : ComponentActivity() {
     override fun onDestroy() {
         removeFocusSink()
         runCatching { unregisterReceiver(screenReceiver) }
+        if (isFinishing && panelMode) DolphinExitService.gameEnded()
         if (isFinishing) { DolphinExitService.hideSides(); recordPlayTime(); session?.let { if (unsaved > 0) prefs.addPlayTime(it.key, unsaved) }; unsaved = 0L; GameWatch.session = null; GameWatch.onSuspended = null; GameWatch.suspended.value = false }
         super.onDestroy()
     }
@@ -313,6 +359,8 @@ class NowPlayingActivity : ComponentActivity() {
     private fun applyAndRestart(s: GameSession, preset: Preset, remember: Boolean) {
         busy = "Restarting the game with the new controls…"
         GameLauncher.run(this) {
+            // One screen: the menu steps aside first, so Dolphin is in front for its own menu (autosave, exit).
+            if (panelMode) { moveTaskToBack(true); delay(450) }
             val applied = MainActivity.applyPreset(this@NowPlayingActivity, bridge, prefs, s.info.gameId, preset)
             if (remember) prefs.setPresetFor(s.key, preset.id)
             val roles = DeviceInfo.screenRoles(this@NowPlayingActivity, prefs.swapScreens)
@@ -337,6 +385,7 @@ class NowPlayingActivity : ComponentActivity() {
     private fun backToMainMenu() {
         busy = "Closing the game…"
         GameLauncher.run(this) {
+            if (panelMode) { moveTaskToBack(true); delay(450) }
             val roles = DeviceInfo.screenRoles(this@NowPlayingActivity, prefs.swapScreens)
             bridge.closeDolphin(roles.topDisplayId, "Closing the game…")
             // Show the game list (or the frontend that started the game) on the top screen, where the game was, and close this one.
@@ -416,7 +465,7 @@ class NowPlayingActivity : ComponentActivity() {
         LaunchedEffect(startedAt) {
             val ctx = this@NowPlayingActivity
             io.github.hiramrg.delphis.platform.Achievements.watch(ctx, prefs, s.key, s.info) { popup ->
-                val where = prefs.raWhere
+                val where = if (panelMode) "top" else prefs.raWhere
                 var shownOnTop = false
                 if (where != "bottom") {
                     val badge = io.github.hiramrg.delphis.platform.Achievements.badge(ctx, popup.unlock.badgeUrl())
@@ -442,6 +491,9 @@ class NowPlayingActivity : ComponentActivity() {
                 showBrightness -> showBrightness = false
                 confirmExit || restartAction != null || helperPrompt != null -> { confirmExit = false; restartAction = null; helperPrompt = null }
                 mode != Mode.VIEW -> mode = Mode.VIEW
+                showAchievements -> showAchievements = false
+                showPicture -> showPicture = false
+                panelMode -> resumeGame()
                 prefs.skipExitWarning -> closingGame { backToMainMenu() }
                 else -> confirmExit = true
             }
@@ -452,7 +504,7 @@ class NowPlayingActivity : ComponentActivity() {
         // (so it can't press "Main menu" by accident). Menus, dialogs and the editor keep it bright.
         val screenMode = remember { prefs.bottomScreenMode }
         val delayMs = remember { prefs.dimDelaySeconds * 1000L }
-        var autoDim by remember { mutableStateOf(screenMode != BottomScreen.Mode.ON) }
+        var autoDim by remember { mutableStateOf(!panelMode && screenMode != BottomScreen.Mode.ON) }
         var idle by remember { mutableStateOf(false) }
         var lastTouch by remember { mutableLongStateOf(0L) }
         val overlayOpen = confirmExit || restartAction != null || helperPrompt != null || busy != null
@@ -473,6 +525,7 @@ class NowPlayingActivity : ComponentActivity() {
         // Window brightness: the chosen normal level when bright (the system level until one is chosen);
         // the dimmed level (never brighter than normal) when dimmed. Changes fade over FADE_MS.
         val target: Float? = when {
+            panelMode -> null
             showBrightness -> Prefs.windowBrightness(brightness)
             look == BottomScreen.Look.BRIGHT -> if (brightnessChosen) Prefs.windowBrightness(brightness) else null
             look == BottomScreen.Look.DIM -> Prefs.windowBrightness(minOf(dimLevel, brightness))
@@ -513,7 +566,12 @@ class NowPlayingActivity : ComponentActivity() {
             Column(Modifier.fillMaxSize().alpha(contentAlpha).padding(start = 10.dp, end = 10.dp, top = 28.dp, bottom = 6.dp)) {
                 // ---------------- top bar: chips only (Home | 🏆 ▭ ✦ ☀), then the game's name on its own line
                 Row(Modifier.fillMaxWidth().alpha(fade), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    TopChip("⌂ Home") { if (prefs.skipExitWarning) backToMainMenu() else confirmExit = true }
+                    if (panelMode) {
+                        val resumeFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+                        LaunchedEffect(openSignal) { delay(150); runCatching { resumeFocus.requestFocus() } }
+                        TopChip("▶ Resume", modifier = Modifier.focusRequester(resumeFocus)) { resumeGame() }
+                    }
+                    TopChip(if (panelMode) "Quit game" else "⌂ Home") { if (prefs.skipExitWarning) backToMainMenu() else confirmExit = true }
                     Spacer(Modifier.weight(1f))
                     if (achievements != null && mode == Mode.VIEW) AchievementsChip(
                         achievements, onClick = { showAchievements = !showAchievements }, compact = true, active = showAchievements,
@@ -528,7 +586,7 @@ class NowPlayingActivity : ComponentActivity() {
                             if (showPicture) showPicture = false else openPicture(1)
                         }
                     }
-                    TopChip("☀", on = showBrightness) {
+                    if (!panelMode) TopChip("☀", on = showBrightness) {
                         showPicture = false
                         showBrightness = !showBrightness
                     }

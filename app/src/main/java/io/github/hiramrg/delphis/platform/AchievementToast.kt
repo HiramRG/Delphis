@@ -23,10 +23,13 @@ class AchievementToast(private val service: android.accessibilityservice.Accessi
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val queue = ArrayDeque<Pair<Achievements.Popup, Bitmap?>>()
+    /** One screen: top centre (where the Delphis pill is), sliding down instead of in from the right. */
+    private var centre = false
     private var showing: View? = null
     private var wm: WindowManager? = null
 
-    fun show(popup: Achievements.Popup, badge: Bitmap?, displayId: Int?) {
+    fun show(popup: Achievements.Popup, badge: Bitmap?, displayId: Int?, centre: Boolean = false) {
+        this.centre = centre
         queue.addLast(popup to badge)
         if (showing == null) next(displayId)
     }
@@ -35,11 +38,14 @@ class AchievementToast(private val service: android.accessibilityservice.Accessi
         val (popup, badge) = queue.removeFirstOrNull() ?: return
         val v = runCatching { attach(popup, badge, displayId) }.getOrElse { CrashLog.event("achievement pop-up failed: ${it.message}"); null } ?: return
         showing = v
-        v.translationX = v.resources.displayMetrics.density * 380
+        val d = v.resources.displayMetrics.density
+        if (centre) v.translationY = -d * 90 else v.translationX = d * 380
         v.alpha = 0f
-        v.animate().translationX(0f).alpha(1f).setDuration(260).start()
+        v.animate().translationX(0f).translationY(0f).alpha(1f).setDuration(260).start()
         handler.postDelayed({
-            v.animate().translationX(v.resources.displayMetrics.density * 380).alpha(0f).setDuration(260).withEndAction {
+            val out = v.animate().alpha(0f).setDuration(260)
+            if (centre) out.translationY(-d * 90) else out.translationX(d * 380)
+            out.withEndAction {
                 runCatching { wm?.removeView(v) }
                 showing = null
                 next(displayId)
@@ -87,7 +93,7 @@ class AchievementToast(private val service: android.accessibilityservice.Accessi
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
-        ).apply { gravity = Gravity.TOP or Gravity.END; x = dp(14f); y = dp(14f) }
+        ).apply { if (centre) { gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL; y = dp(6f) } else { gravity = Gravity.TOP or Gravity.END; x = dp(14f); y = dp(14f) } }
         manager.addView(card, params)
         wm = manager
         return card

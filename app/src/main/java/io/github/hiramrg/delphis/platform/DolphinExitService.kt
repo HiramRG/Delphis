@@ -18,8 +18,9 @@ import kotlinx.coroutines.delay
  * the old game kept running and the next launch collided with it. Exiting through Dolphin's own
  * menu stops emulation properly.
  *
- * It never filters key or controller events, so it adds no input delay; it only receives
- * Dolphin's (rare) window-change events and does nothing with them.
+ * On the Thor it never filters key or controller events, so it adds no input delay. On one-screen
+ * devices (phones, tablets), while a game runs, it watches for ⊖ + Start to open Delphis' in-game
+ * menu; every other key goes straight through untouched.
  */
 class DolphinExitService : AccessibilityService() {
 
@@ -81,8 +82,38 @@ class DolphinExitService : AccessibilityService() {
         /** The unlock badge over the game on the top screen. False without the service. */
         fun showAchievement(popup: Achievements.Popup, badge: android.graphics.Bitmap?, displayId: Int?): Boolean {
             val s = instance ?: return false
-            s.handler.post { s.achievementToast.show(popup, badge, displayId) }
+            s.handler.post {
+                // One screen: the badge shows at the top centre, in the Delphis pill's place.
+                val centre = s.pill.showing
+                if (centre) s.pill.hold(AchievementToast.SHOW_MS + 700)
+                s.achievementToast.show(popup, badge, displayId, centre)
+            }
             return true
+        }
+
+        /**
+         * One screen: a game started (or restarted). Puts up the Delphis pill (if it's on in Settings) and
+         * starts watching for ⊖ + Start. [gameKey] decides "new games only" for the full pill.
+         */
+        fun gameStarted(context: Context, gameKey: String) {
+            val s = instance ?: return
+            val prefs = Prefs(context)
+            val first = prefs.firstPillFor(gameKey)
+            val showFull = when (prefs.pillFull) { 0 -> true; 1 -> first; else -> false }
+            val pads = DeviceInfo.gamepads()
+            val controller = pads.firstOrNull()?.let { "🎮 " + it.name } ?: "👆 Touch controls"
+            s.handler.post {
+                s.menuShortcut(true)
+                if (prefs.pillShown) s.pill.start(showFull, prefs.pillOpacity, controller) else s.pill.stop()
+                s.handler.removeCallbacks(s.pillCheck)
+                s.handler.postDelayed(s.pillCheck, 1000)
+            }
+        }
+
+        /** One screen: the game was closed. */
+        fun gameEnded() {
+            val s = instance ?: return
+            s.handler.post { s.handler.removeCallbacks(s.pillCheck); s.pill.stop(); s.menuShortcut(false) }
         }
 
         fun hideLoading(delayMs: Long = 0) { instance?.let { s -> s.handler.post { s.loading.hide(delayMs) } } }
@@ -130,6 +161,7 @@ class DolphinExitService : AccessibilityService() {
 
     override fun onDestroy() {
         loading.hide()
+        pill.stop()
         handler.removeCallbacksAndMessages(null)
         instance = null
         super.onDestroy()
@@ -140,6 +172,64 @@ class DolphinExitService : AccessibilityService() {
     private val achievementToast by lazy { AchievementToast(this) }
     private val exitBottom by lazy { LoadingOverlay(this) }
     private val sideFill by lazy { SideFill(this) }
+    private val pill by lazy { DelphisPill(this) { openInGameMenu() } }
+    /** While the pill is up: shown only while Dolphin's game is in front (not Delphis' menu, Home or another app). */
+    private val pillCheck: Runnable = object : Runnable {
+        override fun run() {
+            if (!pill.showing) return
+            val app = topScreenApp()
+            pill.setVisible(!GameLauncher.busy && app != null && app in DolphinBridge.KNOWN_PACKAGES)
+            handler.postDelayed(this, 1000)
+        }
+    }
+
+    // ------------------------------------------------------------------ one screen: Delphis' in-game menu
+
+    private var shortcutOn = false
+    private var selectHeld = false
+    private var swallowStartUp = false
+
+    /** ⊖ + Start: key filtering is only on while a game runs on a one-screen device. */
+    private fun menuShortcut(on: Boolean) {
+        if (shortcutOn == on) return
+        shortcutOn = on
+        selectHeld = false; swallowStartUp = false
+        runCatching {
+            serviceInfo = serviceInfo.apply {
+                flags = if (on) flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+                else flags and android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS.inv()
+            }
+        }.onFailure { CrashLog.event("couldn't change the ⊖ + Start shortcut: ${it.message}") }
+    }
+
+    override fun onKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (!shortcutOn) return false
+        when (event.keyCode) {
+            android.view.KeyEvent.KEYCODE_BUTTON_SELECT -> selectHeld = event.action == android.view.KeyEvent.ACTION_DOWN
+            android.view.KeyEvent.KEYCODE_BUTTON_START -> {
+                if (event.action == android.view.KeyEvent.ACTION_UP && swallowStartUp) { swallowStartUp = false; return true }
+                if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0 && selectHeld && !GameLauncher.busy &&
+                    topScreenApp()?.let { it in DolphinBridge.KNOWN_PACKAGES } == true) {
+                    swallowStartUp = true
+                    handler.post { openInGameMenu() }
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    /** Brings Delphis' in-game menu over the game (it waits behind it while you play). */
+    private fun openInGameMenu() {
+        if (GameWatch.session == null || GameLauncher.busy) return
+        val intent = Intent(this, io.github.hiramrg.delphis.ui.InGameMenuActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            .putExtra(io.github.hiramrg.delphis.ui.InGameMenuActivity.EXTRA_OPEN, true)
+        val top = DeviceInfo.screenRoles(this, Prefs(this).swapScreens).topDisplayId
+        val options = android.app.ActivityOptions.makeBasic().setLaunchDisplayId(top).toBundle()
+        runCatching { startActivity(intent, options) }.onFailure { CrashLog.event("couldn't open the in-game menu: ${it.message}") }
+        pill.setVisible(false)
+    }
     /** While side fills show: hide them whenever Dolphin's menu (at the screen's edge) is open. */
     private val sideMenuCheck: Runnable = object : Runnable {
         override fun run() {

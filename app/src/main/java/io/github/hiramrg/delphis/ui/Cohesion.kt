@@ -386,14 +386,15 @@ private fun NoticeCard(n: Notices.Notice) {
 
 /** The in-game top row's chip (Home, ▭ 4:3, ☀): same size as the 🏆 chip, lit while its panel is open. */
 @Composable
-fun TopChip(text: String, on: Boolean = false, onClick: () -> Unit) {
+fun TopChip(text: String, on: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = ChipShape
     Text(
         text, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
         color = if (on) c.accentText else c.text,
         onTextLayout = { TextFit.check(text, it) },
-        modifier = Modifier.channel(shape, lit = on)
+        // The ring shows where the D-pad is (one-screen in-game menu); the Thor's bottom screen never takes focus.
+        modifier = modifier.focusRing(shape).channel(shape, lit = on)
             .clickable(onClick = onClick).padding(horizontal = 11.dp, vertical = 5.dp),
     )
 }

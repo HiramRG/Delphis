@@ -23,6 +23,8 @@ object DeviceInfo {
     fun screenRoles(context: Context, swap: Boolean): ScreenRoles {
         val dm = context.getSystemService(DisplayManager::class.java)
         val default = dm.getDisplay(Display.DEFAULT_DISPLAY) ?: return ScreenRoles(Display.DEFAULT_DISPLAY, null)
+        // Settings → Display → Screen mode "One": everything on the main screen, even with a second one.
+        if (Prefs(context).screenMode == 1) return ScreenRoles(default.displayId, null)
         val others = dm.displays.filter { it.displayId != Display.DEFAULT_DISPLAY }
         val second = others.minByOrNull { d ->
             val mode = d.mode
@@ -31,6 +33,13 @@ object DeviceInfo {
         } ?: return ScreenRoles(default.displayId, null)
         return if (swap) ScreenRoles(second.displayId, default.displayId) else ScreenRoles(default.displayId, second.displayId)
     }
+
+    /** True when a second built-in screen exists (whatever Screen mode says). */
+    fun hasSecondScreen(context: Context): Boolean =
+        context.getSystemService(DisplayManager::class.java).displays.any { it.displayId != Display.DEFAULT_DISPLAY }
+
+    /** True when Delphis runs on one screen (phones, tablets, or Screen mode "One"). */
+    fun oneScreen(context: Context): Boolean = screenRoles(context, Prefs(context).swapScreens).bottomDisplayId == null
 
     private fun allDevices(): List<InputDevice> =
         InputDevice.getDeviceIds().toList().mapNotNull { id -> InputDevice.getDevice(id) }

@@ -5,12 +5,14 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 41
+    const val RELEASE = 42
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("More than one games folder.", "Settings → Library lists all your games folders. Add one for Wii and one for GameCube (or as many as you like); all their games show together on Home."),
+        Item("Phones and tablets.", "Delphis now works on one screen. A small Delphis pill at the top of the game (or ⊖ + Start) opens its menu over the game: controls, achievements, picture, change controls and quit."),
+        Item("Touch controls when there's no controller.", "On one screen, Dolphin's on-screen buttons come back until you connect a controller. Delphis asks once when it opens without one."),
+        Item("Settings → Display → Screens.", "Choose one or two screens, and set the pill's opacity, when its full version shows, or turn it off."),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

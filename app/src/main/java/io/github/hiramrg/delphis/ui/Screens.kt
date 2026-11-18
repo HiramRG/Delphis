@@ -1820,6 +1820,8 @@ fun SetupScreen(act: MainActivity) {
     val hasGames = gameFolders.isNotEmpty()
     val helperOn = DolphinExitService.isEnabled(act)
     val calibrated = act.prefs.calibratedDeviceName != null
+    val one = act.oneScreen
+    val pad = if (one) io.github.hiramrg.delphis.platform.rememberPads(act.prefs).firstOrNull()?.name else null
 
     class Step(val title: String, val sub: String, val done: Boolean, val button: String?, val optional: Boolean = false, val action: () -> Unit = {})
     val steps = listOf(
@@ -1834,7 +1836,20 @@ fun SetupScreen(act: MainActivity) {
             else "Add every folder with games: one with everything, or one for Wii and one for GameCube.",
             hasGames, if (hasGames) "Add folder" else "Choose", action = act::chooseGamesFolder,
         ),
-        Step("Turn on \"close games\"", "Lets Delphis exit a game cleanly (no input delay).", helperOn, if (helperOn) "Settings" else "Turn on", action = { DolphinExitService.openSettings(act) }),
+        Step(
+            "Turn on \"close games\"",
+            if (one) "Lets Delphis exit a game cleanly and open its menu over the game (no input delay)." else "Lets Delphis exit a game cleanly (no input delay).",
+            helperOn, if (helperOn) "Settings" else "Turn on", action = { DolphinExitService.openSettings(act) },
+        ),
+    ) + if (one) listOf(
+        // One screen: the Thor-only steps (controller check, gyro) are skipped; a controller is optional.
+        Step(
+            "Connect a controller",
+            if (pad != null) "$pad is connected. Its buttons follow the Thor's layout." else "Pair any Bluetooth controller in Android's settings and press a button on it. Without one, games use Dolphin's touch controls.",
+            pad != null, if (pad != null) null else "Bluetooth settings", optional = true,
+            action = { runCatching { act.startActivity(android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } },
+        ),
+    ) else listOf(
         Step("Controller check", "Recommended · press each button once (about a minute).", calibrated, if (calibrated) "Redo" else "Start", optional = true, action = { act.screen = Screen.ControllerCheck }),
         Step("Try gyro aiming", "Optional · find the speed you like.", false, "Try", optional = true, action = { act.screen = Screen.GyroTest }),
     )
@@ -1889,6 +1904,10 @@ fun SetupScreen(act: MainActivity) {
                         }
                     }
                 }
+                if (one) Text(
+                    "One screen found, so the Thor-only steps (controller check, gyro) are skipped.",
+                    fontSize = 11.5.sp, color = c.textDim, lineHeight = 15.sp, modifier = Modifier.padding(start = 16.dp, top = 6.dp, end = 4.dp),
+                )
             }
             // The step on the ring, explained in plain words.
             val shape = RoundedCornerShape(18.dp)
@@ -1949,7 +1968,9 @@ fun SettingsScreen(act: MainActivity) {
             ) {
                 BackLink("Home") { act.screen = Screen.Home }
                 Spacer(Modifier.height(6.dp))
-                SettingsSection.entries.forEach { s -> SettingsNavItem(s, act.settingsSection == s) { act.settingsSection = s } }
+                // One screen: no "Bottom screen" page.
+                val one = act.oneScreen
+                SettingsSection.entries.filter { !(one && it == SettingsSection.BOTTOM) }.forEach { s -> SettingsNavItem(s, act.settingsSection == s) { act.settingsSection = s } }
             }
             }
             @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -2242,6 +2263,7 @@ private fun ClosingSettings(act: MainActivity) {
 private fun DisplaySettings(act: MainActivity) {
     val prefs = act.prefs
     val c = LocalWii.current
+    ScreensSettings(act)
     var wide by remember { mutableStateOf(prefs.gcDefaultWide) }
     var fill by remember { mutableStateOf(prefs.gcFill) }
     var sides by remember { mutableStateOf(prefs.gcSides) }
@@ -2280,6 +2302,102 @@ private fun DisplaySettings(act: MainActivity) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     io.github.hiramrg.delphis.core.Looks.Look.entries.forEach { l -> WiiChip(l.label, defLook == l, { defLook = l; prefs.defaultLook = l }) }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Screens: one or two (phones and tablets have one), and on one screen the touch controls, the "No
+ * controller found" pop-up and the Delphis pill over the game.
+ */
+@Composable
+private fun ScreensSettings(act: MainActivity) {
+    val prefs = act.prefs
+    val c = LocalWii.current
+    var mode by remember { mutableIntStateOf(prefs.screenMode) }
+    val second = remember { DeviceInfo.hasSecondScreen(act) }
+    val one = mode == 1 || !second
+    var touch by remember { mutableStateOf(prefs.touchWhenNoController) }
+    var warn by remember { mutableStateOf(prefs.warnNoController) }
+    CapsLabel("Screens")
+    GroupCard {
+        SettingRow(
+            "Screen mode",
+            when {
+                mode == 0 -> if (second) "Automatic found 2 screens on this device." else "Automatic found 1 screen on this device."
+                mode == 2 && !second -> "No second screen found, so Delphis uses one."
+                mode == 1 && second -> "Everything on the main screen; the second one isn't used."
+                else -> null
+            },
+        ) {
+            Segmented(listOf(0 to "Automatic", 1 to "One", 2 to "Two"), mode, { mode = it; prefs.screenMode = it; act.screenModeChanged() })
+        }
+        if (one) {
+            RowDivider()
+            ToggleRow("Touch controls when no controller is connected", "Shows Dolphin's on-screen buttons; they hide when you connect one.", touch) { touch = it; prefs.touchWhenNoController = it }
+            RowDivider()
+            ToggleRow("Warn when no controller is found", "Asks when you open Delphis without one.", warn) { warn = it; prefs.warnNoController = it }
+        }
+    }
+    if (one) PillSettings(act)
+}
+
+/** One screen: the Delphis pill at the top of the game (on/off, opacity, when the full pill shows), with a live preview. */
+@Composable
+private fun PillSettings(act: MainActivity) {
+    val prefs = act.prefs
+    val c = LocalWii.current
+    var on by remember { mutableStateOf(prefs.pillShown) }
+    var opacity by remember { mutableFloatStateOf(prefs.pillOpacity.toFloat()) }
+    var full by remember { mutableIntStateOf(prefs.pillFull) }
+    CapsLabel("In-game pill")
+    GroupCard {
+        // Preview: the small pill over a game, at the chosen opacity.
+        val shape = RoundedCornerShape(12.dp)
+        Box(
+            Modifier.padding(top = 2.dp).fillMaxWidth().height(58.dp).clip(shape)
+                .background(androidx.compose.ui.graphics.Brush.radialGradient(listOf(Color(0xFF6FA7D8), Color(0xFF2A5A8A), Color(0xFF2F6A2A), Color(0xFF183818)))),
+        ) {
+            if (on) Box(
+                Modifier.align(Alignment.TopCenter).padding(top = 6.dp).size(width = 58.dp, height = 24.dp)
+                    .graphicsLayer { alpha = opacity / 100f }.clip(RoundedCornerShape(12.dp)).background(Color(0x8014171B))
+                    .border(1.5.dp, Color(0x38FFFFFF), RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(androidx.compose.ui.res.painterResource(io.github.hiramrg.delphis.R.drawable.ic_launcher_monochrome), null, tint = Color.White, modifier = Modifier.size(24.dp))
+            }
+            Text(
+                "PREVIEW · " + if (on) "${opacity.toInt()}%" else "PILL OFF",
+                fontSize = 9.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, color = Color.White.copy(alpha = 0.8f),
+                modifier = Modifier.align(Alignment.BottomStart).padding(8.dp).clip(RoundedCornerShape(7.dp)).background(Color(0x59000000)).padding(horizontal = 7.dp, vertical = 2.dp),
+            )
+        }
+        ToggleRow(
+            "Show the Delphis pill",
+            if (on) "Tap it to open Delphis' menu. Achievements pop out of it." else "Open the menu with ⊖ + Start on your controller. Without a controller, keep the pill on.",
+            on,
+        ) { on = it; prefs.pillShown = it }
+        if (on) {
+            RowDivider()
+            Column(Modifier.padding(horizontal = 8.dp, vertical = 9.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Opacity", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
+                        Text("How see-through the small pill is. The full pill and achievements stay fully visible.", fontSize = 12.sp, color = c.textDim, lineHeight = 15.sp)
+                    }
+                    Text("${opacity.toInt()}%", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.text, modifier = Modifier.padding(start = 10.dp))
+                }
+                WiiSlider(
+                    opacity, { opacity = kotlin.math.round(it / 10f) * 10f; prefs.pillOpacity = opacity.toInt() }, Modifier.fillMaxWidth().focusRing(RoundedCornerShape(50), width = 2.5.dp),
+                    valueRange = 20f..100f, steps = 7, onValueChangeFinished = { prefs.pillOpacity = opacity.toInt() },
+                )
+            }
+            RowDivider()
+            Column(Modifier.padding(horizontal = 8.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text("Show the full pill", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
+                Text("With the shortcut and your controller, for 3 seconds when a game starts.", fontSize = 12.sp, color = c.textDim, lineHeight = 15.sp)
+                Segmented(listOf(0 to "Every game start", 1 to "New games only", 2 to "Never"), full, { full = it; prefs.pillFull = it })
             }
         }
     }

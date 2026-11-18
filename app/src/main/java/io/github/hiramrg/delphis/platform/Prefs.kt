@@ -6,6 +6,8 @@ import io.github.hiramrg.delphis.core.ControllerProfile
 
 /** All user settings, backed by SharedPreferences. */
 class Prefs(context: Context) {
+    /** The app context (for checks like one screen vs two). */
+    val context: Context = context.applicationContext
     private val sp = context.getSharedPreferences("thor_companion", Context.MODE_PRIVATE)
 
     var dolphinTreeUri: Uri?
@@ -332,6 +334,40 @@ class Prefs(context: Context) {
     var libraryCache: String?
         get() = if (sp.getInt("library_cache_version", 0) == LIBRARY_CACHE_VERSION) sp.getString("library_cache", null) else null
         set(v) = sp.edit().putString("library_cache", v).putInt("library_cache_version", LIBRARY_CACHE_VERSION).apply()
+
+    // ---------------------------------------------------------------- one screen (phones, tablets)
+
+    /** Screens: 0 = automatic (whatever the device has), 1 = one screen, 2 = two screens. */
+    var screenMode: Int
+        get() = sp.getInt("screen_mode", 0).coerceIn(0, 2)
+        set(v) = sp.edit().putInt("screen_mode", v).apply()
+    /** One screen: Dolphin's on-screen buttons while no controller is connected. */
+    var touchWhenNoController: Boolean
+        get() = sp.getBoolean("touch_no_pad", true)
+        set(v) = sp.edit().putBoolean("touch_no_pad", v).apply()
+    /** One screen: the "No controller found" pop-up when Delphis opens. */
+    var warnNoController: Boolean
+        get() = sp.getBoolean("warn_no_pad", true)
+        set(v) = sp.edit().putBoolean("warn_no_pad", v).apply()
+    /** One screen: the Delphis pill at the top of the game. */
+    var pillShown: Boolean
+        get() = sp.getBoolean("pill_shown", true)
+        set(v) = sp.edit().putBoolean("pill_shown", v).apply()
+    /** The small pill's opacity, 20..100 %. */
+    var pillOpacity: Int
+        get() = sp.getInt("pill_opacity", 60).coerceIn(20, 100)
+        set(v) = sp.edit().putInt("pill_opacity", v.coerceIn(20, 100)).apply()
+    /** When the full pill (shortcut + controller) shows: 0 = every game start, 1 = new games only, 2 = never. */
+    var pillFull: Int
+        get() = sp.getInt("pill_full", 1).coerceIn(0, 2)
+        set(v) = sp.edit().putInt("pill_full", v).apply()
+    /** True the first time for [gameKey] (and marks it seen). */
+    fun firstPillFor(gameKey: String): Boolean {
+        val seen = sp.getStringSet("pill_seen", emptySet()) ?: emptySet()
+        if (gameKey in seen) return false
+        sp.edit().putStringSet("pill_seen", seen + gameKey).apply()
+        return true
+    }
 
     companion object {
         /** Window brightness (0..1) for a 0..100 setting. 0 stays just above "backlight off". */
