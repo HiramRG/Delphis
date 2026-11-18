@@ -7,6 +7,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -40,21 +43,75 @@ private val GLYPHS = mapOf("Ⓐ" to "A", "Ⓑ" to "B", "Ⓧ" to "X", "Ⓨ" to "Y
 // "Select" isn't here: the word stays text ("Ⓐ Select"); the Select button is written ⊖.
 private val WORD_KEYS = setOf("L1", "R1", "L2", "R2", "L3", "R3", "Start")
 
-/** A button icon: [key] is "A", "L1", "⊖", "DPAD" (D-pad) or "DPAD_LR" (D-pad, left / right). */
+/**
+ * Which controller the hints are drawn for. Delphis works by position (the Thor's: A right, B bottom, X top,
+ * Y left), so on an Xbox or PlayStation controller the hint shows the button in that place as the controller
+ * prints it (Delphis' A is Xbox B / PlayStation ○). One screen with no controller: touch, no button icons.
+ */
+object PadGlyphs {
+    /** null = no controller (touch controls). The Thor (two screens) always uses its own letters. */
+    var labels by mutableStateOf<io.github.hiramrg.delphis.core.ButtonLabels?>(io.github.hiramrg.delphis.core.ButtonLabels.NINTENDO)
+        private set
+    val touch: Boolean get() = labels == null
+
+    /** Reads the connected controller again (one screen); call when controllers come and go. */
+    fun update(oneScreen: Boolean) {
+        labels = if (!oneScreen) io.github.hiramrg.delphis.core.ButtonLabels.NINTENDO
+        else io.github.hiramrg.delphis.platform.DeviceInfo.gamepads().firstOrNull()?.let { io.github.hiramrg.delphis.core.ButtonLabels.forVendor(it.vendorId) }
+    }
+
+    /** [padText] with a controller, [touchText] without one. */
+    fun or(padText: String, touchText: String): String = if (touch) touchText else padText
+
+    /** Delphis' button [key] as the connected controller prints it, with that button's colour (null = no colour). */
+    @Composable
+    fun face(key: String): Pair<String, Color?> {
+        val dark = LocalWii.current.dark
+        return when (labels) {
+            io.github.hiramrg.delphis.core.ButtonLabels.XBOX -> when (key) {
+                "A" -> "B" to Color(0xFFE0503A)
+                "B" -> "A" to Color(0xFF3FA864)
+                "X" -> "Y" to if (dark) Color(0xFFE0C23A) else Color(0xFFB8960E)
+                "Y" -> "X" to Color(0xFF3A7DE0)
+                "L1" -> "LB" to null; "R1" -> "RB" to null; "L2" -> "LT" to null; "R2" -> "RT" to null; "L3" -> "LS" to null; "R3" -> "RS" to null
+                else -> key to null
+            }
+            io.github.hiramrg.delphis.core.ButtonLabels.PLAYSTATION -> when (key) {
+                "A" -> "○" to Color(0xFFE0503A)
+                "B" -> "✕" to Color(0xFF5B8DEF)
+                "X" -> "△" to Color(0xFF3FB8A0)
+                "Y" -> "□" to Color(0xFFD877C0)
+                else -> key to null
+            }
+            else -> key to null
+        }
+    }
+}
+
+/**
+ * A button icon: [key] is "A", "L1", "⊖", "DPAD" (D-pad) or "DPAD_LR" (D-pad, left / right), in Delphis' (the
+ * Thor's) letters; it's drawn as the connected controller prints that button (see [PadGlyphs]), and not at all
+ * with touch controls.
+ */
 @Composable
 fun KeyIcon(key: String, color: Color = LocalWii.current.textDim, size: Dp = 18.dp) {
+    if (PadGlyphs.touch) return
     when (key) {
         "DPAD", "DPAD_LR" -> DpadIcon(color, size, leftRight = key == "DPAD_LR")
         else -> {
-            val round = key.length == 1
+            val (label, own) = PadGlyphs.face(key)
+            // The controller's colour for its letters, unless the icon sits on a coloured button.
+            val c = LocalWii.current
+            val tint = if (own != null && (color == c.textDim || color == c.text)) own else color
+            val round = label.length == 1
             Box(
                 Modifier.height(size).then(if (round) Modifier.width(size) else Modifier.widthIn(min = size))
                     .border(1.5.dp, color, RoundedCornerShape(50)).padding(horizontal = if (round) 0.dp else 4.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    key, color = color, maxLines = 1, fontWeight = FontWeight.Black,
-                    fontSize = (size.value * if (key == "⊖") 0.62f else 0.53f).sp,
+                    label, color = tint, maxLines = 1, fontWeight = FontWeight.Black,
+                    fontSize = (size.value * when (label) { "⊖" -> 0.62f; "○", "✕", "△", "□" -> 0.6f; else -> 0.53f }).sp,
                     style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
                 )
             }
@@ -105,6 +162,10 @@ private fun tokens(text: String): List<Pair<Boolean, String>> {
     return out
 }
 
+/** [text] without its button glyphs, for touch controls. */
+fun touchWords(text: String): String = tokens(text).filter { !it.first }.joinToString("") { it.second }
+    .replace(Regex("""\s+"""), " ").replace(Regex("""(\s*·\s*)+"""), " · ").trim().trim('·', ' ')
+
 /** True if [text] has button glyphs (Ⓐ, ✚, L1…) that [HintText] draws as icons. */
 fun hasKeys(text: String) = tokens(text).any { it.first }
 
@@ -115,6 +176,15 @@ fun HintText(
     color: Color = LocalWii.current.textDim, fontWeight: FontWeight? = null, textAlign: TextAlign? = null,
     letterSpacing: TextUnit = TextUnit.Unspecified,
 ) {
+    // Touch controls: no button icons; what's left is tidied ("↺ Earlier autosaves · R2" → "↺ Earlier autosaves").
+    if (PadGlyphs.touch) {
+        val words = touchWords(text)
+        if (words.any { it.isLetter() }) Text(
+            words, modifier, color = color, fontSize = fontSize, fontWeight = fontWeight, textAlign = textAlign,
+            letterSpacing = letterSpacing, maxLines = 2, onTextLayout = { TextFit.check(words, it) },
+        )
+        return
+    }
     val parts = tokens(text)
     // The icon is sized from the text size the same way as its slot, so it never spills onto the words.
     val iconDp = with(androidx.compose.ui.platform.LocalDensity.current) { (fontSize * 1.4f).toDp() }

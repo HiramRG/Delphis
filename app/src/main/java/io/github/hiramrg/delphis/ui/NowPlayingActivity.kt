@@ -121,7 +121,7 @@ open class NowPlayingActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (panelMode) { openSignal++; GameWatch.menuOpen = true }
+        if (panelMode) { openSignal++; GameWatch.menuOpen = true; PadGlyphs.update(true) }
     }
 
     override fun onPause() {
@@ -260,13 +260,14 @@ open class NowPlayingActivity : ComponentActivity() {
     private val padsAtStart = mutableSetOf<String>()
     private val padListener = object : android.hardware.input.InputManager.InputDeviceListener {
         override fun onInputDeviceAdded(deviceId: Int) {
+            PadGlyphs.update(true)
             if (session == null || GameLauncher.busy) return
             val pad = DeviceInfo.gamepads().firstOrNull { it.name !in padsAtStart } ?: return
             padsAtStart += pad.name
             padJoined = pad.name
             DolphinExitService.openMenu()
         }
-        override fun onInputDeviceRemoved(deviceId: Int) = Unit
+        override fun onInputDeviceRemoved(deviceId: Int) = PadGlyphs.update(true)
         override fun onInputDeviceChanged(deviceId: Int) = Unit
     }
 

@@ -91,6 +91,7 @@ class MainActivity : ComponentActivity() {
     private var controllerAsked = false
     private val padListener = object : android.hardware.input.InputManager.InputDeviceListener {
         override fun onInputDeviceAdded(deviceId: Int) {
+            PadGlyphs.update(oneScreen)
             if (!oneScreen || padConnected != null || screen == Screen.ControllerCheck) return
             val pad = DeviceInfo.gamepads().firstOrNull() ?: return
             if (pad.name != prefs.calibratedDeviceName) {
@@ -101,7 +102,7 @@ class MainActivity : ComponentActivity() {
                 window.decorView.postDelayed({ noPadPrompt = false; padConnected = null }, 2000)
             }
         }
-        override fun onInputDeviceRemoved(deviceId: Int) = Unit
+        override fun onInputDeviceRemoved(deviceId: Int) = PadGlyphs.update(oneScreen)
         override fun onInputDeviceChanged(deviceId: Int) = onInputDeviceAdded(deviceId)
     }
 
@@ -206,6 +207,7 @@ class MainActivity : ComponentActivity() {
     /** Settings → Display → Screen mode changed: landscape on one screen, and the bottom-screen menu on or off. */
     fun screenModeChanged() {
         oneScreen = DeviceInfo.oneScreen(this)
+        PadGlyphs.update(oneScreen)
         requestedOrientation = if (oneScreen) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         MenuCompanion.close()
@@ -386,6 +388,7 @@ class MainActivity : ComponentActivity() {
         }
         // One screen (phones, tablets): Delphis is laid out for landscape, like the Thor's top screen.
         oneScreen = DeviceInfo.oneScreen(this)
+        PadGlyphs.update(oneScreen)
         if (oneScreen) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         getSystemService(android.hardware.input.InputManager::class.java).registerInputDeviceListener(padListener, android.os.Handler(android.os.Looper.getMainLooper()))
         games = library.cached()
@@ -715,6 +718,7 @@ class MainActivity : ComponentActivity() {
         goFullScreen()
         setupVersion++ // re-read things that can change in system settings (e.g. the close-games helper)
         refreshCheck()
+        PadGlyphs.update(oneScreen)
         // Back from a game (or anywhere): reload achievement progress so new unlocks show.
         io.github.hiramrg.delphis.platform.Achievements.refresh()
         // The game list showing up while a game is running (and Delphis didn't close it) means

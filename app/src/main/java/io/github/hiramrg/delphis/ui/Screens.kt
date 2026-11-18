@@ -480,7 +480,7 @@ private fun SearchBox(act: MainActivity) {
                 Text(act.libraryQuery.ifEmpty { "Search" }, color = if (act.libraryQuery.isEmpty()) c.textDim else c.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        if (!editing && focused) HintText("Ⓐ type", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
+        if (!editing && focused) HintText(PadGlyphs.or("Ⓐ type", "Tap to type"), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
     }
     LaunchedEffect(editing) {
         if (editing) {
@@ -711,7 +711,7 @@ private fun GameInfoCard(act: MainActivity, g: GameEntry, focused: Boolean, cont
             } else Text("🏆 No achievements for this game", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1)
             Box(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(1.dp).background(c.cardBorder.copy(alpha = 0.6f)))
             val suggestion = act.homeRow == HomeRow.FAVORITES && g.key !in favorites
-            HintText(if (suggestion) "Ⓐ Add to favorites  Ⓧ Game page" else "Ⓐ Play  Ⓧ Game page", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = if (focused) c.text else c.textDim)
+            HintText(PadGlyphs.or(if (suggestion) "Ⓐ Add to favorites  Ⓧ Game page" else "Ⓐ Play  Ⓧ Game page", "Tap to play"), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = if (focused) c.text else c.textDim)
         }
         // Ready to play: what loads when you press Play.
         val pshape = RoundedCornerShape(14.dp)
@@ -781,7 +781,7 @@ private fun FavoritesEmptyCard() {
         Column(Modifier.weight(1f)) {
             Text("FAVORITES", fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp, color = Color(0xFFE8D38A))
             Text("No favorites yet", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-            HintText("Ⓐ on “+” to pick some, or Ⓐ on a suggestion to add it. Ⓨ on any game adds it too.", fontSize = 11.5.sp)
+            HintText(PadGlyphs.or("Ⓐ on “+” to pick some, or Ⓐ on a suggestion to add it. Ⓨ on any game adds it too.", "Tap “+” to pick some, or tap a suggestion to add it."), fontSize = 11.5.sp)
         }
     }
 }
@@ -960,7 +960,7 @@ private fun FavoritesPicker(act: MainActivity, favorites: Set<String>, onDone: (
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                HintText("Ⓐ Add / remove", fontSize = 12.sp)
+                HintText(PadGlyphs.or("Ⓐ Add / remove", "Tap a game to add or remove it"), fontSize = 12.sp)
                 Spacer(Modifier.weight(1f))
                 WiiButton("Ⓨ Done", onClick = onDone, primary = true, fontSize = 14.sp)
             }
@@ -1055,7 +1055,7 @@ private fun HomeBar(act: MainActivity, rowsMode: Boolean, lit: Boolean) {
                     .clickable { act.exitPrompt = true },
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.Outlined.PowerSettingsNew, "Exit Delphis", tint = c.textDim, modifier = Modifier.size(20.dp)) }
-            HintText("Hold Ⓑ", Modifier.padding(start = 8.dp), fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold)
+            if (!PadGlyphs.touch) HintText("Hold Ⓑ", Modifier.padding(start = 8.dp), fontSize = 11.5.sp, fontWeight = FontWeight.ExtraBold)
         },
         right = {
             // No button hints here: the pinned card and the rail show them. On a row, its sort (R1 changes it);
@@ -1584,7 +1584,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                     Column(Modifier.weight(1f)) {
                         when {
                             shown == null -> Text("CONTROLS", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
-                            p.browsing -> HintText("Ⓐ USE THESE CONTROLS", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, letterSpacing = 1.sp)
+                            p.browsing -> HintText(PadGlyphs.or("Ⓐ USE THESE CONTROLS", "TAP TO USE THESE CONTROLS"), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, letterSpacing = 1.sp)
                             else -> SelectedControlsTitle(10.sp)
                         }
                         Text(
