@@ -878,28 +878,29 @@ open class NowPlayingActivity : ComponentActivity() {
                 } else if (mode == Mode.VIEW) {
                     // The same actions on the Thor and on one screen: change or edit the controls, restart, quit.
                     // One screen: each shows its own controller button, so they sit in two rows to keep every label whole.
-                    val change: @Composable (Modifier) -> Unit = { m -> PanelBtn("Change", if (panelMode) "Y" else null, true, m.focusRequester(changeFocus)) { showBrightness = false; mode = Mode.CHANGE } }
+                    val change: @Composable (Modifier) -> Unit = { m -> PanelBtn("Change", if (panelMode && !PadGlyphs.touch) "Y" else null, true, m.focusRequester(changeFocus)) { showBrightness = false; mode = Mode.CHANGE } }
                     val edit: @Composable (Modifier) -> Unit = { m -> PanelBtn("✎ Edit", null, false, m) { showBrightness = false; mode = Mode.EDIT } }
                     val restart: @Composable (Modifier) -> Unit = { m ->
-                        PanelBtn("Restart", if (panelMode) "⊖" else null, false, m) {
+                        PanelBtn("Restart", if (panelMode && !PadGlyphs.touch) "⊖" else null, false, m) {
                             showBrightness = false; plainRestart = true
                             restartAction = { applyAndRestart(s, preset, remember = false) }
                         }
                     }
                     val quit: @Composable (Modifier) -> Unit = { m ->
-                        PanelBtn("Quit game", if (panelMode) "X" else null, false, m, warn = true) {
+                        PanelBtn("Quit game", if (panelMode && !PadGlyphs.touch) "X" else null, false, m, warn = true) {
                             showBrightness = false
                             if (prefs.skipExitWarning) closingGame { backToMainMenu() } else { exitDontAsk = false; confirmExit = true }
                         }
                     }
-                    if (panelMode) {
+                    // With touch controls there are no controller buttons to show, so one row is enough.
+                    if (panelMode && !PadGlyphs.touch) {
                         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             change(Modifier.weight(1f)); edit(Modifier.weight(0.85f))
                         }
                         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             restart(Modifier.weight(1f)); quit(Modifier.weight(1.1f))
                         }
-                        if (!PadGlyphs.touch) Row(
+                        Row(
                             Modifier.fillMaxWidth().padding(top = 5.dp),
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
                         ) {

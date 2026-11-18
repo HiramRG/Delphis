@@ -223,7 +223,8 @@ fun BoxScope.PicturePanel(
                     }
                 }
             }
-            if (advice != null) Text(
+            // Short screens (a phone held sideways) keep only the ★ line above: the reason would push the buttons off.
+            if (advice != null && androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp >= 480) Text(
                 resolutionWhy(advice), fontSize = 11.sp, lineHeight = 14.sp, color = c.textDim,
             )
         } else if (!showLook) {
