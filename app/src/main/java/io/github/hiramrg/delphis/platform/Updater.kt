@@ -27,6 +27,34 @@ class Updater(private val context: Context) {
         const val RELEASE_PAGE = "https://github.com/HiramRG/Delphis/releases/tag/latest"
         const val APK_NAME = "Delphis.apk"
         const val ACTION_INSTALL_STATUS = "io.github.hiramrg.delphis.INSTALL_STATUS"
+        /** The newest APK, for a download in the browser. */
+        const val APK_URL = "https://github.com/HiramRG/Delphis/releases/download/latest/Delphis.apk"
+
+        /**
+         * Some Android versions (e.g. Android 17 on a Galaxy Tab) refuse to let an app installed from a downloaded
+         * file update itself ("Self update is blocked by unknown source package"). Then the downloaded APK goes to
+         * Android's own installer (the same screen as opening the file), and a notice offers the browser download.
+         */
+        fun installWithSystem(context: Context) {
+            val apk = File(File(context.cacheDir, "updates"), APK_NAME)
+            val opened = apk.exists() && runCatching {
+                val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".updates", apk)
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }.onFailure { CrashLog.event("system installer didn't open: ${it.message}") }.isSuccess
+            io.github.hiramrg.delphis.ui.Notices.info(
+                context, if (opened) "Finish the update in Android's installer" else "Android blocked the update",
+                if (opened) "Android won't let Delphis update itself here, so its own installer took over: tap Update. If it doesn't work, download it instead."
+                else "Android won't let Delphis update itself here. Download the new version and open it to install.",
+                "Download",
+            ) { openDownload(context) }
+        }
+
+        fun openDownload(context: Context) {
+            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(APK_URL)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        }
     }
 
     data class Release(val versionCode: Int, val apkUrl: String, val sizeBytes: Long, val publishedAt: String)
@@ -147,6 +175,12 @@ class InstallReceiver : BroadcastReceiver() {
             else -> {
                 Prefs(context).relaunchAfterUpdate = false
                 val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "unknown error"
+                CrashLog.event("update failed: $msg")
+                // Android blocks self-updates of apps installed from a downloaded file: use its own installer instead.
+                if (msg.contains("self update", true) || msg.contains("unknown source", true)) {
+                    Updater.installWithSystem(context)
+                    return
+                }
                 val hint = if (msg.contains("signature", true) || msg.contains("conflict", true))
                     " — uninstall Delphis once and install the new version manually; updates will work from then on."
                 else ""

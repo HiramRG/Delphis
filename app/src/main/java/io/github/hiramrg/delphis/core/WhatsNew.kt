@@ -13,6 +13,7 @@ object WhatsNew {
         Item("Your controller's Home button opens Delphis' menu.", "On phones and tablets, press ⌂ (Switch), the Xbox button or PS to open Delphis' menu over the game; the game never sees it. Settings → Display → In-game menu also offers ⊖ + Start, now in either order."),
         Item("Controllers work in Delphis' menus.", "Switch, Xbox and PlayStation controllers now use the Thor's button positions everywhere. When one connects, Delphis shows what each button does and offers a one-minute button check."),
         Item("A controller that connects during a game.", "Delphis' menu offers to restart the game so the controller works and the touch buttons go away."),
+        Item("Updates on phones and tablets.", "When Android won't let Delphis update itself, its own installer takes over (or a Download button gets the new version).", fix = true),
         Item("\"Close games\" reminders.", "If it's off, Home and Play explain how to turn it on (Allow restricted settings, then Accessibility).", fix = true),
     )
 

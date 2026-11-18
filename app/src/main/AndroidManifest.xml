@@ -88,6 +88,14 @@
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
         <receiver android:name=".platform.InstallReceiver" android:exported="false" />
+        <!-- Hands the downloaded update to Android's own installer when Android blocks Delphis updating itself. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths" />
+        </provider>
         <!-- Opens Delphis again once it has updated itself ("Restart & update"). -->
         <receiver android:name=".platform.UpdatedReceiver" android:exported="true">
             <intent-filter>
