@@ -220,7 +220,7 @@ fun HomeScreen(act: MainActivity) {
     // Delphis connected to RetroAchievements but Dolphin signed out: a notice with Sign in (Ⓨ).
     LaunchedEffect(Unit) { delay(1500); act.checkDolphinRa() }
     // One screen: ask about the controller (none, or not checked yet) and warn if "close games" is off.
-    LaunchedEffect(Unit) { delay(600); act.checkControllerOnHome(); delay(900); act.checkHelperOnHome() }
+    LaunchedEffect(Unit) { delay(600); act.checkControllerOnHome(); delay(900); act.checkHelperOnHome(); delay(1500); act.checkCrashOnHome() }
     val c = LocalWii.current
     @Suppress("UNUSED_VARIABLE") val v = act.statsVersion
     val lastPlayed = act.prefs.lastPlayed()
@@ -2012,6 +2012,10 @@ fun SettingsScreen(act: MainActivity) {
                     SettingsSection.FRONTENDS -> FrontendSettings(act)
                     SettingsSection.UPDATES -> UpdatePanel(act)
                     SettingsSection.HELP -> GroupCard {
+                        SettingRow("Report a problem", "Tell us what went wrong. Delphis adds the details about your device, controller and game, without anything personal.", onClick = { act.openReport() }) {
+                            Text("Report ›", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
+                        }
+                        RowDivider()
                         SettingRow("Diagnostics", "If presets don't respond or something crashes, open Diagnostics and copy the report.", onClick = { act.screen = Screen.Diagnostics }) {
                             Text("Open ›", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
                         }

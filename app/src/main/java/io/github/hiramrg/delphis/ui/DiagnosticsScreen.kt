@@ -121,7 +121,7 @@ private fun StatusRow(title: String, sub: String, ok: Boolean?) {
     }
 }
 
-private fun buildReport(act: MainActivity): String = buildString {
+internal fun buildReport(act: MainActivity): String = buildString {
     val prefs = act.prefs
     val bridge = act.bridge
     appendLine("Delphis diagnostics")

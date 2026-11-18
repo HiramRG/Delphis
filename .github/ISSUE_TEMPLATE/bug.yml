@@ -1,0 +1,54 @@
+name: Bug report
+description: Something in Delphis doesn't work. "Report a problem" in Delphis (Settings → Diagnostics) fills this in for you.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: One or two lines are enough.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Controller
+        - In a game
+        - Setup
+        - Crashed
+        - Something else
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: Maker, model, Android version, one or two screens.
+      placeholder: "AYN Thor · Android 13 · two screens"
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: "Delphis 220 · Dolphin 2512"
+  - type: input
+    id: controller
+    attributes:
+      label: Controller
+      placeholder: "Built-in / Switch Pro Controller / Xbox …"
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Optional, but it helps a lot.
+      placeholder: "1. …\n2. …"
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics report
+      description: Delphis copied it when it opened this page. Long-press → Paste. (Usernames and folder paths are already removed.)
+      render: text

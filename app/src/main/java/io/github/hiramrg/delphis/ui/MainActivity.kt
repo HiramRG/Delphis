@@ -115,6 +115,34 @@ class MainActivity : ComponentActivity() {
         else if (pad.name != prefs.calibratedDeviceName) { padConnected = pad.name; padVendor = pad.vendorId; padNeedsCheck = true; noPadPrompt = true }
     }
 
+    // ---- "Report a problem" (Settings → Diagnostics, or after a crash)
+    var reportOpen by mutableStateOf(false)
+    var reportArea by mutableIntStateOf(1)
+    var reportText by mutableStateOf("")
+    fun openReport(area: Int = 1) { reportArea = area; reportText = ""; reportOpen = true }
+    fun sendReport() { reportOpen = false; ProblemReport.send(this, reportArea, reportText) }
+
+    /** Home: Delphis crashed last time → offer to report it (once per crash). */
+    fun checkCrashOnHome() {
+        val first = io.github.hiramrg.delphis.platform.CrashLog.read()?.lineSequence()?.firstOrNull() ?: return
+        if (first == prefs.crashSeen) return
+        prefs.crashSeen = first
+        Notices.problem(this, "Delphis closed unexpectedly", "Telling us helps fix it.", "Report it") { openReport(3) }
+    }
+
+    private fun reportKey(event: KeyEvent): Boolean {
+        if (!reportOpen) return false
+        val press = event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_BUTTON_A -> if (press) sendReport()
+            KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> if (press) reportOpen = false
+            KeyEvent.KEYCODE_DPAD_LEFT -> if (event.action == KeyEvent.ACTION_DOWN) reportArea = (reportArea - 1).coerceAtLeast(0)
+            KeyEvent.KEYCODE_DPAD_RIGHT -> if (event.action == KeyEvent.ACTION_DOWN) reportArea = (reportArea + 1).coerceAtMost(ProblemReport.AREAS.lastIndex)
+            else -> return false
+        }
+        return true
+    }
+
     var padDontShow by mutableStateOf(false)
     fun padCheck() { noPadPrompt = false; padConnected = null; padNeedsCheck = false; screen = Screen.ControllerCheck }
     fun padLater() { noPadPrompt = false; padConnected = null; padNeedsCheck = false }
@@ -415,6 +443,7 @@ class MainActivity : ComponentActivity() {
                         padConnected, padNeedsCheck, padVendor, padDontShow, { padDontShow = it },
                         ::padCheck, ::padLater, ::padTouch, ::padBluetooth,
                     )
+                    if (reportOpen) ReportProblemPanel(this@MainActivity)
                     if (runningPrompt && !noPadPrompt) io.github.hiramrg.delphis.platform.GameWatch.session?.let { s ->
                         RunningGamePrompt(s.info.title, ::runningBack, ::runningQuit) { runningPrompt = false }
                     }
@@ -442,6 +471,7 @@ class MainActivity : ComponentActivity() {
             KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> if (event.repeatCount == 0)
                 io.github.hiramrg.delphis.platform.MenuSounds.play(io.github.hiramrg.delphis.platform.MenuSounds.Kind.BACK)
         }
+        if (reportKey(event)) return true
         if (popupKey(event)) return true
         // "Build N is ready": Ⓐ Restart & update, Ⓑ Later.
         if (updatePrompt && updateState is UpdateState.Ready) when (event.keyCode) {
@@ -662,8 +692,11 @@ class MainActivity : ComponentActivity() {
         if (oneScreen && io.github.hiramrg.delphis.platform.GameWatch.session != null && !io.github.hiramrg.delphis.platform.GameLauncher.busy) {
             io.github.hiramrg.delphis.platform.GameWatch.setSuspended(true)
             runningPrompt = true
-        } else if (!io.github.hiramrg.delphis.platform.GameWatch.suspended.value)
+        } else if (!io.github.hiramrg.delphis.platform.GameWatch.suspended.value) {
             io.github.hiramrg.delphis.platform.GameWatch.reportGone("Delphis' game list came back on screen")
+            if (io.github.hiramrg.delphis.platform.GameWatch.unexpectedStop.value)
+                Notices.problem(this, "The game stopped unexpectedly", "Dolphin may have crashed. Telling us helps fix it.", "Report it") { openReport(3) }
+        }
         // Coming back from the "Install unknown apps" screen: continue if it's now allowed.
         if (updateState is UpdateState.NeedsPermission && updater.canInstall()) checkForUpdates()
         // Bottom-screen menu (quick tiles / touch preset picker), shortly after we're on screen.

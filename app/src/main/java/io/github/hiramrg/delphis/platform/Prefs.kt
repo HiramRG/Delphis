@@ -335,6 +335,11 @@ class Prefs(context: Context) {
         get() = if (sp.getInt("library_cache_version", 0) == LIBRARY_CACHE_VERSION) sp.getString("library_cache", null) else null
         set(v) = sp.edit().putString("library_cache", v).putInt("library_cache_version", LIBRARY_CACHE_VERSION).apply()
 
+    /** The first line of the last crash Delphis offered to report (so it's offered once). */
+    var crashSeen: String?
+        get() = sp.getString("crash_seen", null)
+        set(v) = sp.edit().putString("crash_seen", v).apply()
+
     // ---------------------------------------------------------------- one screen (phones, tablets)
 
     /** Screens: 0 = automatic (whatever the device has), 1 = one screen, 2 = two screens. */
