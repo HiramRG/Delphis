@@ -370,7 +370,7 @@ fun HomeScreen(act: MainActivity) {
                 if (shown.isEmpty()) {
                     item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
                         // Says why there's nothing to show, with a way forward.
-                        val folder = act.prefs.gamesTreeUri?.lastPathSegment?.substringAfterLast(':')?.ifBlank { null }
+                        val folder = act.prefs.gamesFolders.takeIf { it.isNotEmpty() }?.joinToString(", ") { io.github.hiramrg.delphis.platform.folderLabel(it).substringAfterLast(" › ") }
                         when {
                             act.scanning -> EmptyState("⌕", "Looking for games…", "Delphis is scanning your games folder. ${act.scanCount} found so far.", Modifier.fillMaxWidth().padding(vertical = 8.dp))
                             act.games.isEmpty() -> EmptyState(
@@ -1816,7 +1816,8 @@ fun SetupScreen(act: MainActivity) {
     @Suppress("UNUSED_VARIABLE") val version = act.setupVersion
     val dolphinPkg = act.bridge.installedPackage()
     val folderOk = act.bridge.hasConfigAccess() && act.bridge.looksLikeDolphinFolder()
-    val hasGames = act.prefs.gamesTreeUri != null
+    val gameFolders = act.prefs.gamesFolders
+    val hasGames = gameFolders.isNotEmpty()
     val helperOn = DolphinExitService.isEnabled(act)
     val calibrated = act.prefs.calibratedDeviceName != null
 
@@ -1827,7 +1828,12 @@ fun SetupScreen(act: MainActivity) {
                 .onFailure { Notices.info(act, "Couldn't open the store", "Search for \"Dolphin Emulator\" in your app store.") }
         }),
         Step("Connect Dolphin's folder", "In the picker: side menu (☰) → \"Dolphin\" → \"Use this folder\".", folderOk, if (folderOk) "Change" else "Connect", action = act::connectDolphinFolder),
-        Step("Choose your games folder", if (hasGames) "${act.games.size} games found" else "The folder with your GameCube and Wii games.", hasGames, if (hasGames) "Change" else "Choose", action = act::chooseGamesFolder),
+        Step(
+            "Choose your games folders",
+            if (hasGames) gameFolders.joinToString("\n") { t -> io.github.hiramrg.delphis.platform.folderLabel(t) + " · " + act.games.count { io.github.hiramrg.delphis.platform.inFolder(it, t) } + " games" }
+            else "Add every folder with games: one with everything, or one for Wii and one for GameCube.",
+            hasGames, if (hasGames) "Add folder" else "Choose", action = act::chooseGamesFolder,
+        ),
         Step("Turn on \"close games\"", "Lets Delphis exit a game cleanly (no input delay).", helperOn, if (helperOn) "Settings" else "Turn on", action = { DolphinExitService.openSettings(act) }),
         Step("Controller check", "Recommended · press each button once (about a minute).", calibrated, if (calibrated) "Redo" else "Start", optional = true, action = { act.screen = Screen.ControllerCheck }),
         Step("Try gyro aiming", "Optional · find the speed you like.", false, "Try", optional = true, action = { act.screen = Screen.GyroTest }),
@@ -2356,18 +2362,82 @@ private fun ScreenModeCard(
 @Composable
 private fun LibrarySettings(act: MainActivity) {
     val c = LocalWii.current
+    @Suppress("UNUSED_VARIABLE") val v = act.setupVersion
+    val folders = act.prefs.gamesFolders
+    var removing by remember { mutableStateOf<android.net.Uri?>(null) }
+    CapsLabel("Games folders · ${act.games.size} games")
+    GroupCard {
+        folders.forEachIndexed { i, tree ->
+            if (i > 0) RowDivider()
+            GamesFolderRow(act, tree) { removing = tree }
+        }
+        if (folders.isNotEmpty()) RowDivider()
+        // ＋ Add a folder: Wii, GameCube or both.
+        val shape = RoundedCornerShape(12.dp)
+        Row(
+            Modifier.fillMaxWidth().rememberFocus("row-add-folder").focusRing(shape, fill = true).clip(shape).clickable(onClick = act::chooseGamesFolder).padding(horizontal = 8.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(Modifier.size(36.dp).drawBehind {
+                drawRoundRect(c.cardBorder, cornerRadius = androidx.compose.ui.geometry.CornerRadius(11.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))))
+            }, contentAlignment = Alignment.Center) { Text("+", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.accentText) }
+            Text("Add a folder", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
+        }
+    }
+    removing?.let { tree ->
+        val n = act.games.count { io.github.hiramrg.delphis.platform.inFolder(it, tree) }
+        ConfirmDialog(
+            "Library", "Remove the \u201C${io.github.hiramrg.delphis.platform.folderLabel(tree).substringAfterLast(" › ")}\u201D folder?",
+            "Its $n games leave your library. The files stay where they are, and play time, favorites and presets come back if you add the folder again.",
+            "Remove", onCancel = { removing = null },
+        ) { removing = null; act.removeGamesFolder(tree) }
+    }
     GroupCard {
         SettingRow("Dolphin folder", if (act.bridge.hasConfigAccess()) "Connected · ${act.bridge.installedPackage() ?: "Dolphin not installed"}" else "Not connected", onClick = act::connectDolphinFolder) {
             Text("Change ›", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
         }
         RowDivider()
-        SettingRow("Games folder", "${act.games.size} games", onClick = act::chooseGamesFolder) {
-            Text("Change ›", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
-        }
-        RowDivider()
-        SettingRow("Scan again", "Looks for games you added or removed.", onClick = act::rescan) {
+        SettingRow("Scan again", "Looks for games you added or removed in all folders.", onClick = act::rescan) {
             Text(if (act.scanning) "Scanning…" else "Scan ›", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
         }
+    }
+}
+
+/**
+ * One games folder: the rail's line icon for what it holds (remote = Wii, cube = GameCube, both when mixed)
+ * in a tile of that colour, where it is, how many games, and Remove (Ⓧ while the cursor is on it).
+ */
+@Composable
+private fun GamesFolderRow(act: MainActivity, tree: android.net.Uri, onRemove: () -> Unit) {
+    val c = LocalWii.current
+    val games = act.games.filter { io.github.hiramrg.delphis.platform.inFolder(it, tree) }
+    val wii = games.any { it.info.platform == Platform.WII }
+    val gc = games.any { it.info.platform == Platform.GAMECUBE }
+    val wiiTint = if (c.dark) Color(0xFFE8ECF0) else Color(0xFF1A6FB5)
+    val gcTint = Color(0xFF8B7CF0)
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)
+            .onPreviewKeyEvent { e -> if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_BUTTON_X) { onRemove(); true } else false },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        val tile = RoundedCornerShape(11.dp)
+        Row(
+            Modifier.size(36.dp).clip(tile).background(if (c.dark) Color(0xFF22272D) else c.sidebar)
+                .then(if (wii != gc) Modifier.border(2.dp, (if (wii) wiiTint else gcTint).copy(alpha = 0.45f), tile) else Modifier),
+            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+        ) {
+            when {
+                wii && gc -> { RailIcon("wii", wiiTint, Modifier.size(16.dp)); RailIcon("gc", gcTint, Modifier.size(16.dp)) }
+                wii -> RailIcon("wii", wiiTint, Modifier.size(20.dp))
+                gc -> RailIcon("gc", gcTint, Modifier.size(20.dp))
+                else -> RailIcon("all", c.textDim, Modifier.size(18.dp))
+            }
+        }
+        Column(Modifier.weight(1f)) {
+            Text(io.github.hiramrg.delphis.platform.folderLabel(tree), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(if (act.scanning) "Scanning…" else "${games.size} games", fontSize = 11.5.sp, color = c.textDim, maxLines = 1)
+        }
+        PanelBtn("Remove", "X", false, onClick = onRemove)
     }
 }
 

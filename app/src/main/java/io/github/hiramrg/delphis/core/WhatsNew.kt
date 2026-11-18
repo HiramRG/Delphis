@@ -5,12 +5,12 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 40
+    const val RELEASE = 41
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("A simpler bottom screen.", "Bigger and easier to read: the game on a blurred banner, the controls you're using (Change Ⓧ), and three facts: achievements, time played and your autosave."),
+        Item("More than one games folder.", "Settings → Library lists all your games folders. Add one for Wii and one for GameCube (or as many as you like); all their games show together on Home."),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

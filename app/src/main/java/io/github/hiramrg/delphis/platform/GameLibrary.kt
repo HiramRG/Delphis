@@ -36,18 +36,24 @@ class GameLibrary(private val context: Context, private val prefs: Prefs) {
     private fun withProperName(g: GameEntry) = g.copy(info = g.info.copy(title = GameTitles.titleFor(g.info)))
 
     suspend fun scan(onProgress: (Int) -> Unit = {}): List<GameEntry> = withContext(Dispatchers.IO) {
-        val tree = prefs.gamesTreeUri ?: return@withContext emptyList()
+        val trees = prefs.gamesFolders
+        if (trees.isEmpty()) return@withContext emptyList()
         val previous = cached().associateBy { it.uri.toString() }
-        val found = mutableListOf<GameEntry>()
-        walk(tree, DocumentsContract.getTreeDocumentId(tree), depth = 0) { uri, name, size, modified ->
-            val old = previous[uri.toString()]
-            found += if (old != null && old.size == size && old.lastModified == modified) old
-            else GameEntry(uri, name, size, modified, identify(uri, name))
-            onProgress(found.size)
+        val found = LinkedHashMap<String, GameEntry>()
+        // Every games folder; a folder inside another one isn't walked twice (same file = same entry).
+        for (tree in trees) runCatching {
+            walk(tree, DocumentsContract.getTreeDocumentId(tree), depth = 0) { uri, name, size, modified ->
+                val old = previous[uri.toString()]
+                found[uri.toString()] = if (old != null && old.size == size && old.lastModified == modified) old
+                else GameEntry(uri, name, size, modified, identify(uri, name))
+                onProgress(found.size)
+            }
         }
-        val sorted = found.sortedBy { it.info.title.lowercase() }
+        val sorted = found.values.sortedBy { it.info.title.lowercase() }
         prefs.libraryCache = encode(sorted) // non-games are cached too so rescans stay fast
-        sorted.filter { it.isDolphinGame }.map(::withProperName)
+        // The same game in two folders shows once.
+        val seen = HashSet<String>()
+        sorted.filter { it.isDolphinGame }.filter { g -> g.info.gameId?.let { seen.add(it) } ?: true }.map(::withProperName)
     }
 
     /** Reads the disc header with random access (needed for WBFS/CISO/GCZ, where it isn't at offset 0). */
@@ -115,4 +121,21 @@ class GameLibrary(private val context: Context, private val prefs: Prefs) {
             )
         }
     } catch (_: Exception) { emptyList() }
+}
+
+
+/** A games folder as people read it: "SD card › ROMs › Wii" (from the folder's tree id). */
+fun folderLabel(tree: Uri): String {
+    val id = runCatching { DocumentsContract.getTreeDocumentId(tree) }.getOrNull() ?: return tree.lastPathSegment ?: "Folder"
+    val volume = id.substringBefore(':')
+    val path = id.substringAfter(':', "").trim('/')
+    val root = if (volume.equals("primary", ignoreCase = true)) "Internal" else "SD card"
+    return (listOf(root) + path.split('/').filter { it.isNotBlank() }).joinToString(" › ")
+}
+
+/** Whether [game] is inside the games folder [tree]. */
+fun inFolder(game: GameEntry, tree: Uri): Boolean {
+    val treeId = runCatching { DocumentsContract.getTreeDocumentId(tree) }.getOrNull() ?: return false
+    val docId = runCatching { DocumentsContract.getDocumentId(game.uri) }.getOrNull() ?: return false
+    return docId == treeId || docId.startsWith(treeId.trimEnd('/') + "/")
 }

@@ -12,9 +12,17 @@ class Prefs(context: Context) {
         get() = sp.getString("dolphin_tree", null)?.let(Uri::parse)
         set(v) = sp.edit().putString("dolphin_tree", v?.toString()).apply()
 
-    var gamesTreeUri: Uri?
-        get() = sp.getString("games_tree", null)?.let(Uri::parse)
-        set(v) = sp.edit().putString("games_tree", v?.toString()).apply()
+    /** The first games folder (older builds had only one; see [gamesFolders]). */
+    val gamesTreeUri: Uri? get() = gamesFolders.firstOrNull()
+
+    /** Every games folder the user added (e.g. one for Wii and one for GameCube). The old single folder carries over. */
+    var gamesFolders: List<Uri>
+        get() {
+            val raw = sp.getString("games_trees", null)
+            if (raw == null) return listOfNotNull(sp.getString("games_tree", null)?.let(Uri::parse))
+            return runCatching { org.json.JSONArray(raw).let { a -> (0 until a.length()).map { Uri.parse(a.getString(it)) } } }.getOrDefault(emptyList())
+        }
+        set(v) = sp.edit().putString("games_trees", org.json.JSONArray(v.map { it.toString() }).toString()).apply()
 
     /** Package of the Dolphin build to launch; null = auto-detect. */
     var dolphinPackage: String?

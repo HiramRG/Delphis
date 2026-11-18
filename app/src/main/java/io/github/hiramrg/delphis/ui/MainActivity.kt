@@ -181,7 +181,10 @@ class MainActivity : ComponentActivity() {
     private val pickGamesFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             persist(uri, write = false)
-            prefs.gamesTreeUri = uri
+            // Adds a folder (keeps the others); picking one that's already there just scans again.
+            val id = runCatching { android.provider.DocumentsContract.getTreeDocumentId(uri) }.getOrNull()
+            val folders = prefs.gamesFolders
+            if (folders.none { runCatching { android.provider.DocumentsContract.getTreeDocumentId(it) }.getOrNull() == id }) prefs.gamesFolders = folders + uri
             setupVersion++
             rescan()
         }
@@ -404,10 +407,18 @@ class MainActivity : ComponentActivity() {
         runCatching { startActivity(intent, opts) }
     }
 
-    fun isSetUp() = bridge.installedPackage() != null && bridge.hasConfigAccess() && prefs.gamesTreeUri != null
+    fun isSetUp() = bridge.installedPackage() != null && bridge.hasConfigAccess() && prefs.gamesFolders.isNotEmpty()
 
     fun connectDolphinFolder(): Unit = pickDolphinFolder.launch(bridge.pickerInitialUri())
     fun chooseGamesFolder(): Unit = pickGamesFolder.launch(prefs.gamesTreeUri)
+
+    /** Takes a games folder out of the library (the files stay; its games' play time etc. come back if re-added). */
+    fun removeGamesFolder(tree: Uri) {
+        prefs.gamesFolders = prefs.gamesFolders.filter { it != tree }
+        runCatching { contentResolver.releasePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        setupVersion++
+        rescan()
+    }
 
     private fun persist(uri: Uri, write: Boolean) {
         val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or (if (write) Intent.FLAG_GRANT_WRITE_URI_PERMISSION else 0)
