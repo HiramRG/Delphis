@@ -1,6 +1,8 @@
 package io.github.hiramrg.delphis.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -19,7 +21,7 @@ import androidx.compose.ui.unit.sp
  */
 @Composable
 fun NoControllerPrompt(
-    connected: String?, needsCheck: Boolean, onCheck: () -> Unit, onLater: () -> Unit,
+    connected: String?, needsCheck: Boolean, vendor: Int, onCheck: () -> Unit, onLater: () -> Unit,
     onTouch: (dontShow: Boolean) -> Unit, onBluetooth: (dontShow: Boolean) -> Unit,
 ) {
     val c = LocalWii.current
@@ -29,16 +31,33 @@ fun NoControllerPrompt(
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
     ) {
         if (connected != null && needsCheck) {
-            // A controller Delphis hasn't checked yet: one press per button tells Delphis and Dolphin exactly what it sends.
-            PopupPanel("✓ Controller connected", connected, Modifier.widthIn(max = 500.dp)) {
-                Text(
-                    "Let's check that it works: press each button once when asked (about a minute). " +
-                        "Some controllers, like the Switch Pro Controller, name their buttons differently on Android; after the check, Delphis' menus and your games read it right.",
-                    fontSize = 12.5.sp, color = c.textDim, lineHeight = 17.sp,
-                )
-                Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PanelBtn("Later", null, false, Modifier.weight(1f), onClick = onLater)
-                    PanelBtn("Check my controller", null, true, Modifier.weight(1.4f), onClick = onCheck)
+            // A controller Delphis hasn't checked yet: what its buttons do in Delphis, then one press per button.
+            val nintendo = vendor == 0x057E
+            val sony = vendor == 0x054C
+            PopupPanel("✓ Controller connected", connected, Modifier.widthIn(max = 660.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            (if (nintendo) "Delphis reads its buttons by their letters, like on the Thor. "
+                            else "Delphis uses buttons by position, like on the Thor, so some letters are swapped. ") +
+                                "Let's check it once: press each button when asked (about a minute).",
+                            fontSize = 12.5.sp, color = c.textDim, lineHeight = 17.sp,
+                        )
+                        Text(
+                            when {
+                                nintendo -> "Same letters as the Thor: Ⓐ selects, Ⓑ goes back."
+                                sony -> "Press ○ (right) to select and ✕ (bottom) to go back. Games use the same positions."
+                                else -> "Press Ⓑ (right) to select and Ⓐ (bottom) to go back. Games use the same positions."
+                            },
+                            fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text, lineHeight = 17.sp,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            PanelBtn("Later", null, false, Modifier.weight(1f), onClick = onLater)
+                            PanelBtn("Check my controller", null, true, Modifier.weight(1.5f), onClick = onCheck)
+                        }
+                    }
+                    ButtonGuide(nintendo, sony)
                 }
             }
         } else if (connected != null) {
@@ -84,7 +103,7 @@ fun OneScreenHelperPrompt(forPlay: Boolean, onNotNow: () -> Unit, onAppInfo: () 
     ) {
         PopupPanel("Closing games", "Turn on \"close games\"", Modifier.widthIn(max = 560.dp)) {
             Text(
-                "Delphis needs it to show its pill over the game, open its menu with ⊖ + Start and quit games. " +
+                "Delphis needs it to show its pill over the game, open its menu with your controller's Home button and quit games. " +
                     "Without it, the only way out of a game is Dolphin's own menu (swipe back from the edge).",
                 fontSize = 12.5.sp, color = c.textDim, lineHeight = 17.sp,
             )
@@ -97,5 +116,32 @@ fun OneScreenHelperPrompt(forPlay: Boolean, onNotNow: () -> Unit, onAppInfo: () 
                 PanelBtn("2 · Accessibility", null, true, Modifier.weight(1.1f), onClick = onAccessibility)
             }
         }
+    }
+}
+
+/** The face buttons as the controller labels them, and what each does in Delphis (the Thor's positions). */
+@Composable
+private fun ButtonGuide(nintendo: Boolean, sony: Boolean) {
+    val c = LocalWii.current
+    // top, right, bottom, left: the controller's own label, its colour, the role in Delphis
+    val buttons = when {
+        nintendo -> listOf(Triple("X", c.text, "X"), Triple("A", c.accentText, "A · Select"), Triple("B", c.text, "B · Back"), Triple("Y", c.text, "Y"))
+        sony -> listOf(Triple("△", Color(0xFF3FB8A0), "= X"), Triple("○", Color(0xFFE0503A), "= A · Select"), Triple("✕", Color(0xFF5B8DEF), "= B · Back"), Triple("□", Color(0xFFD877C0), "= Y"))
+        else -> listOf(Triple("Y", Color(0xFFE0C23A), "= X"), Triple("B", Color(0xFFE0503A), "= A · Select"), Triple("A", Color(0xFF3FA864), "= B · Back"), Triple("X", Color(0xFF3A7DE0), "= Y"))
+    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        CapsLabel("In Delphis")
+        Box(Modifier.size(width = 190.dp, height = 156.dp)) {
+            val spots = listOf(Alignment.TopCenter, Alignment.CenterEnd, Alignment.BottomCenter, Alignment.CenterStart)
+            buttons.forEachIndexed { i, (label, colour, role) ->
+                Column(Modifier.align(spots[i]).width(80.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.size(38.dp).clip(RoundedCornerShape(50)).border(2.5.dp, colour, RoundedCornerShape(50)), contentAlignment = Alignment.Center) {
+                        Text(label, fontSize = 16.sp, fontWeight = FontWeight.Black, color = colour)
+                    }
+                    Text(role, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, color = if ("Select" in role) c.accentText else c.text, maxLines = 1)
+                }
+            }
+        }
+        Text("⌂ Home button · Delphis' menu", fontSize = 10.5.sp, color = c.textDim)
     }
 }

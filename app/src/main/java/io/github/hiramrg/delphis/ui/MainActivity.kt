@@ -84,6 +84,8 @@ class MainActivity : ComponentActivity() {
     var padConnected by mutableStateOf<String?>(null)
     /** One screen: the connected controller hasn't been through the Controller check yet. */
     var padNeedsCheck by mutableStateOf(false)
+    /** The connected controller's maker (Nintendo / Sony / others), for the button guide. */
+    var padVendor by mutableIntStateOf(0)
     private var controllerAsked = false
     private val padListener = object : android.hardware.input.InputManager.InputDeviceListener {
         override fun onInputDeviceAdded(deviceId: Int) {
@@ -91,7 +93,7 @@ class MainActivity : ComponentActivity() {
             val pad = DeviceInfo.gamepads().firstOrNull() ?: return
             if (pad.name != prefs.calibratedDeviceName) {
                 // A new controller: offer the check (each button once), so Delphis and Dolphin read it right.
-                padConnected = pad.name; padNeedsCheck = true; noPadPrompt = true
+                padConnected = pad.name; padVendor = pad.vendorId; padNeedsCheck = true; noPadPrompt = true
             } else if (noPadPrompt) {
                 padConnected = pad.name; padNeedsCheck = false
                 window.decorView.postDelayed({ noPadPrompt = false; padConnected = null }, 2000)
@@ -110,7 +112,7 @@ class MainActivity : ComponentActivity() {
         controllerAsked = true
         val pad = DeviceInfo.gamepads().firstOrNull()
         if (pad == null) { if (prefs.warnNoController) { padConnected = null; noPadPrompt = true } }
-        else if (pad.name != prefs.calibratedDeviceName) { padConnected = pad.name; padNeedsCheck = true; noPadPrompt = true }
+        else if (pad.name != prefs.calibratedDeviceName) { padConnected = pad.name; padVendor = pad.vendorId; padNeedsCheck = true; noPadPrompt = true }
     }
 
     /** Settings → Display → Screen mode changed: landscape on one screen, and the bottom-screen menu on or off. */
@@ -341,7 +343,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 if (noPadPrompt && whatsNewVersion == null) NoControllerPrompt(
-                    padConnected, padNeedsCheck,
+                    padConnected, padNeedsCheck, padVendor,
                     onCheck = { noPadPrompt = false; padConnected = null; padNeedsCheck = false; screen = Screen.ControllerCheck },
                     onLater = { noPadPrompt = false; padConnected = null; padNeedsCheck = false },
                     onTouch = { dontShow -> if (dontShow) prefs.warnNoController = false; noPadPrompt = false },

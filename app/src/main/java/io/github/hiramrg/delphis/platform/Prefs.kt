@@ -349,6 +349,12 @@ class Prefs(context: Context) {
     var warnNoController: Boolean
         get() = sp.getBoolean("warn_no_pad", true)
         set(v) = sp.edit().putBoolean("warn_no_pad", v).apply()
+    /** One screen: what opens Delphis' menu in a game: 0 = the Home button (⌂ / Xbox / PS), 1 = ⊖ + Start, 2 = both. */
+    var menuShortcut: Int
+        get() = sp.getInt("menu_shortcut", 0).coerceIn(0, 2)
+        set(v) = sp.edit().putInt("menu_shortcut", v).apply()
+    /** The shortcut as the pill and Settings name it. */
+    val menuShortcutLabel: String get() = when (menuShortcut) { 0 -> "⌂ Home button"; 1 -> "⊖ + Start"; else -> "⌂ or ⊖ + Start" }
     /** One screen: the Delphis pill at the top of the game. */
     var pillShown: Boolean
         get() = sp.getBoolean("pill_shown", true)

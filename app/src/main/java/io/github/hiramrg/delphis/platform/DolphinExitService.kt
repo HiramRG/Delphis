@@ -104,7 +104,8 @@ class DolphinExitService : AccessibilityService() {
             val controller = pads.firstOrNull()?.let { "🎮 " + it.name } ?: "👆 Touch controls"
             s.handler.post {
                 s.menuShortcut(true)
-                if (prefs.pillShown) s.pill.start(showFull, prefs.pillOpacity, controller) else s.pill.stop()
+                s.shortcut = prefs.menuShortcut
+                if (prefs.pillShown) s.pill.start(showFull, prefs.pillOpacity, controller, prefs.menuShortcutLabel) else s.pill.stop()
                 s.handler.removeCallbacks(s.pillCheck)
                 s.handler.postDelayed(s.pillCheck, 1000)
             }
@@ -193,36 +194,55 @@ class DolphinExitService : AccessibilityService() {
     // ------------------------------------------------------------------ one screen: Delphis' in-game menu
 
     private var shortcutOn = false
+    /** Prefs.menuShortcut: 0 = Home button, 1 = ⊖ + Start, 2 = both. */
+    private var shortcut = 0
     private var selectHeld = false
-    private var swallowStartUp = false
+    private var startHeld = false
+    /** Keys whose release is swallowed too (their press opened the menu). */
+    private val swallowUp = mutableSetOf<Int>()
 
-    /** ⊖ + Start: key filtering is only on while a game runs on a one-screen device. */
+    /** Key filtering is only on while a game runs on a one-screen device. */
     private fun menuShortcut(on: Boolean) {
         if (shortcutOn == on) return
         shortcutOn = on
-        selectHeld = false; swallowStartUp = false
+        selectHeld = false; startHeld = false; swallowUp.clear()
         runCatching {
             serviceInfo = serviceInfo.apply {
                 flags = if (on) flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
                 else flags and android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS.inv()
             }
-        }.onFailure { CrashLog.event("couldn't change the ⊖ + Start shortcut: ${it.message}") }
+        }.onFailure { CrashLog.event("couldn't change the in-game menu shortcut: ${it.message}") }
     }
 
+    /**
+     * The Home button (⌂ / Xbox / PS) opens Delphis' menu and never reaches the game (no preset uses it).
+     * ⊖ + Start works in either order: the second button goes only to Delphis (the first was already sent
+     * to the game, since a press can't be held back and passed on later).
+     */
     override fun onKeyEvent(raw: android.view.KeyEvent): Boolean {
         if (!shortcutOn) return false
-        // Controllers that don't report standard keys (e.g. a Switch Pro Controller): ⊖ / + by what they stand for.
+        // Controllers that don't report standard keys (e.g. a Switch Pro Controller): by what they stand for.
         val event = PadKeys.translate(raw, Prefs(this), true)
-        when (event.keyCode) {
-            android.view.KeyEvent.KEYCODE_BUTTON_SELECT -> selectHeld = event.action == android.view.KeyEvent.ACTION_DOWN
-            android.view.KeyEvent.KEYCODE_BUTTON_START -> {
-                if (event.action == android.view.KeyEvent.ACTION_UP && swallowStartUp) { swallowStartUp = false; return true }
-                if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0 && selectHeld && !GameLauncher.busy &&
-                    topScreenApp()?.let { it in DolphinBridge.KNOWN_PACKAGES } == true) {
-                    swallowStartUp = true
-                    handler.post { openInGameMenu() }
-                    return true
-                }
+        val code = event.keyCode
+        val down = event.action == android.view.KeyEvent.ACTION_DOWN
+        if (!down && swallowUp.remove(code)) {
+            if (code == android.view.KeyEvent.KEYCODE_BUTTON_SELECT) selectHeld = false
+            if (code == android.view.KeyEvent.KEYCODE_BUTTON_START) startHeld = false
+            return true
+        }
+        fun gameInFront() = !GameLauncher.busy && topScreenApp()?.let { it in DolphinBridge.KNOWN_PACKAGES } == true
+        fun open(): Boolean { swallowUp += code; handler.post { openInGameMenu() }; return true }
+        when (code) {
+            android.view.KeyEvent.KEYCODE_BUTTON_MODE -> if (shortcut != 1 && gameInFront()) {
+                if (down && event.repeatCount == 0) return open()
+                return true
+            }
+            android.view.KeyEvent.KEYCODE_BUTTON_SELECT, android.view.KeyEvent.KEYCODE_BUTTON_START -> {
+                val isSelect = code == android.view.KeyEvent.KEYCODE_BUTTON_SELECT
+                if (!down) { if (isSelect) selectHeld = false else startHeld = false; return false }
+                val otherHeld = if (isSelect) startHeld else selectHeld
+                if (isSelect) selectHeld = true else startHeld = true
+                if (shortcut != 0 && event.repeatCount == 0 && otherHeld && gameInFront()) return open()
             }
         }
         return false

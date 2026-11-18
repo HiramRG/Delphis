@@ -42,10 +42,10 @@ class DelphisPill(private val service: AccessibilityService, private val onTap: 
     val showing: Boolean get() = root != null
 
     /** Puts the pill up for a game: full first when [showFull], then small at [opacityPercent]. */
-    fun start(showFull: Boolean, opacityPercent: Int, controller: String) {
+    fun start(showFull: Boolean, opacityPercent: Int, controller: String, shortcut: String) {
         stop()
         opacity = opacityPercent / 100f
-        runCatching { attach(controller) }.onFailure { CrashLog.event("Delphis pill failed: ${it.message}"); return }
+        runCatching { attach(controller, shortcut) }.onFailure { CrashLog.event("Delphis pill failed: ${it.message}"); return }
         if (showFull) {
             full?.visibility = View.VISIBLE; small?.visibility = View.GONE
             handler.postDelayed({ shrink() }, FULL_MS)
@@ -78,7 +78,7 @@ class DelphisPill(private val service: AccessibilityService, private val onTap: 
         root = null; full = null; small = null
     }
 
-    private fun attach(controller: String) {
+    private fun attach(controller: String, shortcut: String) {
         val ctx = service
         val manager = ctx.getSystemService(WindowManager::class.java)
         val d = ctx.resources.displayMetrics.density
@@ -103,7 +103,7 @@ class DelphisPill(private val service: AccessibilityService, private val onTap: 
             setPadding(dp(5f), dp(5f), dp(14f), dp(5f))
             addView(icon(28f, ACCENT_DARK, ACCENT))
             addView(text("Delphis menu", 12.5f, true).apply { setPadding(dp(9f), 0, 0, 0) })
-            addView(text("⊖ + Start", 11.5f, true, 0.85f).apply { setPadding(dp(9f), 0, 0, 0) })
+            addView(text(shortcut, 11.5f, true, 0.85f).apply { setPadding(dp(9f), 0, 0, 0) })
             addView(View(ctx).apply { setBackgroundColor(0x40FFFFFF) }, LinearLayout.LayoutParams(dp(1f), dp(18f)).apply { marginStart = dp(9f); marginEnd = dp(9f) })
             addView(text(controller, 11.5f, false, 0.85f))
         }

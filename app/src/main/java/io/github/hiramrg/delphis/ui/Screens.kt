@@ -2359,7 +2359,23 @@ private fun ScreensSettings(act: MainActivity) {
             ToggleRow("Warn when no controller is found", "Asks when you open Delphis without one.", warn) { warn = it; prefs.warnNoController = it }
         }
     }
-    if (one) PillSettings(act)
+    if (one) {
+        var shortcut by remember { mutableIntStateOf(prefs.menuShortcut) }
+        CapsLabel("In-game menu")
+        GroupCard {
+            Column(Modifier.padding(horizontal = 8.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text("Open Delphis' menu with", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
+                Text(
+                    "The Home button (⌂ on Switch, the Xbox button, PS on PlayStation) isn't used by games, so the game never sees it. " +
+                        "⊖ + Start: whichever you press second goes only to Delphis.",
+                    fontSize = 12.sp, color = c.textDim, lineHeight = 15.sp,
+                )
+                Segmented(listOf(0 to "⌂ Home button", 1 to "⊖ + Start", 2 to "Both"), shortcut, { shortcut = it; prefs.menuShortcut = it })
+                Text("The pill at the top of the game always works too.", fontSize = 11.5.sp, color = c.textDim)
+            }
+        }
+        PillSettings(act)
+    }
 }
 
 /** One screen: the Delphis pill at the top of the game (on/off, opacity, when the full pill shows), with a live preview. */
@@ -2394,7 +2410,7 @@ private fun PillSettings(act: MainActivity) {
         }
         ToggleRow(
             "Show the Delphis pill",
-            if (on) "Tap it to open Delphis' menu. Achievements pop out of it." else "Open the menu with ⊖ + Start on your controller. Without a controller, keep the pill on.",
+            if (on) "Tap it to open Delphis' menu. Achievements pop out of it." else "Open the menu with ${prefs.menuShortcutLabel} on your controller. Without a controller, keep the pill on.",
             on,
         ) { on = it; prefs.pillShown = it }
         if (on) {
