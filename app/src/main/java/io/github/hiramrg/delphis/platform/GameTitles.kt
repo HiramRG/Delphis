@@ -47,6 +47,7 @@ object GameTitles {
         val f = file(context)
         if (f.exists() && System.currentTimeMillis() - f.lastModified() < MAX_AGE_MS) return false
         return runCatching {
+            TestHooks.net()
             val conn = (URL(URL_EN).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 8000; readTimeout = 20000
                 setRequestProperty("User-Agent", "Delphis/1.0")

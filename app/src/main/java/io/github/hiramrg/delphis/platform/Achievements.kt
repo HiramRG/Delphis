@@ -69,6 +69,7 @@ object Achievements {
 
     private suspend fun get(url: String): String? = withContext(Dispatchers.IO) {
         runCatching {
+            TestHooks.net()
             val conn = (URL(url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000; readTimeout = 15_000
                 setRequestProperty("User-Agent", "Delphis (Android Dolphin companion)")
@@ -87,6 +88,7 @@ object Achievements {
      */
     suspend fun dolphinToken(user: String, password: String): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
         runCatching {
+            TestHooks.net()
             val conn = (URL("https://retroachievements.org/dorequest.php").openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000; readTimeout = 15_000; requestMethod = "POST"; doOutput = true
                 setRequestProperty("User-Agent", "Delphis (Android Dolphin companion)")
@@ -163,6 +165,7 @@ object Achievements {
             val url = a.badgeUrl()
             val f = badgeFile(base, url)
             if (!f.exists()) runCatching {
+                TestHooks.net()
                 (URL(url).openConnection() as HttpURLConnection).run {
                     connectTimeout = 10_000; readTimeout = 15_000
                     try { if (responseCode == 200) inputStream.use { i -> f.parentFile?.mkdirs(); f.writeBytes(i.readBytes()) } } finally { disconnect() }
@@ -177,6 +180,7 @@ object Achievements {
         return withContext(Dispatchers.IO) {
             val file = badgeFile(context.applicationContext.filesDir, url)
             val bytes = if (file.exists()) file.readBytes() else runCatching {
+                TestHooks.net()
                 (URL(url).openConnection() as HttpURLConnection).run {
                     connectTimeout = 10_000; readTimeout = 15_000
                     try { if (responseCode == 200) inputStream.use { it.readBytes() } else null } finally { disconnect() }

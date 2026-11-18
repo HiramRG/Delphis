@@ -38,6 +38,14 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
+    // The layout check (src/test/…/LayoutCheckTest.kt) draws every screen with Robolectric: it needs the app's
+    // resources and real drawing (native graphics) for its screenshots.
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all { it.maxHeapSize = "3g" }
+        }
+    }
 }
 
 dependencies {
@@ -54,6 +62,10 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")
+    // Layout check: Delphis' screens drawn off-device.
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test:core:1.6.1")
+    testImplementation("androidx.test.ext:junit:1.2.1")
     // The real org.json for unit tests (Android's is a stub off-device).
     testImplementation("org.json:json:20240303")
 }

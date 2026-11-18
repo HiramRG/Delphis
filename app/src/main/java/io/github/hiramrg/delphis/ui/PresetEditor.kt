@@ -218,7 +218,7 @@ private class EditorState(
 
 private fun controlName(c: ThorControl) = when (c) {
     LEFT_STICK -> "Left stick"; RIGHT_STICK -> "Right stick"; DPAD -> "D-pad"; L3 -> "Left stick click"; R3 -> "Right stick click"
-    FACE_EAST -> "A button"; FACE_SOUTH -> "B button"; FACE_NORTH -> "X button"; FACE_WEST -> "Y button"; GYRO -> "Gyro"; else -> c.shortLabel
+    FACE_EAST, FACE_SOUTH, FACE_NORTH, FACE_WEST -> c.padLabel + " button"; GYRO -> "Gyro"; else -> c.padLabel
 }
 
 // ============================================================================ top screen
@@ -360,7 +360,7 @@ fun MapBadge(control: ThorControl, height: Dp) {
     val blue = Color(0xFF5C8DF6)
     when (control) {
         FACE_EAST, FACE_SOUTH, FACE_NORTH, FACE_WEST -> Box(Modifier.size(height).clip(CircleShape).background(controlColor(control)), contentAlignment = Alignment.Center) {
-            Text(control.shortLabel, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = (height.value * 0.5f).sp)
+            Text(control.padLabel, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = (height.value * 0.5f).sp)
         }
         LEFT_STICK, RIGHT_STICK -> Box(Modifier.size(height), contentAlignment = Alignment.Center) {
             val ring = if (control == RIGHT_STICK) controlColor(control) else blue
@@ -377,7 +377,7 @@ fun MapBadge(control: ThorControl, height: Dp) {
             drawRoundRect(blue, Offset(0f, (w - t) / 2), Size(w, t), CornerRadius(t * 0.25f))
         }
         else -> {
-            val label = when (control) { START -> "Start"; SELECT -> "Select"; GYRO -> "Gyro"; MOTION -> "Tilt"; else -> control.shortLabel }
+            val label = when (control) { START -> "Start"; SELECT -> "Select"; GYRO -> "Gyro"; MOTION -> "Tilt"; else -> control.padLabel }
             val col = if (control == GYRO || control == R3) controlColor(control) else blue
             Box(Modifier.height(height).widthIn(min = height * 1.35f).clip(RoundedCornerShape(50)).background(col).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
                 Text(label, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = (height.value * 0.48f).sp, maxLines = 1)

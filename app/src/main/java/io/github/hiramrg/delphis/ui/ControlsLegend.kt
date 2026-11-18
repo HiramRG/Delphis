@@ -174,7 +174,7 @@ fun ControlBadge(control: ThorControl, size: Dp) {
         face != null -> Box(
             Modifier.size(size).clip(CircleShape).background(face).border(1.5.dp, face.copy(alpha = 0.6f), CircleShape),
             contentAlignment = Alignment.Center,
-        ) { Text(control.shortLabel, color = Color(0xFF0B0F18), fontWeight = FontWeight.Bold, fontSize = (size.value * 0.5f).sp) }
+        ) { Text(control.padLabel, color = Color(0xFF0B0F18), fontWeight = FontWeight.Bold, fontSize = (size.value * 0.5f).sp) }
 
         control == LEFT_STICK || control == RIGHT_STICK || control == L3 || control == R3 -> Box(Modifier.size(size), contentAlignment = Alignment.Center) {
             val click = control == L3 || control == R3
@@ -198,7 +198,7 @@ fun ControlBadge(control: ThorControl, size: Dp) {
         }
 
         else -> {
-            val label = when (control) { START -> "Start"; SELECT -> "Select"; MOTION -> "Tilt"; else -> control.shortLabel }
+            val label = when (control) { START -> "Start"; SELECT -> "Select"; MOTION -> "Tilt"; else -> control.padLabel }
             Box(
                 Modifier.height(size).widthIn(min = size * 1.2f).clip(RoundedCornerShape(size / 3))
                     .background(BadgeFill).border(1.5.dp, BadgeBlue, RoundedCornerShape(size / 3)).padding(horizontal = 5.dp),

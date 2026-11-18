@@ -69,6 +69,7 @@ class CoverArt(context: Context) {
     private fun download(gameId: String, file: File, missing: File) {
         for (url in GameIdReader.coverUrls(gameId)) {
             try {
+                TestHooks.net()
                 val conn = (URL(url).openConnection() as HttpURLConnection).apply {
                     connectTimeout = 6000; readTimeout = 8000
                     setRequestProperty("User-Agent", "Delphis/1.0")

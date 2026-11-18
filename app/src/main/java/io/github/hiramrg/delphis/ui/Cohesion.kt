@@ -177,7 +177,7 @@ fun PopupPanel(
     val c = LocalWii.current
     val shape = RoundedCornerShape(20.dp)
     Column(
-        modifier.shadow(18.dp, shape).clip(shape).background(if (c.dark) Color(0xFF22272D) else c.card)
+        modifier.semantics { this[PopupLayer] = true }.shadow(18.dp, shape).clip(shape).background(if (c.dark) Color(0xFF22272D) else c.card)
             .border(2.dp, c.accent, shape).padding(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -205,7 +205,7 @@ fun ConfirmPanel(caps: String?, title: String, sub: String?, confirm: String, mo
 /** Dimmed backdrop + a centred pop-up panel, drawn inside the current window (no dialog window). */
 @Composable
 fun OverlayPanel(onOutside: () -> Unit, content: @Composable BoxScope.() -> Unit) {
-    Box(Modifier.fillMaxSize().background(Color(0xB3000000)).clickable(onClick = onOutside), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().semantics { this[PopupLayer] = true }.background(Color(0xB3000000)).clickable(onClick = onOutside), contentAlignment = Alignment.Center) {
         Box(Modifier.padding(16.dp).clickable(enabled = false) {}, content = content)
     }
 }
@@ -361,7 +361,7 @@ private fun NoticeCard(n: Notices.Notice) {
     val icon = when (n.kind) { Notices.Kind.DONE -> "✓"; Notices.Kind.INFO -> "i"; Notices.Kind.PROBLEM -> "!" }
     val shape = RoundedCornerShape(18.dp)
     Row(
-        Modifier.widthIn(min = 300.dp, max = 460.dp).shadow(14.dp, shape).clip(shape).background(if (c.dark) Color(0xFF22272D) else c.card)
+        Modifier.widthIn(min = 300.dp, max = 460.dp).semantics { this[PopupLayer] = true }.shadow(14.dp, shape).clip(shape).background(if (c.dark) Color(0xFF22272D) else c.card)
             .border(2.dp, col, shape).clickable { Notices.dismiss() }.padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -424,7 +424,7 @@ fun ScrollingTitle(title: String, fontSize: androidx.compose.ui.unit.TextUnit = 
     val style = androidx.compose.ui.text.TextStyle(fontSize = fontSize, fontWeight = FontWeight.ExtraBold, color = c.text)
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     BoxWithConstraints(
-        Modifier.fillMaxWidth().padding(horizontal = if (start) 0.dp else 4.dp).semantics { this[Marquee] = true },
+        Modifier.fillMaxWidth().padding(horizontal = if (start) 0.dp else 4.dp).semantics { this[MarqueeText] = true },
         contentAlignment = if (start) Alignment.CenterStart else Alignment.Center,
     ) {
         val maxW = constraints.maxWidth
@@ -449,7 +449,10 @@ fun ScrollingTitle(title: String, fontSize: androidx.compose.ui.unit.TextUnit = 
 
 
 /** Marks text that scrolls on purpose (the layout check reads it whole, not as cut off). */
-val Marquee = androidx.compose.ui.semantics.SemanticsPropertyKey<Boolean>("DelphisMarquee")
+val MarqueeText = androidx.compose.ui.semantics.SemanticsPropertyKey<Boolean>("DelphisMarquee")
+
+/** Marks a pop-up drawn over the screen (the layout check compares its words with each other, not with what's under it). */
+val PopupLayer = androidx.compose.ui.semantics.SemanticsPropertyKey<Boolean>("DelphisLayer")
 
 /**
  * Fit check: buttons, chips and hints report a label that didn't fit its space (it would be cut off).

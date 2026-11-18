@@ -158,7 +158,7 @@ fun ControlBadge(k: ThorControl) {
     when {
         k == FACE_EAST || k == FACE_SOUTH || k == FACE_NORTH || k == FACE_WEST ->
             Box(Modifier.size(20.dp).clip(RoundedCornerShape(50)).background(controlColor(k)), contentAlignment = Alignment.Center) {
-                Text(k.shortLabel, fontSize = 10.5.sp, fontWeight = FontWeight.Black, color = White)
+                Text(k.padLabel, fontSize = 10.5.sp, fontWeight = FontWeight.Black, color = White)
             }
         k == LEFT_STICK || k == RIGHT_STICK ->
             Box(
@@ -172,7 +172,7 @@ fun ControlBadge(k: ThorControl) {
             drawRoundRect(ChipBlue, Offset(0f, a - b), Size(2 * a, 2 * b), CornerRadius(2f))
         }
         else -> {
-            val name = when (k) { GYRO -> "Gyro"; MOTION -> "Tilt"; SELECT -> "Select"; START -> "Start"; else -> k.shortLabel }
+            val name = when (k) { GYRO -> "Gyro"; MOTION -> "Tilt"; SELECT -> "Select"; START -> "Start"; else -> k.padLabel }
             val col = if (k == GYRO || k == R3) controlColor(k) else ChipBlue
             Box(Modifier.height(18.dp).clip(RoundedCornerShape(50)).background(col).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
                 Text(name, fontSize = 9.5.sp, fontWeight = FontWeight.Black, color = White, maxLines = 1)
@@ -229,7 +229,7 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     EXTRA.filter(::used).forEach { (if (left.size <= right.size) left else right) += it }
 
     fun badgeName(k: ThorControl) = when (k) {
-        GYRO -> "Gyro"; MOTION -> "Tilt"; SELECT -> "Select"; START -> "Start"; else -> k.shortLabel
+        GYRO -> "Gyro"; MOTION -> "Tilt"; SELECT -> "Select"; START -> "Start"; else -> k.padLabel
     }
     fun isChip(k: ThorControl) = k !in listOf(FACE_EAST, FACE_SOUTH, FACE_NORTH, FACE_WEST, LEFT_STICK, RIGHT_STICK, DPAD)
     fun chipW(k: ThorControl, bs: Float) = maxOf(bs + 10f, w(measure(badgeName(k), bs, Color.White)) + 12f)
@@ -284,7 +284,7 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
             }
             else -> { // face button
                 drawCircle(controlColor(k), r * s, p(cx, yMid))
-                val l = measure(k.shortLabel, bs * 0.95f, White)
+                val l = measure(k.padLabel, bs * 0.95f, White)
                 drawText(l, topLeft = p(cx - w(l) / 2f, yMid - h(l) / 2f))
             }
         }
@@ -315,7 +315,7 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     // ---- the Thor
     listOf(L2 to 14f, L1 to 62f, R1 to 192f, R2 to 240f).forEach { (key, x) ->
         drawRoundRect(if (used(key)) ChipBlue else unused, p(X(x), oy - tabs), Size(46f * k * s, (tabs + 4f * k) * s), CornerRadius(7f * k * s))
-        val l = measure(key.shortLabel, maxOf(6.5f, 9f * k), White)
+        val l = measure(key.padLabel, maxOf(6.5f, 9f * k), White)
         if (h(l) < tabs + 3f) drawText(l, topLeft = p(X(x + 23f) - w(l) / 2f, oy - tabs + (tabs - h(l)) / 2f))
     }
     drawRoundRect(deviceFill, p(ox, oy), Size(tw * s, th * s), CornerRadius(34f * k * s))
@@ -331,7 +331,7 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     drawRoundRect(dpc, p(X(26f), Y(102f)), Size(36f * k * s, 12f * k * s), CornerRadius(3f * k * s))
     listOf(FACE_NORTH to Offset(0f, -14f), FACE_EAST to Offset(14f, 0f), FACE_SOUTH to Offset(0f, 14f), FACE_WEST to Offset(-14f, 0f)).forEach { (key, o) ->
         drawCircle(if (used(key)) controlColor(key) else unused, 7.5f * k * s, p(X(256f + o.x), Y(50f + o.y)))
-        val l = measure(key.shortLabel, maxOf(6f, 8.5f * k), White)
+        val l = measure(key.padLabel, maxOf(6f, 8.5f * k), White)
         if (h(l) < 15f * k + 2f) drawText(l, topLeft = p(X(256f + o.x) - w(l) / 2f, Y(50f + o.y) - h(l) / 2f))
     }
     drawCircle(unused, 19f * k * s, p(X(256f), Y(108f)))

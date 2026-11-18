@@ -149,7 +149,7 @@ private fun DrawScope.drawDevice(g: ThorGeometry, preset: Preset, m: TextMeasure
         val r = g.shoulder(c)
         drawRoundRect(fillFor(c), r.topLeft, r.size, CornerRadius(g.u * 0.04f))
         drawRoundRect(lineFor(c), r.topLeft, r.size, CornerRadius(g.u * 0.04f), style = stroke)
-        drawCenteredText(m, c.shortLabel, Offset(r.center.x, r.top + r.height * 0.45f), (g.u * 0.045f).toSp(), lineFor(c))
+        drawCenteredText(m, c.padLabel, Offset(r.center.x, r.top + r.height * 0.45f), (g.u * 0.045f).toSp(), lineFor(c))
     }
 
     drawRoundRect(BodyFill, g.body.topLeft, g.body.size, CornerRadius(g.u * 0.14f))
@@ -194,7 +194,7 @@ private fun DrawScope.drawDevice(g: ThorGeometry, preset: Preset, m: TextMeasure
         val center = g.faceCenter(c)
         drawCircle(fillFor(c), g.faceR, center)
         drawCircle(lineFor(c), g.faceR, center, style = stroke)
-        drawCenteredText(m, c.shortLabel, center, (g.faceR * 0.95f).toSp(), faceLetterColors.getValue(c), bold = true)
+        drawCenteredText(m, c.padLabel, center, (g.faceR * 0.95f).toSp(), faceLetterColors.getValue(c), bold = true)
     }
 
     if (MOTION in used) {
@@ -228,7 +228,7 @@ private fun DrawScope.drawCallouts(g: ThorGeometry, preset: Preset, m: TextMeasu
         val colWidth = (range.endInclusive - range.start) - pad * 2
         groups.forEachIndexed { i, grp ->
             val single = grp.controls.singleOrNull()
-            val badge = grp.controls.joinToString(" / ") { it.shortLabel }
+            val badge = grp.controls.joinToString(" / ") { it.padLabel }
             val badgeStyle = TextStyle(fontSize = labelSize * 0.82f, fontWeight = FontWeight.Bold, color = single?.let { faceLetterColors[it] } ?: Accent)
             val actionStyle = TextStyle(fontSize = labelSize, color = Color.White)
             val badgeLayout = m.measure(badge, badgeStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,

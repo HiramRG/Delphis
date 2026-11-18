@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
@@ -763,7 +764,7 @@ private fun CardTitle(title: String) {
         else Text(
             title, style = style, maxLines = 1, softWrap = false,
             modifier = Modifier.align(Alignment.CenterStart).fillMaxWidth()
-                .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500, velocity = 40.dp),
+                .semantics { this[MarqueeText] = true }.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500, velocity = 40.dp),
         )
     }
 }
@@ -866,7 +867,7 @@ private fun GameRowView(act: MainActivity, row: HomeRow, games: List<GameEntry>,
                 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
                 Text(
                     here.info.title, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, maxLines = 1, softWrap = false,
-                    modifier = Modifier.weight(1f, fill = false).basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 900, repeatDelayMillis = 1500, velocity = 32.dp),
+                    modifier = Modifier.weight(1f, fill = false).semantics { this[MarqueeText] = true }.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 900, repeatDelayMillis = 1500, velocity = 32.dp),
                 )
             }
         }

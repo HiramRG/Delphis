@@ -51,7 +51,7 @@ private val WORD_KEYS = setOf("L1", "R1", "L2", "R2", "L3", "R3", "Start")
 object PadGlyphs {
     /** null = no controller (touch controls). The Thor (two screens) always uses its own letters. */
     var labels by mutableStateOf<io.github.hiramrg.delphis.core.ButtonLabels?>(io.github.hiramrg.delphis.core.ButtonLabels.NINTENDO)
-        private set
+        internal set
     val touch: Boolean get() = labels == null
 
     /** Reads the connected controller again (one screen); call when controllers come and go. */
@@ -63,30 +63,57 @@ object PadGlyphs {
     /** [padText] with a controller, [touchText] without one. */
     fun or(padText: String, touchText: String): String = if (touch) touchText else padText
 
+    /** Delphis' button [key] (the Thor's letters: "A", "L1"…) as the connected controller prints it. */
+    fun letter(key: String): String = when (labels) {
+        io.github.hiramrg.delphis.core.ButtonLabels.XBOX -> when (key) {
+            "A" -> "B"; "B" -> "A"; "X" -> "Y"; "Y" -> "X"
+            "L1" -> "LB"; "R1" -> "RB"; "L2" -> "LT"; "R2" -> "RT"; "L3" -> "LS"; "R3" -> "RS"
+            else -> key
+        }
+        io.github.hiramrg.delphis.core.ButtonLabels.PLAYSTATION -> when (key) { "A" -> "○"; "B" -> "✕"; "X" -> "△"; "Y" -> "□"; else -> key }
+        else -> key
+    }
+
+    /** The connected controller's colour for a face button on the controls badges (null = the Thor's own colours). */
+    fun badgeColor(c: io.github.hiramrg.delphis.core.ThorControl): Color? = when (labels) {
+        io.github.hiramrg.delphis.core.ButtonLabels.XBOX -> when (c) {
+            io.github.hiramrg.delphis.core.ThorControl.FACE_EAST -> Glow.Red
+            io.github.hiramrg.delphis.core.ThorControl.FACE_SOUTH -> Glow.Green
+            io.github.hiramrg.delphis.core.ThorControl.FACE_NORTH -> Glow.Amber
+            io.github.hiramrg.delphis.core.ThorControl.FACE_WEST -> Glow.Sky
+            else -> null
+        }
+        io.github.hiramrg.delphis.core.ButtonLabels.PLAYSTATION -> when (c) {
+            io.github.hiramrg.delphis.core.ThorControl.FACE_EAST -> Glow.Red
+            io.github.hiramrg.delphis.core.ThorControl.FACE_SOUTH -> Glow.Sky
+            io.github.hiramrg.delphis.core.ThorControl.FACE_NORTH -> Glow.Green
+            io.github.hiramrg.delphis.core.ThorControl.FACE_WEST -> Color(0xFFD877C0)
+            else -> null
+        }
+        else -> null
+    }
+
     /** Delphis' button [key] as the connected controller prints it, with that button's colour (null = no colour). */
     @Composable
     fun face(key: String): Pair<String, Color?> {
         val dark = LocalWii.current.dark
-        return when (labels) {
+        val colour = when (labels) {
             io.github.hiramrg.delphis.core.ButtonLabels.XBOX -> when (key) {
-                "A" -> "B" to Color(0xFFE0503A)
-                "B" -> "A" to Color(0xFF3FA864)
-                "X" -> "Y" to if (dark) Color(0xFFE0C23A) else Color(0xFFB8960E)
-                "Y" -> "X" to Color(0xFF3A7DE0)
-                "L1" -> "LB" to null; "R1" -> "RB" to null; "L2" -> "LT" to null; "R2" -> "RT" to null; "L3" -> "LS" to null; "R3" -> "RS" to null
-                else -> key to null
+                "A" -> Color(0xFFE0503A); "B" -> Color(0xFF3FA864); "X" -> if (dark) Color(0xFFE0C23A) else Color(0xFFB8960E); "Y" -> Color(0xFF3A7DE0)
+                else -> null
             }
             io.github.hiramrg.delphis.core.ButtonLabels.PLAYSTATION -> when (key) {
-                "A" -> "○" to Color(0xFFE0503A)
-                "B" -> "✕" to Color(0xFF5B8DEF)
-                "X" -> "△" to Color(0xFF3FB8A0)
-                "Y" -> "□" to Color(0xFFD877C0)
-                else -> key to null
+                "A" -> Color(0xFFE0503A); "B" -> Color(0xFF5B8DEF); "X" -> Color(0xFF3FB8A0); "Y" -> Color(0xFFD877C0)
+                else -> null
             }
-            else -> key to null
+            else -> null
         }
+        return letter(key) to colour
     }
 }
+
+/** This control's name as the connected controller prints it (the Thor's letters on the Thor). */
+val io.github.hiramrg.delphis.core.ThorControl.padLabel: String get() = PadGlyphs.letter(shortLabel)
 
 /**
  * A button icon: [key] is "A", "L1", "⊖", "DPAD" (D-pad) or "DPAD_LR" (D-pad, left / right), in Delphis' (the

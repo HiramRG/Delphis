@@ -62,7 +62,7 @@ fun withOrangeTags(text: String, orange: Color = ExperimentalOrange): androidx.c
     }
 
 /** Colour of each Thor control in the legend and badges. */
-fun controlColor(c: ThorControl): Color = when (c) {
+fun controlColor(c: ThorControl): Color = PadGlyphs.badgeColor(c) ?: when (c) {
     ThorControl.FACE_EAST -> Glow.Red
     ThorControl.FACE_SOUTH -> Glow.Amber
     ThorControl.FACE_NORTH -> Glow.Sky

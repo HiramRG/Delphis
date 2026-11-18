@@ -84,6 +84,7 @@ class Updater(private val context: Context) {
     /** The newest build on [channel] (null when it can't be read, e.g. offline or no beta yet). */
     suspend fun peek(channel: String): Int? = withContext(Dispatchers.IO) {
         runCatching {
+            TestHooks.net()
             val conn = (URL(releaseApi(channel)).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 8000; readTimeout = 8000
                 setRequestProperty("Accept", "application/vnd.github+json")
@@ -98,6 +99,7 @@ class Updater(private val context: Context) {
     /** Checks the chosen update channel (Settings → Updates). */
     suspend fun check(channel: String = Prefs(context).updateChannel): Check = withContext(Dispatchers.IO) {
         try {
+            TestHooks.net()
             val conn = (URL(releaseApi(channel)).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 8000; readTimeout = 8000
                 setRequestProperty("Accept", "application/vnd.github+json")
@@ -128,6 +130,7 @@ class Updater(private val context: Context) {
         // GitHub redirects release downloads to its CDN; follow a few hops manually (https -> https).
         var hops = 0
         while (true) {
+            TestHooks.net()
             conn = (url.openConnection() as HttpURLConnection).apply {
                 instanceFollowRedirects = false
                 connectTimeout = 10000; readTimeout = 20000

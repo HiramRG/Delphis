@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.draw.alpha
 import io.github.hiramrg.delphis.platform.GameEntry
@@ -294,7 +295,7 @@ private fun ControlsBar(act: MainActivity, g: GameEntry, preset: Preset?) {
             Text(
                 preset?.name ?: "Controls not chosen yet", fontSize = 14.5.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false,
                 // A long name scrolls rather than getting cut.
-                modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 2000, velocity = 28.dp),
+                modifier = Modifier.semantics { this[MarqueeText] = true }.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 2000, velocity = 28.dp),
             )
             Text(if (preset != null) preset.controller.label + " · ✓ selected" else "Pick them on the game page", fontSize = 11.sp, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }

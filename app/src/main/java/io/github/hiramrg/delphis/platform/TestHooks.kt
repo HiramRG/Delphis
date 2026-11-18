@@ -1,0 +1,12 @@
+package io.github.hiramrg.delphis.platform
+
+/**
+ * Set by the layout check (unit tests that draw every screen) so Delphis never goes online there:
+ * no update check, cover or name downloads, or RetroAchievements calls while a test screen is drawn.
+ */
+object TestHooks {
+    @Volatile @JvmField var offline = false
+
+    /** Every download calls this first: throws (like being offline) while [offline] is set. */
+    fun net() { if (offline) throw java.io.IOException("offline (layout check)") }
+}

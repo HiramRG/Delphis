@@ -210,5 +210,5 @@ private fun SmallItem(a: ControlAction, h: Float, cellW: Float, sp: (Float) -> T
 }
 
 private fun badgeName(c: ThorControl) = when (c) {
-    LEFT_STICK -> "L stick"; RIGHT_STICK -> "R stick"; MOTION -> "tilt"; GYRO -> "gyro"; else -> c.shortLabel
+    LEFT_STICK -> "L stick"; RIGHT_STICK -> "R stick"; MOTION -> "tilt"; GYRO -> "gyro"; else -> c.padLabel
 }
