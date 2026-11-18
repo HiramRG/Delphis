@@ -2417,7 +2417,7 @@ private fun GamesFolderRow(act: MainActivity, tree: android.net.Uri, onRemove: (
     val gcTint = Color(0xFF8B7CF0)
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)
-            .onPreviewKeyEvent { e -> if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_BUTTON_X) { onRemove(); true } else false },
+            .onPreviewKeyEvent { e -> if (e.nativeKeyEvent.action == KeyEvent.ACTION_DOWN && e.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_BUTTON_X) { onRemove(); true } else false },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         val tile = RoundedCornerShape(11.dp)
