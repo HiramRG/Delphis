@@ -219,6 +219,8 @@ private fun KeyEvent.firstPress() = action == KeyEvent.ACTION_DOWN && repeatCoun
 fun HomeScreen(act: MainActivity) {
     // Delphis connected to RetroAchievements but Dolphin signed out: a notice with Sign in (Ⓨ).
     LaunchedEffect(Unit) { delay(1500); act.checkDolphinRa() }
+    // One screen: ask about the controller (none, or not checked yet) and warn if "close games" is off.
+    LaunchedEffect(Unit) { delay(600); act.checkControllerOnHome(); delay(900); act.checkHelperOnHome() }
     val c = LocalWii.current
     @Suppress("UNUSED_VARIABLE") val v = act.statsVersion
     val lastPlayed = act.prefs.lastPlayed()
@@ -1823,7 +1825,7 @@ fun SetupScreen(act: MainActivity) {
     val one = act.oneScreen
     val pad = if (one) io.github.hiramrg.delphis.platform.rememberPads(act.prefs).firstOrNull()?.name else null
 
-    class Step(val title: String, val sub: String, val done: Boolean, val button: String?, val optional: Boolean = false, val action: () -> Unit = {})
+    class Step(val title: String, val sub: String, val done: Boolean, val button: String?, val optional: Boolean = false, val extra: Pair<String, () -> Unit>? = null, val action: () -> Unit = {})
     val steps = listOf(
         Step("Install Dolphin", if (dolphinPkg != null) "Found $dolphinPkg" else "Install the official Dolphin Emulator, then open it once.", dolphinPkg != null, if (dolphinPkg != null) null else "Open store", action = {
             runCatching { act.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=org.dolphinemu.dolphinemu"))) }
@@ -1838,16 +1840,32 @@ fun SetupScreen(act: MainActivity) {
         ),
         Step(
             "Turn on \"close games\"",
-            if (one) "Lets Delphis exit a game cleanly and open its menu over the game (no input delay)." else "Lets Delphis exit a game cleanly (no input delay).",
-            helperOn, if (helperOn) "Settings" else "Turn on", action = { DolphinExitService.openSettings(act) },
+            if (one) "Needed to open Delphis' menu over the game and to quit games. First: Settings → Apps → Delphis → ⋮ → Allow restricted settings (Android asks this for apps installed from an APK). Then turn on \"Delphis – close games\" here."
+            else "Lets Delphis exit a game cleanly (no input delay).",
+            helperOn, if (helperOn) "Settings" else "Turn on",
+            // One screen: the app's info page, where "Allow restricted settings" is.
+            extra = if (one && !helperOn) "App info" to {
+                runCatching { act.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + act.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                Unit
+            } else null,
+            action = { DolphinExitService.openSettings(act) },
         ),
     ) + if (one) listOf(
         // One screen: the Thor-only steps (controller check, gyro) are skipped; a controller is optional.
         Step(
-            "Connect a controller",
-            if (pad != null) "$pad is connected. Its buttons follow the Thor's layout." else "Pair any Bluetooth controller in Android's settings and press a button on it. Without one, games use Dolphin's touch controls.",
-            pad != null, if (pad != null) null else "Bluetooth settings", optional = true,
-            action = { runCatching { act.startActivity(android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } },
+            "Connect and check a controller",
+            when {
+                pad == null -> "Pair any Bluetooth controller in Android's settings and press a button on it. Then press each of its buttons once so Delphis and your games read it right. Without one, games use Dolphin's touch controls."
+                pad != act.prefs.calibratedDeviceName -> "$pad is connected. Now press each of its buttons once (about a minute), so Delphis' menus and your games read it right."
+                else -> "$pad is connected and checked."
+            },
+            pad != null && pad == act.prefs.calibratedDeviceName,
+            when { pad == null -> "Bluetooth settings"; pad != act.prefs.calibratedDeviceName -> "Check controller"; else -> "Check again" },
+            optional = true,
+            action = {
+                if (pad == null) runCatching { act.startActivity(android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                else act.screen = Screen.ControllerCheck
+            },
         ),
     ) else listOf(
         Step("Controller check", "Recommended · press each button once (about a minute).", calibrated, if (calibrated) "Redo" else "Start", optional = true, action = { act.screen = Screen.ControllerCheck }),
@@ -1920,6 +1938,7 @@ fun SetupScreen(act: MainActivity) {
                 Text(step.sub, fontSize = 13.sp, color = c.textDim, lineHeight = 18.sp)
                 Spacer(Modifier.weight(1f))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    step.extra?.let { (label, act2) -> PanelBtn(label, null, false, onClick = act2) }
                     if (step.button != null) PanelBtn(step.button, "A", !step.done, Modifier.weight(1f), onClick = step.action)
                     if (sel < steps.lastIndex) PanelBtn(if (step.done) "Next step" else "Skip for now", "Y", false) { next() }
                     else PanelBtn("Go to my games", "Start", act.isSetUp(), enabled = act.isSetUp(), onClick = goHome)

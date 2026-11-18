@@ -82,15 +82,35 @@ class MainActivity : ComponentActivity() {
     /** One screen: the "No controller found" pop-up, and the controller that connected while it was open. */
     var noPadPrompt by mutableStateOf(false)
     var padConnected by mutableStateOf<String?>(null)
+    /** One screen: the connected controller hasn't been through the Controller check yet. */
+    var padNeedsCheck by mutableStateOf(false)
+    private var controllerAsked = false
     private val padListener = object : android.hardware.input.InputManager.InputDeviceListener {
         override fun onInputDeviceAdded(deviceId: Int) {
-            if (!noPadPrompt || padConnected != null) return
+            if (!oneScreen || padConnected != null || screen == Screen.ControllerCheck) return
             val pad = DeviceInfo.gamepads().firstOrNull() ?: return
-            padConnected = pad.name
-            window.decorView.postDelayed({ noPadPrompt = false; padConnected = null }, 2000)
+            if (pad.name != prefs.calibratedDeviceName) {
+                // A new controller: offer the check (each button once), so Delphis and Dolphin read it right.
+                padConnected = pad.name; padNeedsCheck = true; noPadPrompt = true
+            } else if (noPadPrompt) {
+                padConnected = pad.name; padNeedsCheck = false
+                window.decorView.postDelayed({ noPadPrompt = false; padConnected = null }, 2000)
+            }
         }
         override fun onInputDeviceRemoved(deviceId: Int) = Unit
         override fun onInputDeviceChanged(deviceId: Int) = onInputDeviceAdded(deviceId)
+    }
+
+    /**
+     * One screen, once per opening when Home shows (so also right after setup): no controller → "Connect
+     * a controller first?"; a controller that was never checked → offer the Controller check.
+     */
+    fun checkControllerOnHome() {
+        if (!oneScreen || controllerAsked) return
+        controllerAsked = true
+        val pad = DeviceInfo.gamepads().firstOrNull()
+        if (pad == null) { if (prefs.warnNoController) { padConnected = null; noPadPrompt = true } }
+        else if (pad.name != prefs.calibratedDeviceName) { padConnected = pad.name; padNeedsCheck = true; noPadPrompt = true }
     }
 
     /** Settings → Display → Screen mode changed: landscape on one screen, and the bottom-screen menu on or off. */
@@ -171,6 +191,20 @@ class MainActivity : ComponentActivity() {
     var setupVersion by mutableIntStateOf(0)
     /** Set when starting a game needs the close-games helper, which isn't turned on yet. */
     var exitHelperPrompt by mutableStateOf<(() -> Unit)?>(null)
+    /** One screen: the "close games" prompt came from Play ("Play anyway") rather than Home ("Not now"). */
+    var exitHelperForPlay by mutableStateOf(true)
+    /** One screen: "Play anyway" was chosen once since Delphis opened (asked again next time). */
+    private var helperDeclined = false
+
+    /** One screen, "close games" off: there's no pill, no ⊖ + Start and no way to quit from Delphis, so say so on Home. */
+    fun checkHelperOnHome() {
+        if (!oneScreen || helperWarned || io.github.hiramrg.delphis.platform.DolphinExitService.isEnabled(this)) return
+        helperWarned = true
+        Notices.problem(this, "\"Close games\" is off", "Without it you can't open Delphis' menu or leave a game with your controller.", "Fix it") {
+            exitHelperForPlay = false; exitHelperPrompt = {}
+        }
+    }
+    private var helperWarned = false
 
     /** Non-null while the "What's new" card is showing (holds the version name). */
     private var whatsNewVersion by mutableStateOf<String?>(null)
@@ -240,7 +274,6 @@ class MainActivity : ComponentActivity() {
         oneScreen = DeviceInfo.oneScreen(this)
         if (oneScreen) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         getSystemService(android.hardware.input.InputManager::class.java).registerInputDeviceListener(padListener, android.os.Handler(android.os.Looper.getMainLooper()))
-        if (oneScreen && prefs.warnNoController && isSetUp() && DeviceInfo.gamepads().isEmpty()) noPadPrompt = true
         games = library.cached()
         if (!isSetUp()) screen = Screen.Setup
         else if (games.isEmpty()) rescan()
@@ -268,7 +301,15 @@ class MainActivity : ComponentActivity() {
                 }
                 // Ⓑ never closes the app: on Home and Setup it does nothing (no accidental exits).
                 BackHandler(enabled = screen == Screen.Home || screen == Screen.Setup) { }
-                exitHelperPrompt?.let { action ->
+                if (oneScreen) exitHelperPrompt?.let { action -> OneScreenHelperPrompt(
+                    forPlay = exitHelperForPlay,
+                    onNotNow = { exitHelperPrompt = null; helperDeclined = true; action() },
+                    onAppInfo = {
+                        runCatching { startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    },
+                    onAccessibility = { exitHelperPrompt = null; io.github.hiramrg.delphis.platform.DolphinExitService.openSettings(this) },
+                ) }
+                if (!oneScreen) exitHelperPrompt?.let { action ->
                     val notNow = { exitHelperPrompt = null; prefs.skipExitHelperPrompt = true; action() }
                     val open = { exitHelperPrompt = null; io.github.hiramrg.delphis.platform.DolphinExitService.openSettings(this) }
                     androidx.compose.ui.window.Dialog(onDismissRequest = { exitHelperPrompt = null }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
@@ -300,7 +341,9 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 if (noPadPrompt && whatsNewVersion == null) NoControllerPrompt(
-                    padConnected,
+                    padConnected, padNeedsCheck,
+                    onCheck = { noPadPrompt = false; padConnected = null; padNeedsCheck = false; screen = Screen.ControllerCheck },
+                    onLater = { noPadPrompt = false; padConnected = null; padNeedsCheck = false },
                     onTouch = { dontShow -> if (dontShow) prefs.warnNoController = false; noPadPrompt = false },
                     onBluetooth = { dontShow ->
                         if (dontShow) prefs.warnNoController = false
@@ -333,7 +376,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
+        // One screen: controllers that don't report standard keys (e.g. a Switch Pro Controller) are translated.
+        // (Not on the Controller check, which records exactly what the controller sends.)
+        val event = if (screen == Screen.ControllerCheck) raw else io.github.hiramrg.delphis.platform.PadKeys.translate(raw, prefs, oneScreen)
+        if (handleKey(event)) return true
+        if (event !== raw) io.github.hiramrg.delphis.platform.PadKeys.fallback(event)?.let { return handleKey(it) }
+        return false
+    }
+
+    private fun handleKey(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT ->
                 io.github.hiramrg.delphis.platform.MenuSounds.play(io.github.hiramrg.delphis.platform.MenuSounds.Kind.MOVE)
@@ -592,7 +644,9 @@ class MainActivity : ComponentActivity() {
      * keeps input focus.
      */
     fun play(entry: GameEntry, preset: Preset) {
-        if (!io.github.hiramrg.delphis.platform.DolphinExitService.isEnabled(this) && !prefs.skipExitHelperPrompt) {
+        // One screen: always asked (once per opening) since it's the only way out of a game.
+        if (!io.github.hiramrg.delphis.platform.DolphinExitService.isEnabled(this) && !(if (oneScreen) helperDeclined else prefs.skipExitHelperPrompt)) {
+            exitHelperForPlay = true
             exitHelperPrompt = { play(entry, preset) }
             return
         }

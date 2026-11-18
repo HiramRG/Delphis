@@ -177,6 +177,10 @@ open class NowPlayingActivity : ComponentActivity() {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
+        if (panelMode) {
+            padsAtStart += DeviceInfo.gamepads().map { it.name }
+            getSystemService(android.hardware.input.InputManager::class.java).registerInputDeviceListener(padListener, android.os.Handler(android.os.Looper.getMainLooper()))
+        }
         if (!panelMode) preferLowRefreshRate()
         session = GameSession.from(intent)
         watch(session)
@@ -192,6 +196,30 @@ open class NowPlayingActivity : ComponentActivity() {
             }
         }
         if (!panelMode) blockSystemGestures()
+    }
+
+    override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
+        if (!panelMode) return super.dispatchKeyEvent(raw)
+        // One screen: controllers that don't report standard keys (e.g. a Switch Pro Controller) are translated.
+        val event = io.github.hiramrg.delphis.platform.PadKeys.translate(raw, prefs, true)
+        if (super.dispatchKeyEvent(event)) return true
+        if (event !== raw) io.github.hiramrg.delphis.platform.PadKeys.fallback(event)?.let { return super.dispatchKeyEvent(it) }
+        return false
+    }
+
+    /** One screen: a controller connected while the game runs (it only works after a restart, and the touch buttons stay until then). */
+    private var padJoined by mutableStateOf<String?>(null)
+    private val padsAtStart = mutableSetOf<String>()
+    private val padListener = object : android.hardware.input.InputManager.InputDeviceListener {
+        override fun onInputDeviceAdded(deviceId: Int) {
+            if (session == null || GameLauncher.busy) return
+            val pad = DeviceInfo.gamepads().firstOrNull { it.name !in padsAtStart } ?: return
+            padsAtStart += pad.name
+            padJoined = pad.name
+            DolphinExitService.openMenu()
+        }
+        override fun onInputDeviceRemoved(deviceId: Int) = Unit
+        override fun onInputDeviceChanged(deviceId: Int) = Unit
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -316,6 +344,7 @@ open class NowPlayingActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (panelMode) runCatching { getSystemService(android.hardware.input.InputManager::class.java).unregisterInputDeviceListener(padListener) }
         removeFocusSink()
         runCatching { unregisterReceiver(screenReceiver) }
         if (isFinishing && panelMode) DolphinExitService.gameEnded()
@@ -777,6 +806,17 @@ open class NowPlayingActivity : ComponentActivity() {
                     confirm = "Save & restart", dismiss = "Cancel",
                     onDismiss = { restartAction = null },
                     onConfirm = { restartAction = null; closingGame(action) },
+                )
+            }
+            // One screen: a controller connected mid-game. Dolphin only picks controllers up when a game starts.
+            padJoined?.let { name ->
+                OverlayDialog(
+                    title = "$name connected",
+                    body = "Dolphin only picks up controllers when a game starts, so restart the game to play with it (the touch buttons go away then). " +
+                        if (autosaveOn()) "Your progress is autosaved first and the game continues from there." else "Any unsaved progress will be lost.",
+                    confirm = "Restart game", dismiss = "Later",
+                    onDismiss = { padJoined = null },
+                    onConfirm = { padJoined = null; closingGame { applyAndRestart(s, preset, remember = false) } },
                 )
             }
             // Dolphin's game screen went away without Delphis closing it (most likely a Dolphin crash).

@@ -110,6 +110,13 @@ class DolphinExitService : AccessibilityService() {
             }
         }
 
+        /** One screen: brings Delphis' in-game menu over the game. False without the service. */
+        fun openMenu(): Boolean {
+            val s = instance ?: return false
+            s.handler.post { s.openInGameMenu() }
+            return true
+        }
+
         /** One screen: the game was closed. */
         fun gameEnded() {
             val s = instance ?: return
@@ -202,8 +209,10 @@ class DolphinExitService : AccessibilityService() {
         }.onFailure { CrashLog.event("couldn't change the ⊖ + Start shortcut: ${it.message}") }
     }
 
-    override fun onKeyEvent(event: android.view.KeyEvent): Boolean {
+    override fun onKeyEvent(raw: android.view.KeyEvent): Boolean {
         if (!shortcutOn) return false
+        // Controllers that don't report standard keys (e.g. a Switch Pro Controller): ⊖ / + by what they stand for.
+        val event = PadKeys.translate(raw, Prefs(this), true)
         when (event.keyCode) {
             android.view.KeyEvent.KEYCODE_BUTTON_SELECT -> selectHeld = event.action == android.view.KeyEvent.ACTION_DOWN
             android.view.KeyEvent.KEYCODE_BUTTON_START -> {

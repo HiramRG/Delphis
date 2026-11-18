@@ -115,7 +115,7 @@ object DeviceInfo {
     /** Human-readable dump of every input device, for the diagnostics report. */
     fun describeDevices(): String = allDevices().joinToString("\n") { d ->
         val axes = d.motionRanges.map { "${it.axis}(${MotionEvent.axisToString(it.axis)})" }.distinct()
-        "#${d.id} \"${d.name}\" controllerNumber=${d.controllerNumber} virtual=${d.isVirtual} external=${d.isExternal} " +
+        "#${d.id} \"${d.name}\" vendor=0x${Integer.toHexString(d.vendorId)} product=0x${Integer.toHexString(d.productId)} controllerNumber=${d.controllerNumber} virtual=${d.isVirtual} external=${d.isExternal} " +
             "sources=0x${Integer.toHexString(d.sources)} gamepad=${isGamepad(d)} axes=$axes"
     }
 
