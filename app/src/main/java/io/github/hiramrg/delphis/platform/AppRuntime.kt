@@ -131,6 +131,8 @@ object CrashLog {
  */
 object GameWatch {
     @Volatile var session: GameSession? = null
+    /** One screen: Delphis' in-game menu is in front of the game (the pill hides, shortcuts don't fire). */
+    @Volatile var menuOpen = false
     /** True when the game stopped without Delphis asking; the bottom screen offers a restart. */
     val unexpectedStop = androidx.compose.runtime.mutableStateOf(false)
 

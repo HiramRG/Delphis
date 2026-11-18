@@ -10,6 +10,8 @@ class InGameMenuActivity : NowPlayingActivity() {
     companion object {
         /** Opened from the pill or ⊖ + Start (not a game starting). */
         const val EXTRA_OPEN = "delphis.open_menu"
+        /** Delphis' Home asked to quit the game that's running in the background. */
+        const val EXTRA_QUIT = "delphis.quit_game"
     }
 
     override val panelMode: Boolean = true

@@ -115,6 +115,61 @@ class MainActivity : ComponentActivity() {
         else if (pad.name != prefs.calibratedDeviceName) { padConnected = pad.name; padVendor = pad.vendorId; padNeedsCheck = true; noPadPrompt = true }
     }
 
+    var padDontShow by mutableStateOf(false)
+    fun padCheck() { noPadPrompt = false; padConnected = null; padNeedsCheck = false; screen = Screen.ControllerCheck }
+    fun padLater() { noPadPrompt = false; padConnected = null; padNeedsCheck = false }
+    fun padTouch() { if (padDontShow) prefs.warnNoController = false; noPadPrompt = false }
+    fun padBluetooth() {
+        if (padDontShow) prefs.warnNoController = false
+        runCatching { startActivity(android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+    fun helperNotNow() { val action = exitHelperPrompt; exitHelperPrompt = null; helperDeclined = true; action?.invoke() }
+    fun helperAppInfo() {
+        runCatching { startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+    fun helperAccessibility() { exitHelperPrompt = null; io.github.hiramrg.delphis.platform.DolphinExitService.openSettings(this) }
+
+    /** One screen: a game is still open in the background (Android's Home, or the app switcher). */
+    var runningPrompt by mutableStateOf(false)
+    fun runningBack() {
+        runningPrompt = false
+        val s = io.github.hiramrg.delphis.platform.GameWatch.session ?: return
+        bridge.bringToFront(s.uri, DeviceInfo.screenRoles(this, prefs.swapScreens).topDisplayId)
+    }
+    fun runningQuit() {
+        runningPrompt = false
+        runCatching {
+            startActivity(android.content.Intent(this, InGameMenuActivity::class.java)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                .putExtra(InGameMenuActivity.EXTRA_QUIT, true))
+        }
+    }
+
+    /** One screen keys for the pop-ups above (Ⓐ / Ⓑ / Ⓧ / Ⓨ as their buttons show). */
+    private fun popupKey(event: KeyEvent): Boolean {
+        if (!oneScreen) return false
+        val press = event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0
+        val a = event.keyCode == KeyEvent.KEYCODE_BUTTON_A || event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER
+        val b = event.keyCode == KeyEvent.KEYCODE_BUTTON_B || event.keyCode == KeyEvent.KEYCODE_BACK
+        when {
+            exitHelperPrompt != null -> {
+                when { a -> if (press) helperAccessibility(); b -> if (press) helperNotNow(); event.keyCode == KeyEvent.KEYCODE_BUTTON_Y -> if (press) helperAppInfo(); else -> return false }
+                return true
+            }
+            noPadPrompt && whatsNewVersion == null -> {
+                if (padConnected != null && !padNeedsCheck) return a || b
+                val check = padConnected != null
+                when { a -> if (press) { if (check) padCheck() else padBluetooth() }; b -> if (press) { if (check) padLater() else padTouch() }; else -> return false }
+                return true
+            }
+            runningPrompt -> {
+                when { a -> if (press) runningBack(); event.keyCode == KeyEvent.KEYCODE_BUTTON_X -> if (press) runningQuit(); b -> if (press) runningPrompt = false; else -> return false }
+                return true
+            }
+        }
+        return false
+    }
+
     /** Settings → Display → Screen mode changed: landscape on one screen, and the bottom-screen menu on or off. */
     fun screenModeChanged() {
         oneScreen = DeviceInfo.oneScreen(this)
@@ -303,14 +358,6 @@ class MainActivity : ComponentActivity() {
                 }
                 // Ⓑ never closes the app: on Home and Setup it does nothing (no accidental exits).
                 BackHandler(enabled = screen == Screen.Home || screen == Screen.Setup) { }
-                if (oneScreen) exitHelperPrompt?.let { action -> OneScreenHelperPrompt(
-                    forPlay = exitHelperForPlay,
-                    onNotNow = { exitHelperPrompt = null; helperDeclined = true; action() },
-                    onAppInfo = {
-                        runCatching { startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                    },
-                    onAccessibility = { exitHelperPrompt = null; io.github.hiramrg.delphis.platform.DolphinExitService.openSettings(this) },
-                ) }
                 if (!oneScreen) exitHelperPrompt?.let { action ->
                     val notNow = { exitHelperPrompt = null; prefs.skipExitHelperPrompt = true; action() }
                     val open = { exitHelperPrompt = null; io.github.hiramrg.delphis.platform.DolphinExitService.openSettings(this) }
@@ -342,16 +389,6 @@ class MainActivity : ComponentActivity() {
                         androidx.compose.runtime.LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
                     }
                 }
-                if (noPadPrompt && whatsNewVersion == null) NoControllerPrompt(
-                    padConnected, padNeedsCheck, padVendor,
-                    onCheck = { noPadPrompt = false; padConnected = null; padNeedsCheck = false; screen = Screen.ControllerCheck },
-                    onLater = { noPadPrompt = false; padConnected = null; padNeedsCheck = false },
-                    onTouch = { dontShow -> if (dontShow) prefs.warnNoController = false; noPadPrompt = false },
-                    onBluetooth = { dontShow ->
-                        if (dontShow) prefs.warnNoController = false
-                        runCatching { startActivity(android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                    },
-                )
                 whatsNewVersion?.let { v ->
                     WhatsNewDialog(v) {
                         whatsNewVersion = null
@@ -372,6 +409,15 @@ class MainActivity : ComponentActivity() {
                     }
                     (updateState as? UpdateState.Ready)?.let { r -> if (updatePrompt) UpdateReadyCard(r.release.versionCode, onLater = { updatePrompt = false }) { restartAndUpdate() } }
                     (updateState as? UpdateState.Available)?.let { a -> if (foundPrompt) UpdateFoundCard(a.release.versionCode, onLater = { foundPrompt = false }) { foundPrompt = false; installUpdate(a.release) } }
+                    // One screen: pop-ups drawn in this window, so controller keys go through handleKey.
+                    if (oneScreen) exitHelperPrompt?.let { OneScreenHelperPrompt(exitHelperForPlay, ::helperNotNow, ::helperAppInfo, ::helperAccessibility) }
+                    if (noPadPrompt && whatsNewVersion == null && exitHelperPrompt == null) NoControllerPrompt(
+                        padConnected, padNeedsCheck, padVendor, padDontShow, { padDontShow = it },
+                        ::padCheck, ::padLater, ::padTouch, ::padBluetooth,
+                    )
+                    if (runningPrompt && !noPadPrompt) io.github.hiramrg.delphis.platform.GameWatch.session?.let { s ->
+                        RunningGamePrompt(s.info.title, ::runningBack, ::runningQuit) { runningPrompt = false }
+                    }
                     NoticeHost()
                 }
             }
@@ -396,6 +442,7 @@ class MainActivity : ComponentActivity() {
             KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> if (event.repeatCount == 0)
                 io.github.hiramrg.delphis.platform.MenuSounds.play(io.github.hiramrg.delphis.platform.MenuSounds.Kind.BACK)
         }
+        if (popupKey(event)) return true
         // "Build N is ready": Ⓐ Restart & update, Ⓑ Later.
         if (updatePrompt && updateState is UpdateState.Ready) when (event.keyCode) {
             KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> {
@@ -611,7 +658,11 @@ class MainActivity : ComponentActivity() {
         // The game list showing up while a game is running (and Delphis didn't close it) means
         // Dolphin's game screen went away, most likely because Dolphin crashed.
         // (Unless the player had left the game for the home screen and opened Delphis from there.)
-        if (!io.github.hiramrg.delphis.platform.GameWatch.suspended.value)
+        // One screen: the game is still open behind Delphis (Android's Home was pressed): offer to go back or quit.
+        if (oneScreen && io.github.hiramrg.delphis.platform.GameWatch.session != null && !io.github.hiramrg.delphis.platform.GameLauncher.busy) {
+            io.github.hiramrg.delphis.platform.GameWatch.setSuspended(true)
+            runningPrompt = true
+        } else if (!io.github.hiramrg.delphis.platform.GameWatch.suspended.value)
             io.github.hiramrg.delphis.platform.GameWatch.reportGone("Delphis' game list came back on screen")
         // Coming back from the "Install unknown apps" screen: continue if it's now allowed.
         if (updateState is UpdateState.NeedsPermission && updater.canInstall()) checkForUpdates()

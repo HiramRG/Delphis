@@ -185,13 +185,19 @@ class DolphinExitService : AccessibilityService() {
     private val pillCheck: Runnable = object : Runnable {
         override fun run() {
             if (!pill.showing) return
-            val app = topScreenApp()
-            pill.setVisible(!GameLauncher.busy && app != null && app in DolphinBridge.KNOWN_PACKAGES)
-            handler.postDelayed(this, 1000)
+            pill.setVisible(gameInFront())
+            handler.postDelayed(this, 700)
         }
     }
 
     // ------------------------------------------------------------------ one screen: Delphis' in-game menu
+
+    /**
+     * Dolphin's game is on screen and Delphis' menu isn't over it. (Checks Dolphin's game view itself: the
+     * "top app" can be another window on some tablets, e.g. Samsung's game tools.)
+     */
+    private fun gameInFront(): Boolean = !GameLauncher.busy && !GameWatch.menuOpen &&
+        DolphinBridge.KNOWN_PACKAGES.any { runCatching { find(it, "frame_emulation_fragment") != null }.getOrDefault(false) }
 
     private var shortcutOn = false
     /** Prefs.menuShortcut: 0 = Home button, 1 = ⊖ + Start, 2 = both. */
@@ -230,10 +236,10 @@ class DolphinExitService : AccessibilityService() {
             if (code == android.view.KeyEvent.KEYCODE_BUTTON_START) startHeld = false
             return true
         }
-        fun gameInFront() = !GameLauncher.busy && topScreenApp()?.let { it in DolphinBridge.KNOWN_PACKAGES } == true
         fun open(): Boolean { swallowUp += code; handler.post { openInGameMenu() }; return true }
         when (code) {
-            android.view.KeyEvent.KEYCODE_BUTTON_MODE -> if (shortcut != 1 && gameInFront()) {
+            // Some tablets report a controller's Home button as Android's Home key.
+            android.view.KeyEvent.KEYCODE_BUTTON_MODE, android.view.KeyEvent.KEYCODE_HOME -> if (shortcut != 1 && fromGamepad(event) && gameInFront()) {
                 if (down && event.repeatCount == 0) return open()
                 return true
             }
@@ -246,6 +252,13 @@ class DolphinExitService : AccessibilityService() {
             }
         }
         return false
+    }
+
+    private fun fromGamepad(e: android.view.KeyEvent): Boolean {
+        val src = e.source
+        return (src and android.view.InputDevice.SOURCE_GAMEPAD) == android.view.InputDevice.SOURCE_GAMEPAD ||
+            (src and android.view.InputDevice.SOURCE_JOYSTICK) == android.view.InputDevice.SOURCE_JOYSTICK ||
+            e.device?.let { d -> !d.isVirtual && d.isExternal && (d.sources and android.view.InputDevice.SOURCE_GAMEPAD) != 0 } == true
     }
 
     /** Brings Delphis' in-game menu over the game (it waits behind it while you play). */

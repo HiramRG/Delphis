@@ -46,12 +46,13 @@ class DelphisPill(private val service: AccessibilityService, private val onTap: 
         stop()
         opacity = opacityPercent / 100f
         runCatching { attach(controller, shortcut) }.onFailure { CrashLog.event("Delphis pill failed: ${it.message}"); return }
-        if (showFull) {
-            full?.visibility = View.VISIBLE; small?.visibility = View.GONE
-            handler.postDelayed({ shrink() }, FULL_MS)
-        } else shrink()
+        // The full pill waits until the game is actually on screen (the game takes a while to load).
+        pendingFull = showFull
+        if (showFull) { full?.visibility = View.VISIBLE; small?.visibility = View.GONE } else shrink()
+        visible = false
         apply()
     }
+    private var pendingFull = false
 
     private fun shrink() {
         full?.visibility = View.GONE
@@ -69,7 +70,11 @@ class DelphisPill(private val service: AccessibilityService, private val onTap: 
     }
     private val release = Runnable { held = false; apply() }
 
-    private fun apply() { root?.visibility = if (visible && !held) View.VISIBLE else View.GONE }
+    private fun apply() {
+        val on = visible && !held
+        root?.visibility = if (on) View.VISIBLE else View.GONE
+        if (on && pendingFull) { pendingFull = false; handler.postDelayed({ shrink() }, FULL_MS) }
+    }
 
     fun stop() {
         handler.removeCallbacksAndMessages(null)

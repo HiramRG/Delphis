@@ -105,7 +105,27 @@ open class NowPlayingActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (panelMode) openSignal++
+        if (panelMode) { openSignal++; GameWatch.menuOpen = true }
+    }
+
+    override fun onPause() {
+        if (panelMode) GameWatch.menuOpen = false
+        super.onPause()
+        recordPlayTime() // banked as we go, in case the process is killed without finishing
+    }
+
+    /**
+     * One screen, "Quit game" from Delphis' Home while the game sits in the background: bring Dolphin back
+     * to the front (its own menu does the autosave and exit), then close it like "Quit game" here.
+     */
+    private fun quitFromHome() {
+        val s = session ?: return
+        GameLauncher.run(this) {
+            bridge.bringToFront(s.uri, DeviceInfo.screenRoles(this@NowPlayingActivity, prefs.swapScreens).topDisplayId)
+            delay(1500)
+            GameWatch.setSuspended(false)
+        }
+        backToMainMenu()
     }
 
     private lateinit var prefs: Prefs
@@ -316,6 +336,7 @@ open class NowPlayingActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (panelMode && intent.getBooleanExtra(InGameMenuActivity.EXTRA_QUIT, false)) { quitFromHome(); return }
         if (intent.getBooleanExtra(EXTRA_RESUMED, false)) {
             // Back from the home screen: this window came to the front, so give focus back to the game.
             window.decorView.postDelayed({
@@ -338,11 +359,6 @@ open class NowPlayingActivity : ComponentActivity() {
         GameWatch.suspended.value = false
         // The player went to the home screen / another app: hide with the game (it comes back with it).
         GameWatch.onSuspended = { gone -> runOnUiThread { updateCounting(); if (gone) moveTaskToBack(true) } }
-    }
-
-    override fun onPause() {
-        super.onPause()
-        recordPlayTime() // banked as we go, in case the process is killed without finishing
     }
 
     override fun onDestroy() {

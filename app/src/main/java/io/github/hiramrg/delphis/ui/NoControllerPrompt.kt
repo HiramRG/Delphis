@@ -21,15 +21,12 @@ import androidx.compose.ui.unit.sp
  */
 @Composable
 fun NoControllerPrompt(
-    connected: String?, needsCheck: Boolean, vendor: Int, onCheck: () -> Unit, onLater: () -> Unit,
-    onTouch: (dontShow: Boolean) -> Unit, onBluetooth: (dontShow: Boolean) -> Unit,
+    connected: String?, needsCheck: Boolean, vendor: Int, dontShow: Boolean, onDontShow: (Boolean) -> Unit,
+    onCheck: () -> Unit, onLater: () -> Unit, onTouch: () -> Unit, onBluetooth: () -> Unit,
 ) {
     val c = LocalWii.current
-    var dontShow by remember { mutableStateOf(false) }
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = { onTouch(dontShow) },
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-    ) {
+    // Drawn inside Delphis' own window (not a dialog window), so controller keys go through Delphis' key handling.
+    OverlayPanel(onOutside = { if (connected != null && needsCheck) onLater() else if (connected == null) onTouch() }) {
         if (connected != null && needsCheck) {
             // A controller Delphis hasn't checked yet: what its buttons do in Delphis, then one press per button.
             val nintendo = vendor == 0x057E
@@ -53,8 +50,8 @@ fun NoControllerPrompt(
                         )
                         Spacer(Modifier.height(4.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            PanelBtn("Later", null, false, Modifier.weight(1f), onClick = onLater)
-                            PanelBtn("Check my controller", null, true, Modifier.weight(1.5f), onClick = onCheck)
+                            PanelBtn("Later", "B", false, Modifier.weight(1f), onClick = onLater)
+                            PanelBtn("Check my controller", "A", true, Modifier.weight(1.5f), onClick = onCheck)
                         }
                     }
                     ButtonGuide(nintendo, sony)
@@ -80,10 +77,10 @@ fun NoControllerPrompt(
                     fontSize = 12.5.sp, color = c.textDim, lineHeight = 17.sp,
                 )
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PanelBtn("Use touch controls", null, false, Modifier.weight(1f)) { onTouch(dontShow) }
-                    PanelBtn("Open Bluetooth settings", null, true, Modifier.weight(1.25f)) { onBluetooth(dontShow) }
+                    PanelBtn("Use touch controls", "B", false, Modifier.weight(1f)) { onTouch() }
+                    PanelBtn("Open Bluetooth settings", "A", true, Modifier.weight(1.25f)) { onBluetooth() }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) { DontAskRow("Don't show this again", dontShow) { dontShow = it } }
+                Row(verticalAlignment = Alignment.CenterVertically) { DontAskRow("Don't show this again", dontShow) { onDontShow(it) } }
             }
         }
     }
@@ -97,10 +94,7 @@ fun NoControllerPrompt(
 @Composable
 fun OneScreenHelperPrompt(forPlay: Boolean, onNotNow: () -> Unit, onAppInfo: () -> Unit, onAccessibility: () -> Unit) {
     val c = LocalWii.current
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = onNotNow,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-    ) {
+    OverlayPanel(onOutside = onNotNow) {
         PopupPanel("Closing games", "Turn on \"close games\"", Modifier.widthIn(max = 560.dp)) {
             Text(
                 "Delphis needs it to show its pill over the game, open its menu with your controller's Home button and quit games. " +
@@ -111,9 +105,9 @@ fun OneScreenHelperPrompt(forPlay: Boolean, onNotNow: () -> Unit, onAppInfo: () 
             Text("Android asks for this for apps installed from an APK. If ⋮ has no such option, skip to step 2.", fontSize = 12.sp, color = c.textDim, lineHeight = 16.sp)
             Text("2 · Accessibility → Installed apps → Delphis – close games → On", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.text, lineHeight = 17.sp)
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PanelBtn(if (forPlay) "Play anyway" else "Not now", null, false, Modifier.weight(1f), onClick = onNotNow)
-                PanelBtn("1 · App info", null, false, Modifier.weight(1f), onClick = onAppInfo)
-                PanelBtn("2 · Accessibility", null, true, Modifier.weight(1.1f), onClick = onAccessibility)
+                PanelBtn(if (forPlay) "Play anyway" else "Not now", "B", false, Modifier.weight(1f), onClick = onNotNow)
+                PanelBtn("1 · App info", "Y", false, Modifier.weight(1f), onClick = onAppInfo)
+                PanelBtn("2 · Accessibility", "A", true, Modifier.weight(1.1f), onClick = onAccessibility)
             }
         }
     }
@@ -143,5 +137,23 @@ private fun ButtonGuide(nintendo: Boolean, sony: Boolean) {
             }
         }
         Text("⌂ Home button · Delphis' menu", fontSize = 10.5.sp, color = c.textDim)
+    }
+}
+
+/** One screen: Delphis' Home opened while a game still runs in the background (e.g. after Android's Home). */
+@Composable
+fun RunningGamePrompt(title: String, onBack: () -> Unit, onQuit: () -> Unit, onDismiss: () -> Unit) {
+    val c = LocalWii.current
+    OverlayPanel(onOutside = onDismiss) {
+        PopupPanel("Still playing", "$title is still open", Modifier.widthIn(max = 480.dp)) {
+            Text(
+                "It's paused in the background. Go back to it, or quit it (with its autosave) before playing something else.",
+                fontSize = 12.5.sp, color = c.textDim, lineHeight = 17.sp,
+            )
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PanelBtn("Quit game", "X", false, Modifier.weight(1f), onClick = onQuit)
+                PanelBtn("Back to game", "A", true, Modifier.weight(1.3f), onClick = onBack)
+            }
+        }
     }
 }
