@@ -20,6 +20,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.isSpecified
 import androidx.test.core.app.ApplicationProvider
 import io.github.hiramrg.delphis.core.ButtonLabels
 import io.github.hiramrg.delphis.core.GameInfo
@@ -132,8 +133,8 @@ class LayoutCheckTest {
         for (size in listOf(thor, phone, tablet)) withMain(size) { act ->
             show(act, size, "Setup") { act.screen = Screen.Setup }
             show(act, size, "Home") { act.screen = Screen.Home }
-            show(act, size, "Game page") { act.screen = Screen.Game(games[0]) }
-            show(act, size, "Game page (long title)") { act.screen = Screen.Game(games[1]) }
+            show(act, size, "Game page") { act.openGame(games[0]) }
+            show(act, size, "Game page (long title)") { act.openGame(games[1]) }
             for (s in SettingsSection.entries) {
                 if (size.oneScreen && s == SettingsSection.BOTTOM) continue
                 show(act, size, "Settings → ${s.label}") { act.screen = Screen.Settings; act.settingsSection = s }
@@ -292,7 +293,7 @@ class LayoutCheckTest {
 
     private class Words(
         val text: String, val node: SemanticsNode, val ink: Rect, val visibleInk: Rect?,
-        val layer: Int?, val scroller: Int?,
+        val layer: Int?, val scroller: Int?, val ancestors: Set<Int>,
     )
 
     private fun analyse(root: ViewRootForTest, density: Float, popupOnly: Boolean): List<String> {
@@ -306,7 +307,8 @@ class LayoutCheckTest {
             val chain = ancestors + node
             val text = node.config.getOrNull(SemanticsProperties.Text)?.joinToString(" ") { it.text }?.trim()
             val editable = node.config.contains(SemanticsProperties.EditableText)
-            if (!text.isNullOrEmpty() && !editable) {
+            val cover = chain.any { it.config.getOrNull(CoverText) == true }
+            if (!text.isNullOrEmpty() && !editable && !cover) {
                 val results = mutableListOf<TextLayoutResult>()
                 runCatching { node.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action?.invoke(results) }
                 val layout = results.firstOrNull()
@@ -328,6 +330,8 @@ class LayoutCheckTest {
                     val boxH = layout.size.height.toFloat()
                     val paraW = layout.multiParagraph.width
                     val align = layout.layoutInput.style.textAlign
+                    val fs = layout.layoutInput.style.fontSize
+                    val fontPx = with(layout.layoutInput.density) { if (fs.isSpecified) fs.toPx() else 14f * density }
                     var l = Float.MAX_VALUE; var t = Float.MAX_VALUE; var r = -Float.MAX_VALUE; var b = -Float.MAX_VALUE
                     var widest = 0f
                     for (i in 0 until layout.lineCount) {
@@ -342,7 +346,9 @@ class LayoutCheckTest {
                         }
                         widest = max(widest, lr - ll)
                         l = min(l, ll); r = max(r, lr)
-                        t = min(t, layout.getLineTop(i)); b = max(b, layout.getLineBottom(i))
+                        // The letters, not the line box: Material's 24 sp line height is taller than small text.
+                        val base = layout.getLineBaseline(i)
+                        t = min(t, base - 0.76f * fontPx); b = max(b, base + 0.22f * fontPx)
                     }
                     if (layout.lineCount > 0 && r > l && b > t) {
                         val ink = Rect(l, t, r, b).translate(origin)
@@ -355,7 +361,7 @@ class LayoutCheckTest {
                             val ellipsized = (0 until layout.lineCount).any { layout.isLineEllipsized(it) }
                             val why = when {
                                 layout.multiParagraph.didExceedMaxLines || ellipsized -> "only ${layout.lineCount} line(s) fit"
-                                layout.multiParagraph.height > boxH + tol -> "needs ${dp(layout.multiParagraph.height)} dp of height, has ${dp(boxH)}"
+                                b > boxH + tol || t < -tol -> "the letters need ${dp(b - min(t, 0f))} dp of height, the box has ${dp(boxH)}"
                                 widest > boxW + tol -> "needs ${dp(widest)} dp of width, has ${dp(boxW)}"
                                 else -> null
                             }
@@ -372,18 +378,21 @@ class LayoutCheckTest {
                             if (ink.left < screen.left - tol || ink.right > screen.right + tol || ink.top < screen.top - tol || ink.bottom > screen.bottom + tol)
                                 found += "$quote runs off the screen"
                         }
-                        if (shown) words += Words(text, node, ink, visible, layer, scroller)
+                        if (shown) words += Words(text, node, ink, visible, layer, scroller, ancestors.map { it.id }.toSet())
                     }
                 }
             }
             node.children.forEach { walk(it, chain) }
         }
         walk(rootNode, emptyList())
+        if (words.isEmpty() && !popupOnly) found += "no words on the screen (it didn't draw)"
 
         // 5. Words on top of other words (in the same pop-up, or both on the screen itself).
         for (i in words.indices) for (j in i + 1 until words.size) {
             val a = words[i]; val b = words[j]
             if (a.layer != b.layer) continue
+            // A button icon inside a hint line is part of that line.
+            if (a.node.id in b.ancestors || b.node.id in a.ancestors) continue
             val (ra, rb) = if (a.scroller != null && a.scroller == b.scroller) a.ink to b.ink else (a.visibleInk ?: continue) to (b.visibleInk ?: continue)
             val x = ra.intersect(rb)
             if (x.isEmpty || x.width < 2f * density || x.height < 2f * density) continue

@@ -459,6 +459,9 @@ fun Modifier.scrollingLine(initialDelayMillis: Int = 1200, repeatDelayMillis: In
 /** Marks text that scrolls on purpose (the layout check reads it whole, not as cut off). */
 val MarqueeText = androidx.compose.ui.semantics.SemanticsPropertyKey<Boolean>("DelphisMarquee")
 
+/** Marks words that stand in for a picture (a game's title on its cover while there's no cover art): not a label. */
+val CoverText = androidx.compose.ui.semantics.SemanticsPropertyKey<Boolean>("DelphisCoverText")
+
 /** Marks a pop-up drawn over the screen (the layout check compares its words with each other, not with what's under it). */
 val PopupLayer = androidx.compose.ui.semantics.SemanticsPropertyKey<Boolean>("DelphisLayer")
 
