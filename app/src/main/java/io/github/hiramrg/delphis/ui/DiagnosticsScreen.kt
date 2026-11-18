@@ -125,6 +125,7 @@ internal fun buildReport(act: MainActivity): String = buildString {
     val prefs = act.prefs
     val bridge = act.bridge
     appendLine("Delphis diagnostics")
+    appendLine("build: ${runCatching { act.updater.installedVersionCode() }.getOrDefault(0)} · ${io.github.hiramrg.delphis.platform.Updater.builtChannel(act)} · updates from ${prefs.updateChannel}")
     appendLine("device: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}")
     appendLine("dolphin package: ${bridge.installedPackage()}")
     appendLine("dolphin folder: ${prefs.dolphinTreeUri}")

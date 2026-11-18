@@ -34,6 +34,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.semantics.semantics
 
 /*
  * The shared pieces every screen picks from (one look across the app):
@@ -148,7 +149,7 @@ fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> 
 
 /** 40 dp button with its button icon: "Restore" + Ⓐ. [key] null = no icon. */
 @Composable
-fun PanelBtn(label: String, key: String?, primary: Boolean, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+fun PanelBtn(label: String, key: String?, primary: Boolean, modifier: Modifier = Modifier, enabled: Boolean = true, warn: Boolean = false, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = ButtonShape
     Row(
@@ -156,7 +157,7 @@ fun PanelBtn(label: String, key: String?, primary: Boolean, modifier: Modifier =
             .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {
-        val fg = channelText(primary, enabled)
+        val fg = if (warn && !primary) c.orange.copy(alpha = if (enabled) 1f else 0.4f) else channelText(primary, enabled)
         Text(label, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1, onTextLayout = { TextFit.check(label, it) })
         if (key != null) KeyIcon(key, if (primary) fg.copy(alpha = 0.75f) else c.textDim)
     }
@@ -417,14 +418,17 @@ fun HomeBarPill(label: String = "Home", onClick: () -> Unit) {
 /** A title on its own line: still when it fits, otherwise it scrolls slowly inside its margins with faded edges. */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun ScrollingTitle(title: String, fontSize: androidx.compose.ui.unit.TextUnit = 15.5.sp) {
+fun ScrollingTitle(title: String, fontSize: androidx.compose.ui.unit.TextUnit = 15.5.sp, start: Boolean = false) {
     val c = LocalWii.current
     val style = androidx.compose.ui.text.TextStyle(fontSize = fontSize, fontWeight = FontWeight.ExtraBold, color = c.text)
     val measurer = androidx.compose.ui.text.rememberTextMeasurer()
-    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(
+        Modifier.fillMaxWidth().padding(horizontal = if (start) 0.dp else 4.dp).semantics { this[Marquee] = true },
+        contentAlignment = if (start) Alignment.CenterStart else Alignment.Center,
+    ) {
         val maxW = constraints.maxWidth
         val fits = remember(title, maxW) { measurer.measure(title, style, maxLines = 1).size.width <= maxW }
-        if (fits) Text(title, style = style, maxLines = 1, textAlign = TextAlign.Center)
+        if (fits) Text(title, style = style, maxLines = 1, textAlign = if (start) TextAlign.Start else TextAlign.Center)
         else Text(
             title, style = style, maxLines = 1, softWrap = false,
             modifier = Modifier.fillMaxWidth()
@@ -442,6 +446,9 @@ fun ScrollingTitle(title: String, fontSize: androidx.compose.ui.unit.TextUnit = 
     }
 }
 
+
+/** Marks text that scrolls on purpose (the layout check reads it whole, not as cut off). */
+val Marquee = androidx.compose.ui.semantics.SemanticsPropertyKey<Boolean>("DelphisMarquee")
 
 /**
  * Fit check: buttons, chips and hints report a label that didn't fit its space (it would be cut off).

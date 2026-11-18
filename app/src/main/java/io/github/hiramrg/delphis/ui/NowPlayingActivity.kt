@@ -39,6 +39,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -114,6 +115,9 @@ open class NowPlayingActivity : ComponentActivity() {
 
     /** Bumped each time the one-screen menu opens, to put the cursor on ▶ Resume. */
     private var openSignal by mutableIntStateOf(0)
+
+    /** One screen: L1 / R1 switch the menu's tabs (sequence, direction). */
+    private var tabStep by mutableStateOf(0 to 0)
 
     override fun onResume() {
         super.onResume()
@@ -241,6 +245,11 @@ open class NowPlayingActivity : ComponentActivity() {
         if (!panelMode) return super.dispatchKeyEvent(raw)
         // One screen: controllers that don't report standard keys (e.g. a Switch Pro Controller) are translated.
         val event = io.github.hiramrg.delphis.platform.PadKeys.translate(raw, prefs, true)
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 &&
+            (event.keyCode == KeyEvent.KEYCODE_BUTTON_L1 || event.keyCode == KeyEvent.KEYCODE_BUTTON_R1)) {
+            tabStep = (tabStep.first + 1) to (if (event.keyCode == KeyEvent.KEYCODE_BUTTON_L1) -1 else 1)
+            return true
+        }
         if (super.dispatchKeyEvent(event)) return true
         if (event !== raw) io.github.hiramrg.delphis.platform.PadKeys.fallback(event)?.let { return super.dispatchKeyEvent(it) }
         return false
@@ -508,6 +517,8 @@ open class NowPlayingActivity : ComponentActivity() {
         var confirmExit by remember { mutableStateOf(false) }
         // Set when a change needs the game restarted; shows the confirmation first.
         var restartAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+        // "Restart" from the action row (no new controls): the confirmation says so.
+        var plainRestart by remember { mutableStateOf(false) }
         // Set when closing the game needs the close-games helper, which isn't turned on yet.
         var helperPrompt by remember { mutableStateOf<(() -> Unit)?>(null) }
         // Closing/restarting goes through here: asks once to turn on the helper if it's off.
@@ -517,7 +528,8 @@ open class NowPlayingActivity : ComponentActivity() {
         }
 
         // Bottom-screen trackpad (trackpad presets): Map / Trackpad switch, finger-on-pad state, speed.
-        var padView by remember(preset.id) { mutableStateOf(preset.isTrackpad) }
+        // (One screen has no second screen to use as a trackpad: such presets show their map there.)
+        var padView by remember(preset.id) { mutableStateOf(preset.isTrackpad && !panelMode) }
         var padActive by remember { mutableStateOf(false) }
         var padBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
         var padSpeed by remember(s.key) { mutableStateOf(prefs.trackpadSpeed(s.key)) }
@@ -654,40 +666,65 @@ open class NowPlayingActivity : ComponentActivity() {
         ) {
             StatusBanner(Modifier.alpha(contentAlpha * fade))
             Column(Modifier.fillMaxSize().alpha(contentAlpha).padding(start = 10.dp, end = 10.dp, top = 28.dp, bottom = 6.dp)) {
-                // ---------------- top bar: chips only (Home | 🏆 ▭ ✦ ☀), then the game's name on its own line
-                Row(Modifier.fillMaxWidth().alpha(fade), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // ---------------- header: the same on the Thor's bottom screen and the one-screen menu (cover, game,
+                // controls in use; ▶ Resume over the game on one screen, ☀ on the Thor), then the tabs.
+                val padName = if (panelMode) io.github.hiramrg.delphis.platform.rememberPads(prefs).firstOrNull()?.name else null
+                Row(Modifier.fillMaxWidth().alpha(fade), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    GameThumb(gid, s.info.platform)
+                    Column(Modifier.weight(1f)) {
+                        CapsLabel(if (panelMode) "Paused · Delphis" else "Playing")
+                        ScrollingTitle(s.info.title, 14.sp, start = true)
+                        val controlsLine = (if (!s.applied) "⚠ not applied · " else "") +
+                            (if (panelMode) (padName?.let { "🎮 $it · " } ?: "👆 Touch controls · ") else "") + preset.controller.label
+                        Text(
+                            controlsLine, fontSize = 11.sp, lineHeight = 13.sp, maxLines = 2, onTextLayout = { TextFit.check(controlsLine, it) },
+                            color = if (s.applied) LocalWii.current.textDim else MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
                     if (panelMode) {
                         val resumeFocus = remember { androidx.compose.ui.focus.FocusRequester() }
                         LaunchedEffect(openSignal) { delay(150); runCatching { resumeFocus.requestFocus() } }
-                        TopChip("▶ Resume", modifier = Modifier.focusRequester(resumeFocus)) { resumeGame() }
-                    }
-                    TopChip(if (panelMode) "Quit game" else "⌂ Home") { if (prefs.skipExitWarning) backToMainMenu() else confirmExit = true }
-                    Spacer(Modifier.weight(1f))
-                    if (achievements != null && mode == Mode.VIEW) AchievementsChip(
-                        achievements, onClick = { showAchievements = !showAchievements }, compact = true, active = showAchievements,
-                    )
-                    screenChoice?.let { sc ->
-                        TopChip("▭ " + (if (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) "16:9" else "4:3"), on = showPicture && pictureTab == 0) {
-                            if (showPicture) showPicture = false else openPicture(0)
+                        PanelBtn("▶ Resume", "B", false, Modifier.focusRequester(resumeFocus)) { resumeGame() }
+                    } else {
+                        // Trackpad on screen: the action row is replaced by the pad's controls, so Quit stays up here.
+                        if (preset.isTrackpad && padView && mode == Mode.VIEW) TopChip("Quit") { if (prefs.skipExitWarning) closingGame { backToMainMenu() } else confirmExit = true }
+                        TopChip("☀", on = showBrightness) {
+                            showPicture = false
+                            showBrightness = !showBrightness
                         }
-                    }
-                    gameLook?.let { l ->
-                        TopChip("✦ " + l.label, on = showPicture && (pictureTab == 1 || screenChoice == null)) {
-                            if (showPicture) showPicture = false else openPicture(1)
-                        }
-                    }
-                    if (!panelMode) TopChip("☀", on = showBrightness) {
-                        showPicture = false
-                        showBrightness = !showBrightness
                     }
                 }
-                Column(Modifier.fillMaxWidth().padding(top = 6.dp).alpha(fade), horizontalAlignment = Alignment.CenterHorizontally) {
-                    ScrollingTitle(s.info.title)
-                    Text(
-                        (if (!s.applied) "⚠ not applied · " else "") + preset.controller.label,
-                        fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        color = if (s.applied) LocalWii.current.textDim else MaterialTheme.colorScheme.tertiary,
+                // Tabs: Controls · Achievements · Picture (L1 / R1 on one screen; touch on the Thor, whose buttons belong to Dolphin).
+                val tabs = buildList {
+                    add(0)
+                    if (achievements != null) add(1)
+                    if (screenChoice != null || gameLook != null) add(2)
+                }
+                val tab = when { showPicture -> 2; showAchievements -> 1; else -> 0 }
+                fun selectTab(t: Int) {
+                    showBrightness = false
+                    when (t) {
+                        1 -> { showPicture = false; showAchievements = true }
+                        2 -> { showAchievements = false; openPicture(if (screenChoice != null) 0 else 1) }
+                        else -> { showAchievements = false; showPicture = false }
+                    }
+                }
+                LaunchedEffect(tabStep) {
+                    val (seq, dir) = tabStep
+                    // The Picture panel is a pop-up with its own Cancel / Done: L1 / R1 wait until it's closed.
+                    if (seq == 0 || mode != Mode.VIEW || tabs.size < 2 || showPicture) return@LaunchedEffect
+                    selectTab(tabs[(tabs.indexOf(tab).coerceAtLeast(0) + dir + tabs.size) % tabs.size])
+                }
+                if (mode == Mode.VIEW && tabs.size > 1) Row(
+                    Modifier.fillMaxWidth().padding(top = 7.dp).alpha(fade),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (panelMode) KeyIcon("L1")
+                    Segmented(
+                        tabs.map { it to when (it) { 1 -> "🏆 Achievements"; 2 -> "▭ Picture"; else -> "🎮 Controls" } },
+                        tab, { selectTab(it) }, height = 28.dp,
                     )
+                    if (panelMode) KeyIcon("R1")
                 }
                 Spacer(Modifier.height(8.dp))
 
@@ -715,7 +752,7 @@ open class NowPlayingActivity : ComponentActivity() {
                             Modifier.weight(1f).fillMaxWidth().clip(shape).background(Color(0xFF1F242A)).border(2.dp, Color(0xFF6B5A2E), shape).padding(8.dp),
                             onClose = { showAchievements = false },
                         )
-                    } else if (!preset.isTrackpad) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
+                    } else if (!preset.isTrackpad || panelMode) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
                         ControlsSwitchable(preset, prefs, s.key, Modifier.fillMaxSize())
                     } else Column(Modifier.weight(1f).fillMaxWidth()) {
                         Segmented(
@@ -800,9 +837,18 @@ open class NowPlayingActivity : ComponentActivity() {
                         )
                     }
                 } else if (mode == Mode.VIEW) {
-                    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PanelBtn("Change preset", null, true, Modifier.weight(1f)) { showBrightness = false; mode = Mode.CHANGE }
-                        PanelBtn("✎ Edit preset", null, false, Modifier.weight(1f)) { showBrightness = false; mode = Mode.EDIT }
+                    // The same actions on the Thor and on one screen: change or edit the controls, restart, quit.
+                    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PanelBtn("Change", null, true, Modifier.weight(1f)) { showBrightness = false; mode = Mode.CHANGE }
+                        PanelBtn("✎ Edit", null, false, Modifier.weight(0.85f)) { showBrightness = false; mode = Mode.EDIT }
+                        PanelBtn("Restart", null, false, Modifier.weight(1f)) {
+                            showBrightness = false; plainRestart = true
+                            restartAction = { applyAndRestart(s, preset, remember = false) }
+                        }
+                        PanelBtn("Quit game", null, false, Modifier.weight(1.2f), warn = true) {
+                            showBrightness = false
+                            if (prefs.skipExitWarning) closingGame { backToMainMenu() } else confirmExit = true
+                        }
                     }
                 }
             }
@@ -862,11 +908,12 @@ open class NowPlayingActivity : ComponentActivity() {
             restartAction?.let { action ->
                 OverlayDialog(
                     title = "Restart the game?",
-                    body = "Dolphin only reads controls when a game starts, so Delphis will close and relaunch the game with your new controls. " +
+                    body = (if (plainRestart) "Delphis will close the game and start it again. "
+                        else "Dolphin only reads controls when a game starts, so Delphis will close and relaunch the game with your new controls. ") +
                         if (autosaveOn()) "Your progress is autosaved first and the game continues from there." else "Any unsaved progress will be lost.",
-                    confirm = "Save & restart", dismiss = "Cancel",
-                    onDismiss = { restartAction = null },
-                    onConfirm = { restartAction = null; closingGame(action) },
+                    confirm = if (plainRestart) "Restart" else "Save & restart", dismiss = "Cancel",
+                    onDismiss = { restartAction = null; plainRestart = false },
+                    onConfirm = { restartAction = null; plainRestart = false; closingGame(action) },
                 )
             }
             // One screen: a controller connected mid-game. Dolphin only picks controllers up when a game starts.
@@ -922,6 +969,21 @@ open class NowPlayingActivity : ComponentActivity() {
             }
         }
 
+    }
+
+    /** The game's cover, small, beside its name in the menu header (platform colour while it loads or if it has none). */
+    @Composable
+    private fun GameThumb(gameId: String?, platform: io.github.hiramrg.delphis.core.Platform) {
+        val cover by produceState<android.graphics.Bitmap?>(null, gameId) {
+            value = gameId?.let { io.github.hiramrg.delphis.platform.CoverArt(this@NowPlayingActivity).load(it) }
+        }
+        val shape = RoundedCornerShape(6.dp)
+        Box(
+            Modifier.size(width = 34.dp, height = 46.dp).clip(shape)
+                .background(if (platform == io.github.hiramrg.delphis.core.Platform.GAMECUBE) Color(0xFF3B2F66) else Color(0xFF2B3F9E)),
+        ) {
+            cover?.let { androidx.compose.foundation.Image(it.asImageBitmap(), null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+        }
     }
 
     /** The panel under the brightness pill: normal brightness, Auto-dim for this session, Turn screen off. */

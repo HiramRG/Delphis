@@ -13,7 +13,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.Color
+import io.github.hiramrg.delphis.platform.Updater
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,8 +25,63 @@ import androidx.compose.ui.unit.sp
 import io.github.hiramrg.delphis.ui.MainActivity.UpdateState
 
 /** "Updates" block for Settings: current version, check button, download progress, install. */
+/**
+ * Settings → Updates → Update channel. Stable (everyone) only gets a build after it worked on Beta; Beta
+ * (testers) gets every new build first. Switching re-checks for updates on the new channel.
+ */
+@Composable
+fun UpdateChannelCard(act: MainActivity) {
+    val prefs = act.prefs
+    val c = LocalWii.current
+    var channel by remember { mutableStateOf(prefs.updateChannel) }
+    val installed = remember { act.updater.installedVersionCode() }
+    val built = remember { Updater.builtChannel(act) }
+    CapsLabel("Update channel")
+    GroupCard {
+        SettingRow(
+            "Update channel",
+            "Beta gets new versions first, to test. Stable only gets them once they've worked on a Thor and on a phone or tablet.",
+        ) {
+            Segmented(listOf("stable" to "Stable", "beta" to "Beta"), channel, { channel = it; prefs.updateChannel = it; act.otherChannelBuild = null; act.checkForUpdates() })
+        }
+        RowDivider()
+        Column(Modifier.padding(horizontal = 8.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text("This is build $installed · ${if (built == "beta") "Beta" else "Stable"}", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
+            val other = act.otherChannelBuild
+            val otherName = if (channel == "beta") "Stable" else "Beta"
+            Text(
+                when {
+                    other == null -> "$otherName: checking…"
+                    other <= 0 -> "$otherName: no build right now"
+                    else -> "$otherName has build $other"
+                } + if (channel == "stable" && built == "beta") " · you'll get Stable once it's newer than build $installed" else "",
+                fontSize = 12.sp, color = c.textDim, lineHeight = 15.sp,
+            )
+            Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                ChannelStep("New build", c.cardBorder)
+                Text("→", fontSize = 12.sp, color = c.textDim)
+                ChannelStep("Beta · Thor, phone, tablet", Color(0xFFF5A623))
+                Text("→", fontSize = 12.sp, color = c.textDim)
+                ChannelStep("Stable · everyone", c.green)
+            }
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+}
+
+@Composable
+private fun ChannelStep(text: String, rim: Color) {
+    val shape = RoundedCornerShape(50)
+    Text(
+        text, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = LocalWii.current.text, maxLines = 1,
+        onTextLayout = { TextFit.check(text, it) },
+        modifier = Modifier.clip(shape).border(2.dp, rim, shape).padding(horizontal = 10.dp, vertical = 4.dp),
+    )
+}
+
 @Composable
 fun UpdatePanel(act: MainActivity) {
+    UpdateChannelCard(act)
     val shape = RoundedCornerShape(18.dp)
     Column(
         Modifier.fillMaxWidth().clip(shape).background(LocalWii.current.card).border(2.dp, LocalWii.current.cardBorder, shape).padding(12.dp),

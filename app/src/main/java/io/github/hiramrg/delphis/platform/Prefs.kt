@@ -335,6 +335,14 @@ class Prefs(context: Context) {
         get() = if (sp.getInt("library_cache_version", 0) == LIBRARY_CACHE_VERSION) sp.getString("library_cache", null) else null
         set(v) = sp.edit().putString("library_cache", v).putInt("library_cache_version", LIBRARY_CACHE_VERSION).apply()
 
+    /**
+     * Settings → Updates → Update channel: "stable" (everyone) or "beta" (new builds first, to test).
+     * Defaults to the channel this build came from, so a beta APK keeps getting beta updates.
+     */
+    var updateChannel: String
+        get() = sp.getString("update_channel", null) ?: Updater.builtChannel(context)
+        set(v) = sp.edit().putString("update_channel", if (v == "beta") "beta" else "stable").apply()
+
     /** The first line of the last crash Delphis offered to report (so it's offered once). */
     var crashSeen: String?
         get() = sp.getString("crash_seen", null)

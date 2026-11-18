@@ -37,7 +37,8 @@ object ProblemReport {
         val dolphin = act.bridge.installedPackage()?.let { p ->
             runCatching { act.packageManager.getPackageInfo(p, 0).let { "${it.versionName} (${it.longVersionCode})" } }.getOrNull()
         } ?: "not found"
-        return "Delphis ${runCatching { act.updater.installedVersionCode() }.getOrDefault(0)} · Dolphin $dolphin"
+        val beta = if (io.github.hiramrg.delphis.platform.Updater.builtChannel(act) == "beta") " beta" else ""
+        return "Delphis ${runCatching { act.updater.installedVersionCode() }.getOrDefault(0)}$beta · Dolphin $dolphin"
     }
 
     fun controller(act: MainActivity): String {

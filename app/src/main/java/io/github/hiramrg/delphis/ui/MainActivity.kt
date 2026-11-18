@@ -73,6 +73,8 @@ class MainActivity : ComponentActivity() {
         data class Failed(val reason: String) : UpdateState
     }
     var updateState by mutableStateOf<UpdateState>(UpdateState.Idle)
+    /** Settings → Updates: the newest build on the other channel (null = not read yet, 0 = none). */
+    var otherChannelBuild by mutableStateOf<Int?>(null)
     /** The "Build N is ready" card; "Later" hides it and leaves the banner. */
     var updatePrompt by mutableStateOf(false)
     /** "A new version is ready to download" pop-up (Ⓐ Download / Ⓑ Later), shown once per new build. */
@@ -618,6 +620,8 @@ class MainActivity : ComponentActivity() {
         if (updateState is UpdateState.Checking || updateState is UpdateState.Downloading) return
         updateState = UpdateState.Checking
         lifecycleScope.launch {
+            val other = if (prefs.updateChannel == "beta") "stable" else "beta"
+            launch { otherChannelBuild = updater.peek(other) ?: 0 }
             updateState = when (val r = updater.check()) {
                 is Updater.Check.UpdateAvailable -> UpdateState.Available(r.release).also {
                     // Ask once per new build; afterwards the banner's button (R2) does it.

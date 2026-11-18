@@ -16,7 +16,10 @@ android {
         // the in-app updater compares this number with the one in the GitHub release notes.
         val code = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
         versionCode = code
-        versionName = "1.0.$code"
+        // CI passes -Pchannel=beta for the beta branch (Settings → Updates → Update channel).
+        val channel = (project.findProperty("channel") as String?)?.takeIf { it == "beta" } ?: "stable"
+        versionName = if (channel == "beta") "1.0.$code-beta" else "1.0.$code"
+        resValue("string", "build_channel", channel)
     }
 
     // Release APKs are built unsigned; CI signs both APKs with apksigner (see .github/workflows/build.yml

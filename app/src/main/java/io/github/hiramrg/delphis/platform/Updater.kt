@@ -23,12 +23,21 @@ import java.net.URL
  */
 class Updater(private val context: Context) {
     companion object {
-        const val RELEASE_API = "https://api.github.com/repos/HiramRG/Delphis/releases/tags/latest"
-        const val RELEASE_PAGE = "https://github.com/HiramRG/Delphis/releases/tag/latest"
         const val APK_NAME = "Delphis.apk"
         const val ACTION_INSTALL_STATUS = "io.github.hiramrg.delphis.INSTALL_STATUS"
-        /** The newest APK, for a download in the browser. */
-        const val APK_URL = "https://github.com/HiramRG/Delphis/releases/download/latest/Delphis.apk"
+
+        /** The release tag of a channel: "latest" for Stable, "beta" for Beta (a GitHub pre-release). */
+        fun tag(channel: String) = if (channel == "beta") "beta" else "latest"
+        fun releaseApi(channel: String) = "https://api.github.com/repos/HiramRG/Delphis/releases/tags/${tag(channel)}"
+        fun releasePage(channel: String) = "https://github.com/HiramRG/Delphis/releases/tag/${tag(channel)}"
+        /** The channel's newest APK, for a download in the browser. */
+        fun apkUrl(channel: String) = "https://github.com/HiramRG/Delphis/releases/download/${tag(channel)}/$APK_NAME"
+        val RELEASE_PAGE get() = releasePage("stable")
+        val APK_URL get() = apkUrl("stable")
+
+        /** "stable" or "beta": the channel this APK was built for (CI's -Pchannel). */
+        fun builtChannel(context: Context): String =
+            runCatching { context.getString(io.github.hiramrg.delphis.R.string.build_channel) }.getOrDefault("stable")
 
         /**
          * Some Android versions (e.g. Android 17 on a Galaxy Tab) refuse to let an app installed from a downloaded
@@ -53,7 +62,8 @@ class Updater(private val context: Context) {
         }
 
         fun openDownload(context: Context) {
-            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(APK_URL)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            val url = apkUrl(Prefs(context).updateChannel)
+            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         }
     }
 
@@ -71,13 +81,29 @@ class Updater(private val context: Context) {
     fun installedVersionName(): String =
         context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
 
-    suspend fun check(): Check = withContext(Dispatchers.IO) {
-        try {
-            val conn = (URL(RELEASE_API).openConnection() as HttpURLConnection).apply {
+    /** The newest build on [channel] (null when it can't be read, e.g. offline or no beta yet). */
+    suspend fun peek(channel: String): Int? = withContext(Dispatchers.IO) {
+        runCatching {
+            val conn = (URL(releaseApi(channel)).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 8000; readTimeout = 8000
                 setRequestProperty("Accept", "application/vnd.github+json")
                 setRequestProperty("User-Agent", "Delphis-updater")
             }
+            if (conn.responseCode != 200) return@runCatching null
+            val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+            Regex("""versionCode:\s*(\d+)""").find(json.optString("body"))?.groupValues?.get(1)?.toInt()
+        }.getOrNull()
+    }
+
+    /** Checks the chosen update channel (Settings → Updates). */
+    suspend fun check(channel: String = Prefs(context).updateChannel): Check = withContext(Dispatchers.IO) {
+        try {
+            val conn = (URL(releaseApi(channel)).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 8000; readTimeout = 8000
+                setRequestProperty("Accept", "application/vnd.github+json")
+                setRequestProperty("User-Agent", "Delphis-updater")
+            }
+            if (conn.responseCode == 404 && channel == "beta") return@withContext Check.Failed("There's no beta build right now")
             if (conn.responseCode != 200) return@withContext Check.Failed("GitHub answered ${conn.responseCode}")
             val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
             val code = Regex("""versionCode:\s*(\d+)""").find(json.optString("body"))?.groupValues?.get(1)?.toInt()
