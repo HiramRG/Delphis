@@ -764,7 +764,7 @@ private fun CardTitle(title: String) {
         else Text(
             title, style = style, maxLines = 1, softWrap = false,
             modifier = Modifier.align(Alignment.CenterStart).fillMaxWidth()
-                .semantics { this[MarqueeText] = true }.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500, velocity = 40.dp),
+                .scrollingLine(initialDelayMillis = 1200, repeatDelayMillis = 1500, velocity = 40.dp),
         )
     }
 }
@@ -867,7 +867,7 @@ private fun GameRowView(act: MainActivity, row: HomeRow, games: List<GameEntry>,
                 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
                 Text(
                     here.info.title, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, maxLines = 1, softWrap = false,
-                    modifier = Modifier.weight(1f, fill = false).semantics { this[MarqueeText] = true }.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 900, repeatDelayMillis = 1500, velocity = 32.dp),
+                    modifier = Modifier.weight(1f, fill = false).scrollingLine(initialDelayMillis = 900, repeatDelayMillis = 1500, velocity = 32.dp),
                 )
             }
         }

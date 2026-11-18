@@ -163,5 +163,7 @@ jobs:
           done
           grep -l "<failure" -r "$GITHUB_WORKSPACE/app/build/test-results" 2>/dev/null | head -5 | while read x; do cp "$x" .; done || true
           cp "$GITHUB_WORKSPACE/app/build/layout-check/summary.md" layout-check.md 2>/dev/null || true
+          # The layout check's screenshots too (CI artifacts can't be downloaded everywhere).
+          if [ -d "$GITHUB_WORKSPACE/app/build/layout-check" ]; then mkdir -p shots && cp -r "$GITHUB_WORKSPACE/app/build/layout-check/." shots/; fi
           git add -A && git -c user.name=ci -c user.email=ci@localhost commit -qm "build report"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD:refs/ci/${GITHUB_REF_NAME}

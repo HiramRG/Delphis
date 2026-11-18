@@ -7,6 +7,9 @@ package io.github.hiramrg.delphis.platform
 object TestHooks {
     @Volatile @JvmField var offline = false
 
+    /** Endless animations (the breathing cursor, scrolling titles) stand still: the layout check reads a still screen. */
+    @Volatile @JvmField var still = false
+
     /** Every download calls this first: throws (like being offline) while [offline] is set. */
     fun net() { if (offline) throw java.io.IOException("offline (layout check)") }
 }

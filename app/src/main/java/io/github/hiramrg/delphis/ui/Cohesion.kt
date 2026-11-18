@@ -442,11 +442,19 @@ fun ScrollingTitle(title: String, fontSize: androidx.compose.ui.unit.TextUnit = 
                         blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
                     )
                 }
-                .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1200, repeatDelayMillis = 1500, velocity = 36.dp),
+                .scrollingLine(initialDelayMillis = 1200, repeatDelayMillis = 1500, velocity = 36.dp),
         )
     }
 }
 
+
+/** A line too long for its space that scrolls slowly instead of being cut (the layout check reads it whole). */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+fun Modifier.scrollingLine(initialDelayMillis: Int = 1200, repeatDelayMillis: Int = 1500, velocity: Dp = 36.dp): Modifier =
+    this.semantics { this[MarqueeText] = true }.then(
+        if (io.github.hiramrg.delphis.platform.TestHooks.still) Modifier
+        else Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = initialDelayMillis, repeatDelayMillis = repeatDelayMillis, velocity = velocity),
+    )
 
 /** Marks text that scrolls on purpose (the layout check reads it whole, not as cut off). */
 val MarqueeText = androidx.compose.ui.semantics.SemanticsPropertyKey<Boolean>("DelphisMarquee")

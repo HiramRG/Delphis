@@ -116,6 +116,7 @@ fun channelText(primary: Boolean, enabled: Boolean = true): Color {
 @Composable
 fun breathingAccent(): Color {
     val c = LocalWii.current
+    if (io.github.hiramrg.delphis.platform.TestHooks.still) return c.accent
     val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "breath")
     val f by t.animateFloat(
         0f, 1f,

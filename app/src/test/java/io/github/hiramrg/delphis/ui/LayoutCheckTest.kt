@@ -118,6 +118,7 @@ class LayoutCheckTest {
         // Fewer frames per second of (virtual) time: animations still finish, with far less drawing.
         org.robolectric.shadows.ShadowChoreographer.setFrameDelay(Duration.ofMillis(64))
         TestHooks.offline = true
+        TestHooks.still = true
         val app = ApplicationProvider.getApplicationContext<android.app.Application>()
         Prefs(app).apply {
             warnNoController = false
@@ -331,7 +332,12 @@ class LayoutCheckTest {
                         val quote = "\"" + text.take(70) + (if (text.length > 70) "…" else "") + "\""
                         val shown = visible != null || scroller != null
                         // 1. Cut off: more words than fit (ellipsis, max lines, a box too small).
-                        if (layout.hasVisualOverflow && !marquee && shown) found += "$quote is cut off (doesn't fit its space)"
+                        if (layout.hasVisualOverflow && !marquee && shown) {
+                            fun dp(px: Float) = (px / density).toInt()
+                            val why = if (layout.didOverflowHeight) "${layout.lineCount} line(s) in a box ${dp(layout.size.height.toFloat())} dp tall"
+                                else "${dp(layout.multiParagraph.width)} dp wide in ${dp(layout.size.width.toFloat())} dp"
+                            found += "$quote is cut off ($why)"
+                        }
                         // 2. Labels wrap to two lines at most (your rule); paragraphs may wrap more.
                         val bold = (layout.layoutInput.style.fontWeight ?: FontWeight.Normal) >= FontWeight.SemiBold
                         if (bold && layout.lineCount > 2 && shown) found += "$quote wraps to ${layout.lineCount} lines (labels can use 2)"
