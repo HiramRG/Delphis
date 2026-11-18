@@ -217,6 +217,34 @@ fun BoxScope.PicturePanel(
             }
         }
         if (showRes) {
+            if (compact) {
+                // The in-game menu: one line per level, its tag on the right, so everything fits the panel.
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    io.github.hiramrg.delphis.core.Resolution.Level.entries.forEach { l -> ResolutionLine(l, l == res, advice?.scale) { onRes(l) } }
+                }
+            } else {
+                Column(Modifier.fillMaxWidth().height(area), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    io.github.hiramrg.delphis.core.Resolution.Level.entries.chunked(3).forEach { row ->
+                        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            row.forEach { l -> ResolutionCard(l, l == res, advice?.scale, true, Modifier.weight(1f).fillMaxHeight()) { onRes(l) } }
+                        }
+                    }
+                }
+                // Short screens (a phone held sideways) keep only the ★ line above: the reason would push the buttons off.
+                if (advice != null && androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp >= 480) Text(
+                    resolutionWhy(advice), fontSize = 11.sp, lineHeight = 14.sp, color = c.textDim,
+                )
+            }
+        } else if (!showLook) {
+                CapsLabel(if (choice!!.shape == Shape.WIDE) "16:9 fill" else "Sides · change right away", Modifier.weight(1f))
+                Segmented(listOf(Shape.STANDARD to "4:3", Shape.WIDE to "16:9"), choice.shape, { onPick(choice.copy(shape = it)) })
+                if (keys) KeyIcon("Y")
+            } else {
+                CapsLabel("Applies when the game starts", Modifier.weight(1f))
+                if (!compact) Text("Only the final picture: same game speed", fontSize = 11.sp, color = c.textDim, maxLines = 1)
+            }
+        }
+        if (showRes) {
             // Narrow (the in-game menu): two per row, without the descriptions, so every name fits.
             Column(Modifier.fillMaxWidth().height(if (compact) 186.dp else area), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 io.github.hiramrg.delphis.core.Resolution.Level.entries.chunked(if (compact) 2 else 3).forEach { row ->
@@ -256,6 +284,30 @@ fun resolutionWhy(a: io.github.hiramrg.delphis.platform.DeviceInfo.ResolutionAdv
     val chip = if (a.known && a.chip != null) "${a.chip} chip, " else ""
     return "Sharper pictures work the graphics chip harder. For your ${a.device} (${chip}${a.screen} screen) Delphis suggests $level" +
         (if (a.known) "" else ", a guess since it doesn't know this chip") + ". If the game stutters or gets hot, go one step down."
+}
+
+@Composable
+private fun ResolutionLine(l: io.github.hiramrg.delphis.core.Resolution.Level, on: Boolean, recommended: Int?, onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(10.dp)
+    val fit = recommended?.let { io.github.hiramrg.delphis.core.Resolution.fit(l, it) }
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 28.dp).focusRing(shape).clip(shape)
+            .background(if (on) (if (c.dark) Color(0xFF173444) else c.accentSoft) else (if (c.dark) Color(0xFF20252B) else c.card))
+            .border(if (on) 2.dp else 1.dp, if (on) Sel else c.cardBorder, shape).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(l.label, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+        if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF6BCB77))
+        Spacer(Modifier.weight(1f))
+        when (fit) {
+            io.github.hiramrg.delphis.core.Resolution.Fit.RECOMMENDED -> CostTag(fit.label, Color(0xFF6BCB77), Color(0xFF1F3B2A))
+            io.github.hiramrg.delphis.core.Resolution.Fit.MAYBE -> CostTag(fit.label, Color(0xFFF5C542), Color(0xFF3D331A))
+            io.github.hiramrg.delphis.core.Resolution.Fit.SLOW -> CostTag(fit.label, Color(0xFFFF8A80), Color(0xFF3D1F1F))
+            io.github.hiramrg.delphis.core.Resolution.Fit.FAST -> CostTag(fit.label, c.textDim, if (c.dark) Color(0xFF2A3038) else c.cardBorder)
+            null -> {}
+        }
+    }
 }
 
 @Composable
