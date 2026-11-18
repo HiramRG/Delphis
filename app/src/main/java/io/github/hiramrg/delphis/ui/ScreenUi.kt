@@ -276,7 +276,7 @@ private fun ResolutionLine(l: io.github.hiramrg.delphis.core.Resolution.Level, o
     val fit = recommended?.let { io.github.hiramrg.delphis.core.Resolution.fit(l, it) }
     // Name on top, a short tag under it: fits the in-game menu's narrow columns.
     Column(
-        modifier.height(46.dp).focusRing(shape).clip(shape)
+        modifier.heightIn(min = 40.dp).focusRing(shape).clip(shape)
             .background(if (on) (if (c.dark) Color(0xFF173444) else c.accentSoft) else (if (c.dark) Color(0xFF20252B) else c.card))
             .border(if (on) 2.dp else 1.dp, if (on) Sel else c.cardBorder, shape).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 3.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
