@@ -166,6 +166,7 @@ class MainActivity : ComponentActivity() {
     }
     fun runningQuit() {
         runningPrompt = false
+        if (io.github.hiramrg.delphis.platform.GameWatch.session == null) return
         runCatching {
             startActivity(android.content.Intent(this, InGameMenuActivity::class.java)
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
@@ -191,7 +192,8 @@ class MainActivity : ComponentActivity() {
                 when { a -> if (press) { if (check) padCheck() else padBluetooth() }; b -> if (press) { if (check) padLater() else padTouch() }; else -> return false }
                 return true
             }
-            runningPrompt -> {
+            // (Only while a game is really open: a stale prompt must never swallow Ⓐ / Ⓑ / Ⓧ on Home.)
+            runningPrompt && io.github.hiramrg.delphis.platform.GameWatch.session != null -> {
                 when { a -> if (press) runningBack(); event.keyCode == KeyEvent.KEYCODE_BUTTON_X -> if (press) runningQuit(); b -> if (press) runningPrompt = false; else -> return false }
                 return true
             }
@@ -690,6 +692,7 @@ class MainActivity : ComponentActivity() {
         // Dolphin's game screen went away, most likely because Dolphin crashed.
         // (Unless the player had left the game for the home screen and opened Delphis from there.)
         // One screen: the game is still open behind Delphis (Android's Home was pressed): offer to go back or quit.
+        if (io.github.hiramrg.delphis.platform.GameWatch.session == null) runningPrompt = false
         if (oneScreen && io.github.hiramrg.delphis.platform.GameWatch.session != null && !io.github.hiramrg.delphis.platform.GameLauncher.busy) {
             io.github.hiramrg.delphis.platform.GameWatch.setSuspended(true)
             runningPrompt = true

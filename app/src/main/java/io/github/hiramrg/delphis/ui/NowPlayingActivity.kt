@@ -109,6 +109,8 @@ open class NowPlayingActivity : ComponentActivity() {
 
     /** Set when the player quits from this menu (so closing it ends the session; Android closing it doesn't). */
     private var quitting = false
+    /** One screen: opened without a game; closed right away and touches nothing on the way out. */
+    private var emptyMenu = false
 
     /** Bumped each time the one-screen menu opens, to put the cursor on ▶ Resume. */
     private var openSignal by mutableIntStateOf(0)
@@ -216,6 +218,9 @@ open class NowPlayingActivity : ComponentActivity() {
         // Android closed it (the game kept running: same session, no new start).
         val reopened = panelMode && (intent.getBooleanExtra(InGameMenuActivity.EXTRA_OPEN, false) || intent.getBooleanExtra(InGameMenuActivity.EXTRA_QUIT, false))
         session = GameSession.from(intent) ?: if (panelMode) GameWatch.session else null
+        // One screen: opened with no game running (e.g. a late tap after quitting): nothing to show, so close
+        // at once instead of leaving an empty, invisible window over Delphis.
+        if (panelMode && session == null) { emptyMenu = true; finish(); return }
         watch(session, announce = !reopened)
         if (panelMode && intent.getBooleanExtra(InGameMenuActivity.EXTRA_QUIT, false)) window.decorView.post { quitFromHome() }
         setContent {
@@ -377,6 +382,12 @@ open class NowPlayingActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (emptyMenu) {
+            runCatching { getSystemService(android.hardware.input.InputManager::class.java).unregisterInputDeviceListener(padListener) }
+            runCatching { unregisterReceiver(screenReceiver) }
+            super.onDestroy()
+            return
+        }
         if (panelMode) runCatching { getSystemService(android.hardware.input.InputManager::class.java).unregisterInputDeviceListener(padListener) }
         removeFocusSink()
         runCatching { unregisterReceiver(screenReceiver) }
@@ -463,6 +474,10 @@ open class NowPlayingActivity : ComponentActivity() {
             }
             val roles = DeviceInfo.screenRoles(this@NowPlayingActivity, prefs.swapScreens)
             bridge.closeDolphin(roles.topDisplayId, "Closing the game…")
+            // The game is closed: Delphis' Home mustn't see it as still running when it comes back (it would offer
+            // "Back to game" and mark the game as gone to the background).
+            GameWatch.session = null
+            GameWatch.suspended.value = false
             // Show the game list (or the frontend that started the game) on the top screen, where the game was, and close this one.
             val menu = session?.returnTo?.let { frontendIntent(it) }
                 ?: Intent(this@NowPlayingActivity, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
