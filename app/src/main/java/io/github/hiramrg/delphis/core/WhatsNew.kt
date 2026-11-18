@@ -5,13 +5,17 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 44
+    const val RELEASE = 45
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("Report a problem.", "Settings → Diagnostics → Report a problem: pick what went wrong, write a line, and Delphis opens a GitHub report with your device and controller filled in (nothing personal). After a crash, Home offers it too."),
-        Item("Phones and tablets: the pill and the Home button.", "The Delphis pill and your controller's Home button now work while you play, and Delphis' Home offers \"Back to game\" or \"Quit game\" if you left a game open.", fix = true),
+        Item("Delphis check.", "Settings → Diagnostics lists everything Delphis needs, each with a Fix button. A dot on ⚙ and one notice tell you when something needs attention."),
+        Item("One in-game menu.", "The same menu on the Thor's bottom screen and over the game on phones and tablets: Controls, Achievements and Picture, then Change, Edit, Restart and Quit game."),
+        Item("Hints for your controller.", "On phones and tablets the button hints show your controller's own buttons (Xbox, PlayStation, Switch). With touch controls they're left out."),
+        Item("Interface size.", "Settings → Display: Automatic makes Delphis fill a tablet the way it fills the Thor's screen."),
+        Item("Beta updates.", "Settings → Updates → Update channel: Beta gets new versions first, to try them."),
+        Item("Every word fits.", "Home's card, the game page and Report a problem no longer cut words off. Quitting a game on one screen no longer leaves a hidden prompt on Home.", fix = true),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */
