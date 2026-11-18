@@ -1014,7 +1014,7 @@ open class NowPlayingActivity : ComponentActivity() {
                         fun move(d: Int, rows: Int) {
                             when (shown) {
                                 1 -> gameLook?.let { l -> val n = lookStep(l, d * rows); gameLook = n; lookGid?.let { prefs.setLookFor(it, n) } }
-                                2 -> gameRes?.let { r -> val n = io.github.hiramrg.delphis.core.Resolution.step(r, d * (if (rows == 1) 1 else 2)); gameRes = n; gid?.let { prefs.setResolutionFor(it, n) } }
+                                2 -> gameRes?.let { r -> val n = io.github.hiramrg.delphis.core.Resolution.step(r, d * (if (rows == 1) 1 else if (resources.configuration.screenHeightDp < 480) 3 else 2)); gameRes = n; gid?.let { prefs.setResolutionFor(it, n) } }
                                 else -> if (rows == 1) screenChoice?.let { c -> val n = screenStep(c, d); screenChoice = n; screenGid?.let { prefs.setScreenFor(it, n) } }
                             }
                         }

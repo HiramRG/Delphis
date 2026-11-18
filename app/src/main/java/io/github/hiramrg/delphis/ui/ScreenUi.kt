@@ -200,7 +200,9 @@ fun BoxScope.PicturePanel(
         // One frame for both tabs: the same sub-line and a content area of fixed height, so switching
         // tabs doesn't make anything jump. Screen's cards fill it in one row, Look's six in two rows.
         val area = if (compact) 150.dp else 190.dp
-        Row(Modifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // A short screen (a phone) in the in-game menu: no sub-line on Sharpness, its cells in three columns.
+        val shortCompact = compact && androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 480
+        if (!(showRes && shortCompact)) Row(Modifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (showRes) {
                 CapsLabel("Applies when the game starts", Modifier.weight(1f))
                 if (advice != null) Text(
@@ -221,7 +223,7 @@ fun BoxScope.PicturePanel(
                 // The in-game menu: one line per level, its tag on the right, so everything fits the panel.
                 // Two columns of one-line rows (short tags), so the panel fits a phone too.
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    io.github.hiramrg.delphis.core.Resolution.Level.entries.chunked(2).forEach { pair ->
+                    io.github.hiramrg.delphis.core.Resolution.Level.entries.chunked(if (shortCompact) 3 else 2).forEach { pair ->
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             pair.forEach { l -> ResolutionLine(l, l == res, advice?.scale, Modifier.weight(1f)) { onRes(l) } }
                         }
@@ -282,7 +284,7 @@ private fun ResolutionLine(l: io.github.hiramrg.delphis.core.Resolution.Level, o
         verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(l.label, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false, modifier = Modifier.weight(1f, fill = false))
+            Text(l.label, fontSize = 12.5.sp, lineHeight = 15.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
             if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF6BCB77))
         }
         when (fit) {
