@@ -286,15 +286,39 @@ class MainActivity : ComponentActivity() {
     /** One screen: "Play anyway" was chosen once since Delphis opened (asked again next time). */
     private var helperDeclined = false
 
-    /** One screen, "close games" off: there's no pill, no ⊖ + Start and no way to quit from Delphis, so say so on Home. */
-    fun checkHelperOnHome() {
-        if (!oneScreen || helperWarned || io.github.hiramrg.delphis.platform.DolphinExitService.isEnabled(this)) return
-        helperWarned = true
-        Notices.problem(this, "\"Close games\" is off", "Without it you can't open Delphis' menu or leave a game with your controller.", "Fix it") {
-            exitHelperForPlay = false; exitHelperPrompt = {}
+    /** Delphis check (Settings → Diagnostics): bumped when Delphis comes back to the front, so the list is read again. */
+    var checkVersion by mutableIntStateOf(0)
+    /** How many things the Delphis check says need attention (Home shows a dot on ⚙ while there are any). */
+    var checkIssues by mutableIntStateOf(0)
+    private var checkNoticeShown = false
+
+    private suspend fun readCheck(): List<DelphisCheck.Item> = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        runCatching { DelphisCheck.needsAttention(DelphisCheck.items(this@MainActivity)) }.getOrDefault(emptyList())
+    }
+
+    fun refreshCheck() {
+        checkVersion++
+        if (!isSetUp()) { checkIssues = 0; return }
+        lifecycleScope.launch { checkIssues = readCheck().size }
+    }
+
+    /**
+     * Home, once per opening: one notice when the Delphis check has something to fix ("close games" off,
+     * updates not allowed, a controller that wasn't checked…), with "Delphis check" (Ⓨ) to see and fix it.
+     */
+    fun checkHealthOnHome() {
+        if (checkNoticeShown || !isSetUp()) return
+        lifecycleScope.launch {
+            val fix = readCheck()
+            checkIssues = fix.size
+            if (fix.isEmpty() || checkNoticeShown || screen != Screen.Home) return@launch
+            checkNoticeShown = true
+            Notices.problem(
+                this@MainActivity, DelphisCheck.summary(fix.size),
+                fix.mapNotNull { it.short }.joinToString(" · ").replaceFirstChar { it.uppercase() }, "Delphis check",
+            ) { settingsSection = SettingsSection.HELP; screen = Screen.Settings }
         }
     }
-    private var helperWarned = false
 
     /** Non-null while the "What's new" card is showing (holds the version name). */
     private var whatsNewVersion by mutableStateOf<String?>(null)
@@ -690,6 +714,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         goFullScreen()
         setupVersion++ // re-read things that can change in system settings (e.g. the close-games helper)
+        refreshCheck()
         // Back from a game (or anywhere): reload achievement progress so new unlocks show.
         io.github.hiramrg.delphis.platform.Achievements.refresh()
         // The game list showing up while a game is running (and Delphis didn't close it) means

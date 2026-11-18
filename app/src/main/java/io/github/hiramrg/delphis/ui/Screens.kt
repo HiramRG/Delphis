@@ -219,8 +219,9 @@ private fun KeyEvent.firstPress() = action == KeyEvent.ACTION_DOWN && repeatCoun
 fun HomeScreen(act: MainActivity) {
     // Delphis connected to RetroAchievements but Dolphin signed out: a notice with Sign in (Ⓨ).
     LaunchedEffect(Unit) { delay(1500); act.checkDolphinRa() }
-    // One screen: ask about the controller (none, or not checked yet) and warn if "close games" is off.
-    LaunchedEffect(Unit) { delay(600); act.checkControllerOnHome(); delay(900); act.checkHelperOnHome(); delay(1500); act.checkCrashOnHome() }
+    // One screen: ask about the controller (none, or not checked yet). Then, once per opening, the Delphis check's
+    // notice if something needs attention ("close games" off, updates not allowed…), and a crash report offer.
+    LaunchedEffect(Unit) { delay(600); act.checkControllerOnHome(); delay(900); act.checkHealthOnHome(); delay(1500); act.checkCrashOnHome() }
     val c = LocalWii.current
     @Suppress("UNUSED_VARIABLE") val v = act.statsVersion
     val lastPlayed = act.prefs.lastPlayed()
@@ -1035,12 +1036,16 @@ private fun HomeBar(act: MainActivity, rowsMode: Boolean, lit: Boolean) {
     val round = RoundedCornerShape(50)
     WiiBar(
         left = {
-            Box(
-                Modifier.size(36.dp).focusRing(round).channel(round)
-                    .onFocusChanged { if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeRow = null } }
-                    .clickable { act.screen = Screen.Settings },
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Filled.Settings, "Settings", tint = c.textDim, modifier = Modifier.size(20.dp)) }
+            Box {
+                Box(
+                    Modifier.size(36.dp).focusRing(round).channel(round)
+                        .onFocusChanged { if (it.isFocused) { act.homeFocusedTile = true; act.focusedGame = null; act.homeRow = null } }
+                        .clickable { if (act.checkIssues > 0) act.settingsSection = SettingsSection.HELP; act.screen = Screen.Settings },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Filled.Settings, "Settings", tint = c.textDim, modifier = Modifier.size(20.dp)) }
+                // Something in the Delphis check needs attention (Settings → Diagnostics).
+                if (act.checkIssues > 0) AttentionDot(Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp))
+            }
             // ⊖ opens Settings too. Same spacing for each button and its shortcut: ⚙ ⊖ · ⏻ Hold Ⓑ.
             Box(Modifier.padding(start = 8.dp)) { KeyIcon("⊖") }
             // ⏻ exits Delphis (asks first). Holding Ⓑ on Home does the same.
@@ -2011,7 +2016,10 @@ fun SettingsScreen(act: MainActivity) {
                     SettingsSection.LIBRARY -> LibrarySettings(act)
                     SettingsSection.FRONTENDS -> FrontendSettings(act)
                     SettingsSection.UPDATES -> UpdatePanel(act)
-                    SettingsSection.HELP -> GroupCard {
+                    SettingsSection.HELP -> DelphisCheckCard(act)
+                }
+                if (act.settingsSection == SettingsSection.HELP) {
+                    GroupCard {
                         SettingRow("Report a problem", "Tell us what went wrong. Delphis adds the details about your device, controller and game, without anything personal.", onClick = { act.openReport() }) {
                             Text("Report ›", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
                         }
