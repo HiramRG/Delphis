@@ -271,6 +271,10 @@ class LayoutCheckTest {
             decor.measure(View.MeasureSpec.makeMeasureSpec(lp.width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(decor.height, View.MeasureSpec.EXACTLY))
             decor.layout(0, 0, lp.width, decor.height)
         }
+        // Robolectric doesn't draw frames, and Compose lays out a changed screen when it draws: lay it out now
+        // (twice, for anything placed from another part's size), so the check reads the screen as it is.
+        repeat(2) { composeRoots(decor).forEach { r -> r.measureAndLayout() }; settle(128) }
+        composeRoots(decor).forEach { r -> r.measureAndLayout() }
         val shot = "${size.id}/${slug(screen)}.png"
         val found = mutableListOf<String>()
         val roots = composeRoots(decor)
