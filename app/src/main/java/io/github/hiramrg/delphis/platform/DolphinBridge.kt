@@ -372,6 +372,12 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             val pkg = installedPackage()
             if (resumeGameId != null) autoResume(resumeGameId)
             else if (pkg != null && DolphinExitService.awaitGameScreen(pkg, 20_000)) kotlinx.coroutines.delay(800)
+            // One screen: set Dolphin's touch buttons from its own menu too, while the loading screen still covers it.
+            val want = overlayWanted
+            if (pkg != null && want != null && DeviceInfo.oneScreen(context)) {
+                if (resumeGameId == null) kotlinx.coroutines.delay(1500) // let the game finish booting
+                CrashLog.event("touch buttons ${if (want) "on" else "off"} in Dolphin's menu: ${DolphinExitService.syncTouchButtons(pkg, want)}")
+            }
             return true
         } finally {
             DolphinExitService.hideLoading(400)

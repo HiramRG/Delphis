@@ -162,6 +162,8 @@ fun BoxScope.PicturePanel(
     onCancel: () -> Unit, onDone: () -> Unit, doneLabel: String = "Done", note: String? = null, compact: Boolean = false,
     res: io.github.hiramrg.delphis.core.Resolution.Level? = null, onRes: (io.github.hiramrg.delphis.core.Resolution.Level) -> Unit = {},
     advice: io.github.hiramrg.delphis.platform.DeviceInfo.ResolutionAdvice? = null,
+    /** Show the controller buttons (the game page, and the in-game menu on one screen). */
+    keys: Boolean = !compact,
 ) {
     val c = LocalWii.current
     Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.6f)).clickable(onClick = onCancel))
@@ -181,18 +183,18 @@ fun BoxScope.PicturePanel(
             .fillMaxWidth(if (compact) 0.97f else 0.9f).clickable(enabled = false) {},
         corner = if (tabs.size > 1) ({
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (!compact) KeyIcon("L1")
+                if (keys) KeyIcon("L1")
                 Segmented(tabs.map { it to when (it) { 0 -> "▭ Screen"; 1 -> "✦ Look"; else -> "▣ Sharpness" } }, shown, onTab)
-                if (!compact) KeyIcon("R1")
+                if (keys) KeyIcon("R1")
             }
         }) else null,
         buttons = {
             if (note != null) Text(note, fontSize = 11.sp, color = c.textDim, modifier = Modifier.weight(1f), lineHeight = 14.sp)
-            else if (!compact) Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            else if (keys) Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 KeyIcon(if (showLook || showRes) "DPAD" else "DPAD_LR"); Text("Choose", fontSize = 12.sp, color = c.textDim)
             }
-            PanelBtn("Cancel", if (compact) null else "B", false, onClick = onCancel)
-            PanelBtn(doneLabel, if (compact) null else "A", true, onClick = onDone)
+            PanelBtn("Cancel", if (keys) "B" else null, false, onClick = onCancel)
+            PanelBtn(doneLabel, if (keys) "A" else null, true, onClick = onDone)
         },
     ) {
         // One frame for both tabs: the same sub-line and a content area of fixed height, so switching
@@ -208,7 +210,7 @@ fun BoxScope.PicturePanel(
             } else if (!showLook) {
                 CapsLabel(if (choice!!.shape == Shape.WIDE) "16:9 fill" else "Sides · change right away", Modifier.weight(1f))
                 Segmented(listOf(Shape.STANDARD to "4:3", Shape.WIDE to "16:9"), choice.shape, { onPick(choice.copy(shape = it)) })
-                if (!compact) KeyIcon("Y")
+                if (keys) KeyIcon("Y")
             } else {
                 CapsLabel("Applies when the game starts", Modifier.weight(1f))
                 if (!compact) Text("Only the final picture: same game speed", fontSize = 11.sp, color = c.textDim, maxLines = 1)

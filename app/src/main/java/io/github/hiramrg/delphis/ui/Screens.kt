@@ -126,13 +126,15 @@ fun BarClock(modifier: Modifier = Modifier) {
 }
 
 /**
- * Bar D: no pill, just a soft line along the top. Left and right get equal halves of what's left after
- * the clock, so the clock is always centred and the two sides can never run into it (hints wrap instead).
+ * Bar D: no pill, just a soft line along the top. The clock sits in the middle when there's room; when the
+ * right side's hints need more, the clock moves left (into the left side's free space), and only then do
+ * the hints shrink a little (down to 75%). They always stay on one line.
  */
 @Composable
 fun WiiBar(left: @Composable RowScope.() -> Unit, right: @Composable RowScope.() -> Unit, modifier: Modifier = Modifier) {
     val c = LocalWii.current
-    Row(
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.ui.layout.SubcomposeLayout(
         modifier.padding(bottom = 8.dp).fillMaxWidth().height(48.dp)
             .drawBehind {
                 val y = 1.dp.toPx()
@@ -142,11 +144,30 @@ fun WiiBar(left: @Composable RowScope.() -> Unit, right: @Composable RowScope.()
                 )
             }
             .padding(start = 12.dp, end = 12.dp, top = 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, content = left)
-        BarClock()
-        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End, content = right)
+    ) { cons ->
+        val w = cons.maxWidth; val h = cons.maxHeight
+        val gap = 12.dp.roundToPx()
+        val loose = androidx.compose.ui.unit.Constraints(maxWidth = w, maxHeight = h)
+        val clock = subcompose("clock") { BarClock() }.first().measure(loose)
+        val leftP = subcompose("left") { Row(verticalAlignment = Alignment.CenterVertically, content = left) }.first()
+            .measure(loose.copy(maxWidth = ((w - clock.width) / 2).coerceAtLeast(0)))
+        val room = (w - leftP.width - clock.width - 2 * gap).coerceAtLeast(0)
+        var rightP: androidx.compose.ui.layout.Placeable? = null
+        for (scale in listOf(1f, 0.9f, 0.82f, 0.75f)) {
+            val m = subcompose("right$scale") {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density * scale, density.fontScale),
+                ) { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End, content = right) }
+            }.first()
+            if (m.maxIntrinsicWidth(h) <= room || scale == 0.75f) { rightP = m.measure(loose.copy(maxWidth = room)); break }
+        }
+        val r = rightP!!
+        val clockX = ((w - clock.width) / 2).coerceAtMost(w - r.width - gap - clock.width).coerceAtLeast(leftP.width + gap)
+        layout(w, h) {
+            leftP.place(0, (h - leftP.height) / 2)
+            clock.place(clockX, (h - clock.height) / 2)
+            r.place(w - r.width, (h - r.height) / 2)
+        }
     }
 }
 

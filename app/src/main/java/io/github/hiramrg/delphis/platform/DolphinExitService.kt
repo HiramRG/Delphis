@@ -69,6 +69,7 @@ class DolphinExitService : AccessibilityService() {
 
         /** See [pressQuickLoad]. Null when the service isn't running. */
         suspend fun quickLoad(pkg: String): StateResult? = instance?.pressQuickLoad(pkg)
+        suspend fun syncTouchButtons(pkg: String, show: Boolean): String = instance?.syncTouchButtonsImpl(pkg, show) ?: "helper off"
 
         /** Covers the top screen with the loading screen (no-op without the service). Returns whether it's showing. */
         fun showLoading(phase: LoadingOverlay.Phase, title: String?, gameId: String?, line: String, displayId: Int?): Boolean {
@@ -499,6 +500,45 @@ class DolphinExitService : AccessibilityService() {
             return if (ok) StateResult.DONE else StateResult.FAILED
         }
         return StateResult.FAILED
+    }
+
+    /**
+     * Makes Dolphin show or hide its touch buttons right now, from its own in-game menu (Overlay controls →
+     * Show overlay), the way a person would. Restarting Dolphin so it re-reads Dolphin.ini doesn't always
+     * happen (Samsung can keep it alive after its Recent apps card is removed), but this applies at once.
+     * Returns what happened, for Diagnostics (it lists the menu's items, so a renamed item shows up).
+     */
+    suspend fun syncTouchButtonsImpl(pkg: String, show: Boolean): String {
+        if (find(pkg, "frame_emulation_fragment") == null) return "no game on screen"
+        if (!openMenu(pkg)) return "Dolphin's menu didn't open"
+        waitFor(1500) { find(pkg, "menu_overlay_controls")?.isVisibleToUser == true }
+        val button = find(pkg, "menu_overlay_controls")?.takeIf { it.isVisibleToUser }
+        if (button == null) { performGlobalAction(GLOBAL_ACTION_BACK); return "no Overlay controls button" }
+        delay(400)
+        if (!click(button)) { performGlobalAction(GLOBAL_ACTION_BACK); return "Overlay controls didn't open" }
+        // The pop-up's rows: a title, and a check box for the items that can be ticked.
+        data class Row(val title: String, val checked: Boolean?, val node: AccessibilityNodeInfo)
+        fun rows(): List<Row> = dolphinRoots(pkg).flatMap { root ->
+            runCatching { root.findAccessibilityNodeInfosByViewId("android:id/title") }.getOrDefault(emptyList())
+        }.mapNotNull { t ->
+            val row = t.parent ?: return@mapNotNull null
+            val box = (0 until row.childCount).mapNotNull { row.getChild(it) }.firstOrNull { it.isCheckable }
+            Row(t.text?.toString().orEmpty(), box?.isChecked ?: row.isChecked.takeIf { row.isCheckable }, row)
+        }
+        waitFor(1500) { rows().isNotEmpty() }
+        val items = rows()
+        val listed = items.joinToString(" | ") { it.title + (when (it.checked) { true -> " [on]"; false -> " [off]"; null -> "" }) }
+        val target = items.firstOrNull { r ->
+            r.checked != null && Regex("overlay|superposici|en pantalla|on-screen|show controls|mostrar controles", RegexOption.IGNORE_CASE).containsMatchIn(r.title)
+        }
+        val result = when {
+            target == null -> { performGlobalAction(GLOBAL_ACTION_BACK); "no show-overlay item found" }
+            target.checked == show -> { performGlobalAction(GLOBAL_ACTION_BACK); "already ${if (show) "on" else "off"}" }
+            else -> { delay(300); if (click(target.node)) "switched ${if (show) "on" else "off"}" else "click failed" }
+        }
+        delay(400)
+        if (find(pkg, "menu_exit") != null) performGlobalAction(GLOBAL_ACTION_BACK) // close Dolphin's menu
+        return "$result · items: $listed"
     }
 
     /**

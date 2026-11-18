@@ -574,12 +574,12 @@ open class NowPlayingActivity : ComponentActivity() {
         val screenGid = gid?.takeIf { s.info.platform == io.github.hiramrg.delphis.core.Platform.GAMECUBE }
         var screenChoice by remember { mutableStateOf(screenGid?.let { prefs.screenFor(it) }) }
         val runningScreen = remember(startedAt) { screenGid?.let { prefs.screenFor(it) } }
-        var showPicture by remember { mutableStateOf(false) }
+        var showPicture by remember { mutableStateOf(panelMode && io.github.hiramrg.delphis.platform.TestHooks.pictureTab != null) }
         // Looks: the game's post-processing shader; a change applies when the game starts again.
         val lookGid = gid?.takeIf { prefs.looksEnabled }
         var gameLook by remember { mutableStateOf(lookGid?.let { prefs.lookFor(it) }) }
         val runningLook = remember(startedAt) { lookGid?.let { prefs.lookFor(it) } }
-        var pictureTab by remember { mutableIntStateOf(0) }
+        var pictureTab by remember { mutableIntStateOf(io.github.hiramrg.delphis.platform.TestHooks.pictureTab ?: 0) }
         var pictureBefore by remember { mutableStateOf<Pair<io.github.hiramrg.delphis.core.GameScreen.Choice?, io.github.hiramrg.delphis.core.Looks.Look?>?>(null) }
         // Resolution: the Picture panel's third tab (needs a restart).
         var gameRes by remember { mutableStateOf(gid?.let { prefs.resolutionFor(it) }) }
@@ -947,6 +947,7 @@ open class NowPlayingActivity : ComponentActivity() {
 
             // Picture: ▭ Screen (GameCube; the sides change right away, shape / 16:9 fill need a restart)
             // and ✦ Look (needs a restart). Touch only here: in game the Thor's buttons belong to Dolphin.
+            val pictureActions = remember { arrayOfNulls<() -> Unit>(2) } // cancel, done (for the controller keys)
             if (showPicture && (screenChoice != null || gameLook != null || gameRes != null)) {
                 val sc = screenChoice
                 val needsRestart = (runningScreen != null && sc != null && (sc.shape != runningScreen.shape ||
@@ -972,7 +973,20 @@ open class NowPlayingActivity : ComponentActivity() {
                     doneLabel = if (needsRestart) "Restart game" else "Done",
                     note = if (needsRestart) "Dolphin applies this when the game starts." else null,
                     compact = true,
+                    keys = panelMode && !PadGlyphs.touch,
                 )
+                pictureActions[0] = {
+                    resBefore?.let { r -> gameRes = r; gid?.let { prefs.setResolutionFor(it, r) } }
+                    pictureBefore?.let { (bs, bl) ->
+                        if (bs != null) { screenChoice = bs; screenGid?.let { prefs.setScreenFor(it, bs) } }
+                        if (bl != null) { gameLook = bl; lookGid?.let { prefs.setLookFor(it, bl) } }
+                    }
+                    showPicture = false
+                }
+                pictureActions[1] = {
+                    showPicture = false
+                    if (needsRestart) restartAction = { applyAndRestart(s, preset, remember = false) }
+                }
             }
 
             // In-window dialogs (no separate dialog window, so Dolphin keeps gamepad focus).
@@ -993,7 +1007,35 @@ open class NowPlayingActivity : ComponentActivity() {
                         KeyEvent.KEYCODE_BUTTON_B to { restartAction = null; pending() },
                         KeyEvent.KEYCODE_BUTTON_A to { restartAction = null },
                     )
-                    mode != Mode.VIEW || showPicture || showBrightness -> emptyMap()
+                    showPicture -> {
+                        // Picture panel: L1 / R1 tabs, D-pad picks, bottom button Done, right button Cancel.
+                        val tabs = pictureTabs(screenChoice != null, gameLook != null, gameRes != null)
+                        val shown = if (pictureTab in tabs) pictureTab else tabs.first()
+                        fun move(d: Int, rows: Int) {
+                            when (shown) {
+                                1 -> gameLook?.let { l -> val n = lookStep(l, d * rows); gameLook = n; lookGid?.let { prefs.setLookFor(it, n) } }
+                                2 -> gameRes?.let { r -> val n = io.github.hiramrg.delphis.core.Resolution.step(r, d * (if (rows == 1) 1 else 2)); gameRes = n; gid?.let { prefs.setResolutionFor(it, n) } }
+                                else -> if (rows == 1) screenChoice?.let { c -> val n = screenStep(c, d); screenChoice = n; screenGid?.let { prefs.setScreenFor(it, n) } }
+                            }
+                        }
+                        mapOf(
+                            KeyEvent.KEYCODE_BUTTON_L1 to { tabs.getOrNull(tabs.indexOf(shown) - 1)?.let { pictureTab = it } },
+                            KeyEvent.KEYCODE_BUTTON_R1 to { tabs.getOrNull(tabs.indexOf(shown) + 1)?.let { pictureTab = it } },
+                            KeyEvent.KEYCODE_DPAD_LEFT to { move(-1, 1) },
+                            KeyEvent.KEYCODE_DPAD_RIGHT to { move(1, 1) },
+                            KeyEvent.KEYCODE_DPAD_UP to { move(-1, 3) },
+                            KeyEvent.KEYCODE_DPAD_DOWN to { move(1, 3) },
+                            KeyEvent.KEYCODE_BUTTON_Y to {
+                                if (shown == 0) screenChoice?.let { c ->
+                                    val n = c.copy(shape = if (c.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD else io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE)
+                                    screenChoice = n; screenGid?.let { prefs.setScreenFor(it, n) }
+                                }
+                            },
+                            KeyEvent.KEYCODE_BUTTON_B to { pictureActions[1]?.invoke() },
+                            KeyEvent.KEYCODE_BUTTON_A to { pictureActions[0]?.invoke() },
+                        )
+                    }
+                    mode != Mode.VIEW || showBrightness -> emptyMap()
                     else -> mapOf(
                         KeyEvent.KEYCODE_BUTTON_A to { resumeGame() },
                         KeyEvent.KEYCODE_BUTTON_START to { resumeGame() },
