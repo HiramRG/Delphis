@@ -40,6 +40,11 @@ object PadKeys {
         12 to KeyEvent.KEYCODE_BUTTON_THUMBR, 13 to KeyEvent.KEYCODE_BUTTON_MODE,
     )
 
+    private val NINTENDO_LABELS = mapOf(
+        KeyEvent.KEYCODE_BUTTON_A to KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BUTTON_B to KeyEvent.KEYCODE_BUTTON_A,
+        KeyEvent.KEYCODE_BUTTON_X to KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_Y to KeyEvent.KEYCODE_BUTTON_X,
+    )
+
     private var cachedFor: Map<String, List<String>>? = null
     private var cached: Map<Int, Int> = emptyMap()
 
@@ -62,10 +67,14 @@ object PadKeys {
         if (!oneScreen) return e
         val device = e.device ?: return e
         if (device.isVirtual) return e
-        val target = if (device.name == prefs.calibratedDeviceName) fromCheck(prefs)[e.keyCode]
-        else if (device.vendorId == 0x057E && e.keyCode in KeyEvent.KEYCODE_BUTTON_1..KeyEvent.KEYCODE_BUTTON_16)
-            SWITCH_ORDER[e.keyCode - KeyEvent.KEYCODE_BUTTON_1 + 1]
-        else null
+        val target = when {
+            device.name == prefs.calibratedDeviceName -> fromCheck(prefs)[e.keyCode]
+            device.vendorId != 0x057E -> null
+            e.keyCode in KeyEvent.KEYCODE_BUTTON_1..KeyEvent.KEYCODE_BUTTON_16 -> SWITCH_ORDER[e.keyCode - KeyEvent.KEYCODE_BUTTON_1 + 1]
+            // Android reports Nintendo controllers by position (Xbox style): the A button (right) arrives as B,
+            // X (top) as Y. Delphis follows the labels, like on the Thor.
+            else -> NINTENDO_LABELS[e.keyCode]
+        }
         if (target == null || target == e.keyCode) return e
         return KeyEvent(e.downTime, e.eventTime, e.action, target, e.repeatCount, e.metaState, e.deviceId, e.scanCode, e.flags, e.source)
     }

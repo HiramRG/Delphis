@@ -181,6 +181,8 @@ open class NowPlayingActivity : ComponentActivity() {
             padsAtStart += DeviceInfo.gamepads().map { it.name }
             getSystemService(android.hardware.input.InputManager::class.java).registerInputDeviceListener(padListener, android.os.Handler(android.os.Looper.getMainLooper()))
         }
+        // One screen, a game starting: step behind right away, so Dolphin (launched next) is in front with the controller.
+        if (panelMode && !intent.getBooleanExtra(InGameMenuActivity.EXTRA_OPEN, false)) window.decorView.post { moveTaskToBack(true) }
         if (!panelMode) preferLowRefreshRate()
         session = GameSession.from(intent)
         watch(session)
