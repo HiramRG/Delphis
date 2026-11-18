@@ -11,6 +11,7 @@ object WhatsNew {
 
     val items = listOf(
         Item("A button for everything in the in-game menu.", "One screen: Resume, Change controls, Restart and Quit game each have their own controller button, shown on the button itself."),
+        Item("Your controller on the map.", "Phones and tablets: the controls map draws your Xbox, PlayStation, Switch Pro or other controller, bigger, with the labels beside it."),
         Item("Sharpness before you play.", "Picture → Sharpness picks the game's resolution, from 1× to 4K. Delphis marks the level your device should handle and warns about the rest."),
         Item("Touch controls really go away now.", "Dolphin is restarted whenever its touch setting has to change, also when it was sitting in its game list.", fix = true),
     )

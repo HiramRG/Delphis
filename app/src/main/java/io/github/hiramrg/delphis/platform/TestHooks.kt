@@ -13,6 +13,9 @@ object TestHooks {
     /** The layout check opens the game page's Picture panel on this tab (2 = Resolution); null = closed. */
     @Volatile @JvmField var pictureTab: Int? = null
 
+    /** The layout check pretends this controller is connected (one screen): vendor id, e.g. 0x045e = Xbox. */
+    @Volatile @JvmField var padVendor: Int? = null
+
     /** Every download calls this first: throws (like being offline) while [offline] is set. */
     fun net() { if (offline) throw java.io.IOException("offline (layout check)") }
 }

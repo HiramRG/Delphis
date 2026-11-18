@@ -58,11 +58,18 @@ object PadGlyphs {
     var thorBody by mutableStateOf(true)
         internal set
 
+    /** Which controller the map draws off the Thor (null = Thor or touch). */
+    var brand by mutableStateOf<PadBrand?>(null)
+        internal set
+
     /** Reads the connected controller again (one screen); call when controllers come and go. */
     fun update(oneScreen: Boolean) {
         thorBody = !oneScreen
+        val fake = io.github.hiramrg.delphis.platform.TestHooks.padVendor
+        brand = if (!oneScreen) null else fake?.let { PadBrand.forVendor(it) } ?: io.github.hiramrg.delphis.platform.DeviceInfo.gamepads().firstOrNull()?.let { PadBrand.forVendor(it.vendorId) }
         labels = if (!oneScreen) io.github.hiramrg.delphis.core.ButtonLabels.NINTENDO
-        else io.github.hiramrg.delphis.platform.DeviceInfo.gamepads().firstOrNull()?.let { io.github.hiramrg.delphis.core.ButtonLabels.forVendor(it.vendorId) }
+        else fake?.let { io.github.hiramrg.delphis.core.ButtonLabels.forVendor(it) }
+            ?: io.github.hiramrg.delphis.platform.DeviceInfo.gamepads().firstOrNull()?.let { io.github.hiramrg.delphis.core.ButtonLabels.forVendor(it.vendorId) }
     }
 
     /** [padText] with a controller, [touchText] without one. */

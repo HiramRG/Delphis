@@ -210,8 +210,7 @@ open class NowPlayingActivity : ComponentActivity() {
             val dm = resources.displayMetrics
             // Interface size: on a big screen the panel is drawn bigger, like the rest of Delphis.
             uiScale = UiScale.forScreen(this, prefs)
-            val width = minOf((470 * dm.density * uiScale).toInt(), (dm.widthPixels * 0.66f).toInt())
-            window.setLayout(width, WindowManager.LayoutParams.MATCH_PARENT)
+            window.setLayout(panelWidth(false), WindowManager.LayoutParams.MATCH_PARENT)
             window.setGravity(Gravity.END)
         } else window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -252,6 +251,19 @@ open class NowPlayingActivity : ComponentActivity() {
      * B = bottom, A = right, Y = left, X = top), kept up to date by the composition.
      */
     private var panelKeys: Map<Int, () -> Unit> = emptyMap()
+
+    /** One screen: the panel's width. [wide] (the controls map showing) = 60% of the screen, so the drawing can be big. */
+    private fun panelWidth(wide: Boolean): Int {
+        val dm = resources.displayMetrics
+        val normal = minOf((470 * dm.density * uiScale).toInt(), (dm.widthPixels * 0.66f).toInt())
+        return if (wide) maxOf(normal, (dm.widthPixels * 0.60f).toInt()) else normal
+    }
+    private var panelWide = false
+    private fun setPanelWide(wide: Boolean) {
+        if (!panelMode || wide == panelWide) return
+        panelWide = wide
+        window.setLayout(panelWidth(wide), WindowManager.LayoutParams.MATCH_PARENT)
+    }
 
     override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
         if (!panelMode) return super.dispatchKeyEvent(raw)
@@ -965,6 +977,8 @@ open class NowPlayingActivity : ComponentActivity() {
 
             // In-window dialogs (no separate dialog window, so Dolphin keeps gamepad focus).
             // One screen: a button for every action, so nobody has to steer the focus with a stick.
+            // The map needs room: the panel widens while it shows (not with touch controls, which show a card instead).
+            if (panelMode) SideEffect { setPanelWide(mode == Mode.VIEW && !showPicture && !showAchievements && !PadGlyphs.touch) }
             if (panelMode) SideEffect {
                 val quit = { showBrightness = false; if (prefs.skipExitWarning) closingGame { backToMainMenu() } else { exitDontAsk = false; confirmExit = true } }
                 val restart = { showBrightness = false; plainRestart = true; restartAction = { applyAndRestart(s, preset, remember = false) } }

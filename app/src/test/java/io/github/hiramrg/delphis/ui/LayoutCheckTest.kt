@@ -197,6 +197,15 @@ class LayoutCheckTest {
             inGameMenu(tablet, InGameMenuActivity::class.java, session(g, preset), name)
         }
         inGameMenu(bottom, NowPlayingActivity::class.java, session(game("REDE41", "Red Steel", Platform.WII), "redsteel-trackpad"), "In-game menu (trackpad)")
+        // One screen with a controller: the map draws that controller (and the panel widens).
+        for ((vendor, brand) in listOf(0x045e to "Xbox", 0x054c to "PlayStation", 0x057e to "Switch Pro", 0x2dc8 to "8BitDo")) {
+            TestHooks.padVendor = vendor
+            for ((g, preset, name) in inGame.take(if (vendor == 0x045e) 3 else 1)) {
+                inGameMenu(phone, InGameMenuActivity::class.java, session(g, preset), "$name · $brand")
+                inGameMenu(tablet, InGameMenuActivity::class.java, session(g, preset), "$name · $brand")
+            }
+        }
+        TestHooks.padVendor = null
 
         step("done")
         writeSummary()
