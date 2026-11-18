@@ -274,15 +274,17 @@ private fun ResolutionLine(l: io.github.hiramrg.delphis.core.Resolution.Level, o
     val c = LocalWii.current
     val shape = RoundedCornerShape(10.dp)
     val fit = recommended?.let { io.github.hiramrg.delphis.core.Resolution.fit(l, it) }
-    Row(
-        modifier.heightIn(min = 28.dp).focusRing(shape).clip(shape)
+    // Name on top, a short tag under it: fits the in-game menu's narrow columns.
+    Column(
+        modifier.height(46.dp).focusRing(shape).clip(shape)
             .background(if (on) (if (c.dark) Color(0xFF173444) else c.accentSoft) else (if (c.dark) Color(0xFF20252B) else c.card))
-            .border(if (on) 2.dp else 1.dp, if (on) Sel else c.cardBorder, shape).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .border(if (on) 2.dp else 1.dp, if (on) Sel else c.cardBorder, shape).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
     ) {
-        Text(l.label, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-        if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF6BCB77))
-        Spacer(Modifier.weight(1f))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(l.label, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false, modifier = Modifier.weight(1f, fill = false))
+            if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF6BCB77))
+        }
         when (fit) {
             io.github.hiramrg.delphis.core.Resolution.Fit.RECOMMENDED -> CostTag("★ Best", Color(0xFF6BCB77), Color(0xFF1F3B2A))
             io.github.hiramrg.delphis.core.Resolution.Fit.MAYBE -> CostTag("Slower", Color(0xFFF5C542), Color(0xFF3D331A))
