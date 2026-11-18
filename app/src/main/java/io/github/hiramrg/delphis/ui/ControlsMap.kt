@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -100,7 +101,7 @@ fun ControlsMap(preset: Preset, modifier: Modifier = Modifier, onFit: ((Float) -
     val c = LocalWii.current
     val measurer = rememberTextMeasurer()
     val actions = preset.mappings.groupBy { it.control }.mapValues { (_, ms) -> mapLabel(ms.first().action) }
-    Canvas(modifier) { val fs = drawMap(actions, measurer, c); onFit?.invoke(fs) }
+    Canvas(modifier.clipToBounds()) { val fs = drawMap(actions, measurer, c); onFit?.invoke(fs) }
 }
 
 /** Below this label size (dp ≈ pt) the diagram is hard to read, so the card opens on the list. */
@@ -394,7 +395,8 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
 fun ControlsSwitchable(preset: Preset, prefs: io.github.hiramrg.delphis.platform.Prefs, gameKey: String?, modifier: Modifier = Modifier, toggle: Int = 0, toggleKey: String? = null) {
     val saved = androidx.compose.runtime.remember(gameKey) { androidx.compose.runtime.mutableStateOf(gameKey?.let { prefs.controlsView(it) }) }
     var tooSmall by androidx.compose.runtime.remember(preset.id) { androidx.compose.runtime.mutableStateOf(false) }
-    val list = when (saved.value) { "list" -> true; "thor" -> false; else -> tooSmall }
+    // Too small to read (a short phone panel): the list, whatever was picked before.
+    val list = tooSmall || saved.value == "list"
     fun set(v: Boolean) { saved.value = if (v) "list" else "thor"; gameKey?.let { prefs.setControlsView(it, saved.value!!) } }
     // A button (L2 on the game page) flips it too.
     var lastToggle by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(toggle) }
@@ -406,7 +408,7 @@ fun ControlsSwitchable(preset: Preset, prefs: io.github.hiramrg.delphis.platform
             if (toggleKey != null) KeyIcon(toggleKey)
         }
         if (list) ControlsList(preset, Modifier.weight(1f).fillMaxWidth())
-        else ControlsMap(preset, Modifier.weight(1f).fillMaxWidth(), onFit = { fs -> if (saved.value == null && fs < MIN_MAP_FONT && !tooSmall) tooSmall = true })
+        else ControlsMap(preset, Modifier.weight(1f).fillMaxWidth(), onFit = { fs -> if (fs < MIN_MAP_FONT && !tooSmall) tooSmall = true })
     }
 }
 
