@@ -285,7 +285,7 @@ fun HomeScreen(act: MainActivity) {
     LaunchedEffect(holdingB) { if (holdingB) { delay(1000); if (holdingB) { holdingB = false; act.exitAll() } } }
     if (act.exitPrompt) ConfirmDialog(
         "Delphis", "Exit Delphis?", "Closes Delphis on both screens and closes Dolphin too, so nothing keeps running in the background.",
-        confirm = "⏻ Exit", onCancel = { act.exitPrompt = false },
+        confirm = "Exit", onCancel = { act.exitPrompt = false },
     ) { act.exitAll() }
     val onKey by rememberUpdatedState<(KeyEvent) -> Boolean> { e ->
         val target = act.focusedGame ?: hero
