@@ -592,7 +592,10 @@ open class NowPlayingActivity : ComponentActivity() {
         val runningRes = remember(startedAt) { gid?.let { prefs.resolutionFor(it) } }
         var resBefore by remember { mutableStateOf(gameRes) }
         val resAdvice = remember { io.github.hiramrg.delphis.platform.DeviceInfo.resolutionAdvice(this@NowPlayingActivity) }
-        fun openPicture(tab: Int) { pictureBefore = screenChoice to gameLook; resBefore = gameRes; pictureTab = tab; showBrightness = false; showPicture = true }
+        // The D-pad moves a glow; the bottom button picks the card under it.
+        var lookCursor by remember { mutableStateOf(gameLook) }
+        var resCursor by remember { mutableStateOf(gameRes) }
+        fun openPicture(tab: Int) { pictureBefore = screenChoice to gameLook; resBefore = gameRes; lookCursor = gameLook; resCursor = gameRes; pictureTab = tab; showBrightness = false; showPicture = true }
         val sideColour by produceState(android.graphics.Color.rgb(75, 58, 143), screenGid) {
             screenGid?.let { value = io.github.hiramrg.delphis.platform.SideFill.colourOf(io.github.hiramrg.delphis.platform.CoverArt(this@NowPlayingActivity).load(it)) }
         }
@@ -963,8 +966,9 @@ open class NowPlayingActivity : ComponentActivity() {
                 PicturePanel(
                     s.info.title, pictureTab, { pictureTab = it },
                     sc, screenGid, prefs.gcUseHack, sideColour, { ch -> screenChoice = ch; screenGid?.let { prefs.setScreenFor(it, ch) } },
-                    gameLook, { l -> gameLook = l; lookGid?.let { prefs.setLookFor(it, l) } },
-                    res = gameRes, onRes = { l -> gameRes = l; gid?.let { prefs.setResolutionFor(it, l) } }, advice = resAdvice,
+                    gameLook, { l -> gameLook = l; lookCursor = l; lookGid?.let { prefs.setLookFor(it, l) } },
+                    res = gameRes, onRes = { l -> gameRes = l; resCursor = l; gid?.let { prefs.setResolutionFor(it, l) } }, advice = resAdvice,
+                    lookCursor = lookCursor, resCursor = resCursor, pickKey = "B",
                     onCancel = {
                         resBefore?.let { r -> gameRes = r; gid?.let { prefs.setResolutionFor(it, r) } }
                         pictureBefore?.let { (bs, bl) ->
@@ -1024,11 +1028,18 @@ open class NowPlayingActivity : ComponentActivity() {
                         // Picture panel: L1 / R1 tabs, D-pad picks, bottom button Done, right button Cancel.
                         val tabs = pictureTabs(screenChoice != null, gameLook != null, gameRes != null)
                         val shown = if (pictureTab in tabs) pictureTab else tabs.first()
+                        // The D-pad only moves the glow (Look / Sharpness); the Screen tab's cards change right away.
                         fun move(d: Int, rows: Int) {
                             when (shown) {
-                                1 -> gameLook?.let { l -> val n = lookStep(l, d * rows); gameLook = n; lookGid?.let { prefs.setLookFor(it, n) } }
-                                2 -> gameRes?.let { r -> val n = io.github.hiramrg.delphis.core.Resolution.step(r, d * (if (rows == 1) 1 else if (resources.configuration.screenHeightDp < 480) 3 else 2)); gameRes = n; gid?.let { prefs.setResolutionFor(it, n) } }
+                                1 -> (lookCursor ?: gameLook)?.let { l -> lookCursor = lookStep(l, d * rows) }
+                                2 -> (resCursor ?: gameRes)?.let { r -> resCursor = io.github.hiramrg.delphis.core.Resolution.step(r, d * (if (rows == 1) 1 else if (resources.configuration.screenHeightDp < 480) 3 else 2)) }
                                 else -> if (rows == 1) screenChoice?.let { c -> val n = screenStep(c, d); screenChoice = n; screenGid?.let { prefs.setScreenFor(it, n) } }
+                            }
+                        }
+                        fun pick() {
+                            when (shown) {
+                                1 -> lookCursor?.let { n -> gameLook = n; lookGid?.let { prefs.setLookFor(it, n) } }
+                                2 -> resCursor?.let { n -> gameRes = n; gid?.let { prefs.setResolutionFor(it, n) } }
                             }
                         }
                         mapOf(
@@ -1038,8 +1049,9 @@ open class NowPlayingActivity : ComponentActivity() {
                             KeyEvent.KEYCODE_DPAD_RIGHT to { move(1, 1) },
                             KeyEvent.KEYCODE_DPAD_UP to { move(-1, 3) },
                             KeyEvent.KEYCODE_DPAD_DOWN to { move(1, 3) },
-                            // Bottom = Apply & restart (Close when nothing changed), right = Cancel, left = Next time.
-                            KeyEvent.KEYCODE_BUTTON_B to { if (pictureChanged) pictureActions[1]?.invoke() else pictureActions[0]?.invoke() },
+                            // Bottom = pick, Start = Apply & restart, right = Cancel / Close, left = Next time.
+                            KeyEvent.KEYCODE_BUTTON_B to { pick() },
+                            KeyEvent.KEYCODE_BUTTON_START to { if (pictureChanged) pictureActions[1]?.invoke() },
                             KeyEvent.KEYCODE_BUTTON_A to { pictureActions[0]?.invoke() },
                             KeyEvent.KEYCODE_BUTTON_Y to { if (pictureChanged) showPicture = false }, // Next time: keep the change, keep playing
                             KeyEvent.KEYCODE_BUTTON_X to { // Screen tab: 4:3 / 16:9

@@ -48,7 +48,8 @@ class DolphinExitService : AccessibilityService() {
         suspend fun exit(pkg: String): Result? = instance?.exitEmulation(pkg)
 
         /** See [dismissFromRecentsImpl]. False when the service isn't running. */
-        suspend fun dismissFromRecents(appLabel: String): Boolean = instance?.dismissFromRecentsImpl(appLabel) ?: false
+        suspend fun dismissFromRecents(appLabel: String): Boolean =
+            instance?.dismissFromRecentsImpl(appLabel) ?: false.also { CrashLog.event("dismiss $appLabel: the helper isn't running") }
 
         /**
          * Settings → Controllers → "Test it": catches the controller's menu buttons the way it does during a game
@@ -547,7 +548,7 @@ class DolphinExitService : AccessibilityService() {
      * process. Used by "Exit Delphis" for Dolphin, since no app may force-stop another one.
      */
     suspend fun dismissFromRecentsImpl(appLabel: String): Boolean {
-        if (!performGlobalAction(GLOBAL_ACTION_RECENTS)) return false
+        if (!performGlobalAction(GLOBAL_ACTION_RECENTS)) { CrashLog.event("dismiss $appLabel: Recent apps didn't open"); return false }
         delay(900)
         fun findLabel(): AccessibilityNodeInfo? {
             val roots = runCatching { windows.mapNotNull { it.root } }.getOrDefault(emptyList()) +

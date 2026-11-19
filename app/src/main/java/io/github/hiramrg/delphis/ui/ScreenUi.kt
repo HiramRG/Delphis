@@ -167,6 +167,10 @@ fun BoxScope.PicturePanel(
     keys: Boolean = !compact,
     /** In the in-game menu: Cancel · Next time · Apply & restart (or just Close), always the same size. */
     inGame: PictureInGame? = null,
+    /** Where the D-pad's glow is (null = on the picked one): the D-pad moves it, [pickKey] picks. */
+    lookCursor: io.github.hiramrg.delphis.core.Looks.Look? = null,
+    resCursor: io.github.hiramrg.delphis.core.Resolution.Level? = null,
+    pickKey: String = "A",
 ) {
     val c = LocalWii.current
     Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.6f)).clickable(onClick = onCancel))
@@ -197,15 +201,15 @@ fun BoxScope.PicturePanel(
             if (inGame.changed) {
                 PanelBtn("Cancel", if (keys) "A" else null, false, onClick = onCancel)
                 PanelBtn("Next time", if (keys) "Y" else null, false, onClick = inGame.onNextTime)
-                PanelBtn("Apply & restart", if (keys) "B" else null, true, onClick = inGame.onApply)
-            } else PanelBtn("Close", if (keys) "B" else null, true, onClick = onCancel)
+                PanelBtn("Apply & restart", if (keys) "⊕" else null, true, onClick = inGame.onApply)
+            } else PanelBtn("Close", if (keys) "A" else null, true, onClick = onCancel)
         }) else ({
             if (note != null) Text(note, fontSize = 11.sp, color = c.textDim, modifier = Modifier.weight(1f), lineHeight = 14.sp)
             else if (keys) Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 KeyIcon(if (showLook || showRes) "DPAD" else "DPAD_LR"); Text("Choose", fontSize = 12.sp, color = c.textDim)
             }
             PanelBtn("Cancel", if (keys) "B" else null, false, onClick = onCancel)
-            PanelBtn(doneLabel, if (keys) "A" else null, true, onClick = onDone)
+            PanelBtn(doneLabel, if (keys) "⊕" else null, true, onClick = onDone)
         }),
     ) {
         // One frame for both tabs: the same sub-line and a content area of fixed height, so switching
@@ -238,7 +242,7 @@ fun BoxScope.PicturePanel(
                 Column(Modifier.fillMaxWidth().height(area), verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
                     io.github.hiramrg.delphis.core.Resolution.Level.entries.chunked(if (shortCompact) 3 else 2).forEach { pair ->
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            pair.forEach { l -> ResolutionLine(l, l == res, advice?.scale, Modifier.weight(1f)) { onRes(l) } }
+                            pair.forEach { l -> ResolutionLine(l, l == res, l == (resCursor ?: res), advice?.scale, Modifier.weight(1f)) { onRes(l) } }
                         }
                     }
                 }
@@ -246,7 +250,7 @@ fun BoxScope.PicturePanel(
                 Column(Modifier.fillMaxWidth().height(area), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     io.github.hiramrg.delphis.core.Resolution.Level.entries.chunked(3).forEach { row ->
                         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            row.forEach { l -> ResolutionCard(l, l == res, advice?.scale, true, Modifier.weight(1f).fillMaxHeight()) { onRes(l) } }
+                            row.forEach { l -> ResolutionCard(l, l == res, l == (resCursor ?: res), advice?.scale, true, Modifier.weight(1f).fillMaxHeight()) { onRes(l) } }
                         }
                     }
                 }
@@ -264,14 +268,14 @@ fun BoxScope.PicturePanel(
             Column(Modifier.fillMaxWidth().height(area), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 io.github.hiramrg.delphis.core.Looks.Look.entries.chunked(3).forEach { row ->
                     Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEach { l -> LookCard(l, l == look, Modifier.weight(1f).fillMaxHeight()) { onLook(l) } }
+                        row.forEach { l -> LookCard(l, l == look, l == (lookCursor ?: look), Modifier.weight(1f).fillMaxHeight()) { onLook(l) } }
                     }
                 }
             }
         }
         // In the game: one note line of fixed height, so the panel never changes size.
         if (inGame != null) Text(
-            if (!inGame.changed) "Pick what you like. Changes apply when the game starts again."
+            if (!inGame.changed) (if (keys) "Move with the D-pad, pick with ${PadGlyphs.letter(pickKey)}. Changes apply when the game starts again." else "Tap to pick. Changes apply when the game starts again.")
             else if (inGame.autosave) "Changes need the game to start again. Your progress is autosaved first."
             else "Changes need the game to start again, from its last save.",
             fontSize = 11.sp, lineHeight = 14.sp, color = c.textDim, maxLines = 2,
@@ -296,7 +300,7 @@ fun resolutionWhy(a: io.github.hiramrg.delphis.platform.DeviceInfo.ResolutionAdv
 }
 
 @Composable
-private fun ResolutionLine(l: io.github.hiramrg.delphis.core.Resolution.Level, on: Boolean, recommended: Int?, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun ResolutionLine(l: io.github.hiramrg.delphis.core.Resolution.Level, on: Boolean, cursor: Boolean, recommended: Int?, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(10.dp)
     val fit = recommended?.let { io.github.hiramrg.delphis.core.Resolution.fit(l, it) }
@@ -304,7 +308,7 @@ private fun ResolutionLine(l: io.github.hiramrg.delphis.core.Resolution.Level, o
     Column(
         modifier.heightIn(min = 40.dp).focusRing(shape).clip(shape)
             .background(if (on) (if (c.dark) Color(0xFF173444) else c.accentSoft) else (if (c.dark) Color(0xFF20252B) else c.card))
-            .border(if (on) 2.dp else 1.dp, if (on) Sel else c.cardBorder, shape).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 3.dp),
+            .border(if (cursor) 2.dp else if (on) 2.dp else 1.dp, if (cursor) Sel else if (on) Color(0xFF6BCB77) else c.cardBorder, shape).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 3.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -322,13 +326,13 @@ private fun ResolutionLine(l: io.github.hiramrg.delphis.core.Resolution.Level, o
 }
 
 @Composable
-private fun ResolutionCard(l: io.github.hiramrg.delphis.core.Resolution.Level, on: Boolean, recommended: Int?, detail: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun ResolutionCard(l: io.github.hiramrg.delphis.core.Resolution.Level, on: Boolean, cursor: Boolean, recommended: Int?, detail: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(12.dp)
     val fit = recommended?.let { io.github.hiramrg.delphis.core.Resolution.fit(l, it) }
     Column(
         modifier.focusRing(shape).clip(shape).background(if (on) (if (c.dark) Color(0xFF173444) else c.accentSoft) else (if (c.dark) Color(0xFF20252B) else c.card))
-            .border(if (on) 3.dp else 2.dp, if (on) Sel else c.cardBorder, shape).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
+            .border(if (cursor) 3.dp else 2.dp, if (cursor) Sel else if (on) Color(0xFF6BCB77) else c.cardBorder, shape).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -347,15 +351,16 @@ private fun ResolutionCard(l: io.github.hiramrg.delphis.core.Resolution.Level, o
 }
 
 @Composable
-private fun LookCard(l: io.github.hiramrg.delphis.core.Looks.Look, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun LookCard(l: io.github.hiramrg.delphis.core.Looks.Look, on: Boolean, cursor: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(12.dp)
     // The scene fills the card; the name sits on a dark strip at the bottom. The chosen look glows blue.
     BoxWithConstraints(
         modifier
-            .then(if (on) Modifier.shadow(10.dp, shape, ambientColor = Sel, spotColor = Sel) else Modifier)
+            // The D-pad's glow: blue edge and glow. The picked look: a green edge (when the glow is elsewhere) and ✓.
+            .then(if (cursor) Modifier.shadow(10.dp, shape, ambientColor = Sel, spotColor = Sel) else Modifier)
             .focusRing(shape).clip(shape).background(Color(0xFF20252B))
-            .border(if (on) 3.dp else 2.dp, if (on) Sel else c.cardBorder, shape).clickable(onClick = onClick),
+            .border(if (cursor) 3.dp else 2.dp, if (cursor) Sel else if (on) Color(0xFF6BCB77) else c.cardBorder, shape).clickable(onClick = onClick),
     ) {
         LookPreview(l)
         Row(
@@ -366,7 +371,7 @@ private fun LookCard(l: io.github.hiramrg.delphis.core.Looks.Look, on: Boolean, 
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(l.label, fontSize = 12.5.sp, fontWeight = FontWeight.Black, color = Color.White, maxLines = 1, softWrap = false)
-            if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color.White)
+            if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF6BCB77))
             Spacer(Modifier.weight(1f))
             when (l.cost) {
                 io.github.hiramrg.delphis.core.Looks.Cost.LIGHT -> CostTag("Light", Color(0xFF7FE0A0), Color(0xE61F4A2E))

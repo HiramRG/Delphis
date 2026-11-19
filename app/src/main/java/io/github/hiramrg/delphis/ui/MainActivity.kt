@@ -630,10 +630,15 @@ class MainActivity : ComponentActivity() {
     var exitPrompt by mutableStateOf(false)
 
     /** Closes everything: a running game (with its autosave), Dolphin's background process, menu music, both screens. */
+    /** Set while "Exit Delphis" runs (so closing isn't logged as "without Exit"). */
+    private var exiting = false
+
     fun exitAll() {
         exitPrompt = false
+        exiting = true
         lifecycleScope.launch {
             val pkg = bridge.installedPackage()
+            io.github.hiramrg.delphis.platform.CrashLog.event("exit: closing Delphis (Dolphin: ${pkg ?: "not found"}, helper ${if (io.github.hiramrg.delphis.platform.DolphinExitService.isEnabled(this@MainActivity)) "on" else "OFF"})")
             val roles = DeviceInfo.screenRoles(this@MainActivity, prefs.swapScreens)
             if (io.github.hiramrg.delphis.platform.GameWatch.session != null) runCatching {
                 bridge.closeDolphin(roles.topDisplayId, "Closing the game…")
@@ -646,7 +651,9 @@ class MainActivity : ComponentActivity() {
                 // No app may force-stop another, so Dolphin's card is removed from Recent apps (Android then
                 // ends its process); the background-process call is a fallback.
                 val label = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(p, 0)).toString() }.getOrDefault("Dolphin")
-                runCatching { io.github.hiramrg.delphis.platform.DolphinExitService.dismissFromRecents(label) }
+                val gone = runCatching { io.github.hiramrg.delphis.platform.DolphinExitService.dismissFromRecents(label) }
+                    .onFailure { io.github.hiramrg.delphis.platform.CrashLog.event("exit: closing Dolphin failed: ${it.message}") }.getOrDefault(false)
+                if (!gone) io.github.hiramrg.delphis.platform.CrashLog.event("exit: Dolphin's card wasn't removed")
                 runCatching { getSystemService(android.app.ActivityManager::class.java).killBackgroundProcesses(p) }
             }
             runCatching { io.github.hiramrg.delphis.platform.MenuMusic.stop() }
@@ -832,6 +839,8 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         runCatching { getSystemService(android.hardware.input.InputManager::class.java).unregisterInputDeviceListener(padListener) }
         if (isFinishing) { MenuCompanion.close(); io.github.hiramrg.delphis.platform.MenuMusic.release() }
+        // Closed some other way (Recent apps, Back…): Dolphin stays open, which Diagnostics should show.
+        if (isFinishing && !exiting) io.github.hiramrg.delphis.platform.CrashLog.event("Delphis closed without Exit (Dolphin left open)")
         super.onDestroy()
     }
 
