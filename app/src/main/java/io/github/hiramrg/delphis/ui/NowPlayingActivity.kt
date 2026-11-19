@@ -1324,8 +1324,6 @@ open class NowPlayingActivity : ComponentActivity() {
         }
     }
 
-    /** Pick another preset (built-in or your edited one), preview it, then apply with a restart. */
-    @Composable
     /**
      * Change controls, in the same box as the menu: the game's layouts on the left (the D-pad moves the ring),
      * the highlighted one drawn on the right. The buttons under it are the menu's own (Use this layout / Cancel).
