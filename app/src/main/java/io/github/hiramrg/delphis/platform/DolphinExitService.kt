@@ -549,36 +549,55 @@ class DolphinExitService : AccessibilityService() {
     suspend fun dismissFromRecentsImpl(appLabel: String): Boolean {
         if (!performGlobalAction(GLOBAL_ACTION_RECENTS)) return false
         delay(900)
-        var done = false
-        for (attempt in 0 until 3) {
+        fun findLabel(): AccessibilityNodeInfo? {
             val roots = runCatching { windows.mapNotNull { it.root } }.getOrDefault(emptyList()) +
                 listOfNotNull(runCatching { rootInActiveWindow }.getOrNull())
-            val label = roots.filter { it.packageName?.toString() != packageName }.firstNotNullOfOrNull { r -> runCatching { r.findAccessibilityNodeInfosByText(appLabel).firstOrNull() }.getOrNull() }
-            if (label == null) { delay(500); continue }
-            // The card offers a "Close" action (Launcher3 adds it to each task); walk up to find it.
+            return roots.filter { it.packageName?.toString() != packageName }
+                .firstNotNullOfOrNull { r -> runCatching { r.findAccessibilityNodeInfosByText(appLabel).firstOrNull() }.getOrNull() }
+        }
+        // Each try is checked: the card must really be gone from Recent apps (pressing "Close" isn't proof).
+        suspend fun gone(): Boolean { delay(700); return findLabel() == null }
+        val tried = mutableListOf<String>()
+        var gone = false
+        var seen = false
+        for (attempt in 0 until 3) {
+            val label = findLabel()
+            if (label == null) { if (seen) { gone = true; break }; delay(500); continue }
+            seen = true
+            // The card's "Close" action (Launcher3 adds one to each task); walk up to find it.
             var n: AccessibilityNodeInfo? = label
-            while (n != null && !done) {
+            var pressed = false
+            while (n != null && !pressed) {
                 val act = n.actionList.firstOrNull { a ->
                     a.id == AccessibilityNodeInfo.AccessibilityAction.ACTION_DISMISS.id ||
                         (a.label?.toString()?.lowercase()?.let { l -> listOf("close", "dismiss", "remove", "cerrar", "descartar", "quitar").any { it in l } } == true)
                 }
-                if (act != null) done = n.performAction(act.id)
+                if (act != null) { pressed = n.performAction(act.id); tried += "action '${act.label ?: act.id}' on ${n.className?.toString()?.substringAfterLast('.')}" }
                 n = n.parent
             }
-            if (!done) done = swipeUp(label)
-            if (done) break
-            delay(400)
+            if (pressed && gone()) { gone = true; break }
+            // Swipe the card up, from its picture (below the name) and then from the name itself.
+            val r = android.graphics.Rect(); label.getBoundsInScreen(r)
+            for (dy in listOf(r.height() * 4 + 200, r.height() / 2)) {
+                if (swipeUp(label, dy)) tried += "swipe +$dy"
+                if (gone()) { gone = true; break }
+            }
+            if (gone) break
         }
-        delay(600)
+        delay(400)
         performGlobalAction(GLOBAL_ACTION_HOME)
-        CrashLog.event("dismiss $appLabel from recents: " + if (done) "done" else "not found")
-        return done
+        CrashLog.event("dismiss $appLabel from recents: " + when {
+            gone -> "gone"
+            !seen -> "no card found"
+            else -> "card still there"
+        } + (if (tried.isNotEmpty()) " (${tried.joinToString(", ")})" else ""))
+        return gone
     }
 
     /** Swipes a Recents card up (from just below its label, where the card's picture is). */
-    private suspend fun swipeUp(label: AccessibilityNodeInfo): Boolean {
+    private suspend fun swipeUp(label: AccessibilityNodeInfo, below: Int = 260): Boolean {
         val r = android.graphics.Rect(); label.getBoundsInScreen(r)
-        val path = android.graphics.Path().apply { moveTo(r.centerX().toFloat(), (r.bottom + 260).toFloat()); lineTo(r.centerX().toFloat(), 20f) }
+        val path = android.graphics.Path().apply { moveTo(r.centerX().toFloat(), (r.centerY() + below).toFloat()); lineTo(r.centerX().toFloat(), 20f) }
         val builder = android.accessibilityservice.GestureDescription.Builder()
             .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 250))
         if (android.os.Build.VERSION.SDK_INT >= 30) runCatching { label.window?.displayId?.let { builder.setDisplayId(it) } }
