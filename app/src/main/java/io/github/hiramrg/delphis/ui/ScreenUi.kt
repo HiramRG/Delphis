@@ -178,13 +178,16 @@ fun BoxScope.PicturePanel(
     val shown = if (tab in tabs) tab else tabs.first()
     val showLook = shown == 1
     val showRes = shown == 2
+    // One layout for every tab: a short one-line title, one explanation line, the same 3 × 2 grid of
+    // picture cards (Look and Sharpness), a controls line, a status line and the same buttons. Nothing
+    // moves or resizes when switching tabs or making a change.
+    val changed = inGame?.changed ?: false
     PopupPanel(
         "Picture · $gameTitle",
         when {
-            showRes -> "Resolution · how sharp should it be?"
-            showLook -> "Look · how should the picture look?"
-            choice!!.shape == Shape.WIDE -> "Screen · 16:9: stretch it or show more of the world?"
-            else -> "Screen · 4:3: what goes in the sides?"
+            showRes -> "Sharpness · how sharp?"
+            showLook -> "Look · what style?"
+            else -> "Screen · " + (if (choice!!.shape == Shape.WIDE) "16:9" else "4:3")
         },
         Modifier.align(if (compact) Alignment.TopCenter else Alignment.Center).padding(top = if (compact) 6.dp else 0.dp)
             .fillMaxWidth(if (compact) 0.97f else 0.9f).clickable(enabled = false) {},
@@ -195,94 +198,72 @@ fun BoxScope.PicturePanel(
                 if (keys) KeyIcon("R1")
             }
         }) else null,
-        buttons = if (inGame != null) ({
-            // Bottom button = the main choice, right button = back, left button = Next time (Thor names: B, A, Y).
+        buttons = {
+            // Always the same buttons in the same places: back on the right button, the main action on Menu.
             Spacer(Modifier.weight(1f))
-            if (inGame.changed) {
-                PanelBtn("Cancel", if (keys) "A" else null, false, onClick = onCancel)
-                PanelBtn("Next time", if (keys) "Y" else null, false, onClick = inGame.onNextTime)
-                PanelBtn("Apply & restart", if (keys) "⊕" else null, true, onClick = inGame.onApply)
-            } else PanelBtn("Close", if (keys) "A" else null, true, onClick = onCancel)
-        }) else ({
-            if (note != null) Text(note, fontSize = 11.sp, color = c.textDim, modifier = Modifier.weight(1f), lineHeight = 14.sp)
-            else if (keys) Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                KeyIcon(if (showLook || showRes) "DPAD" else "DPAD_LR"); Text("Choose", fontSize = 12.sp, color = c.textDim)
-            }
-            PanelBtn("Cancel", if (keys) "B" else null, false, onClick = onCancel)
-            PanelBtn(doneLabel, if (keys) "⊕" else null, true, onClick = onDone)
-        }),
+            PanelBtn("Cancel", if (keys) (if (inGame != null) "A" else "B") else null, false, onClick = onCancel)
+            if (inGame != null) {
+                PanelBtn("Next time", if (keys) "Y" else null, false, enabled = changed, onClick = inGame.onNextTime)
+                PanelBtn("Apply & restart", if (keys) "⊕" else null, true, enabled = changed, onClick = inGame.onApply)
+            } else PanelBtn(doneLabel, if (keys) "⊕" else null, true, onClick = onDone)
+        },
     ) {
-        // One frame for both tabs: the same sub-line and a content area of fixed height, so switching
-        // tabs doesn't make anything jump. Screen's cards fill it in one row, Look's six in two rows.
-        // A short screen (a phone) in the in-game menu: a lower content area, Sharpness in three columns.
         val shortCompact = compact && androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 480
         val area = if (shortCompact) 104.dp else if (compact) 150.dp else 190.dp
-        Row(Modifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (showRes) {
-                CapsLabel("Applies when the game starts", Modifier.weight(1f))
-                if (advice != null) Text(
-                    "★ ${io.github.hiramrg.delphis.core.Resolution.forScale(advice.scale).short} suits this device", fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold, color = Color(0xFF6BCB77), maxLines = 1,
-                )
-            } else if (!showLook) {
-                CapsLabel(if (choice!!.shape == Shape.WIDE) "16:9 fill" else "Sides · change right away", Modifier.weight(1f))
-                Segmented(listOf(Shape.STANDARD to "4:3", Shape.WIDE to "16:9"), choice.shape, { onPick(choice.copy(shape = it)) })
-                if (keys) KeyIcon(if (inGame != null) "X" else "Y")
-            } else {
-                // The tags on the cards: how much extra battery each look uses (Original: none).
-                if (!compact) CapsLabel("Applies when the game starts", Modifier.weight(1f))
-                Text("Tags show extra battery use: Light or Medium.", fontSize = 11.sp, color = c.textDim, maxLines = 1,
-                    modifier = if (compact) Modifier.weight(1f) else Modifier)
-            }
-        }
-        if (showRes) {
-            if (compact) {
-                // The in-game menu: one line per level, its tag on the right, so everything fits the panel.
-                // Two columns of one-line rows (short tags), so the panel fits a phone too.
-                Column(Modifier.fillMaxWidth().height(area), verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
-                    io.github.hiramrg.delphis.core.Resolution.Level.entries.chunked(if (shortCompact) 3 else 2).forEach { pair ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            pair.forEach { l -> ResolutionLine(l, l == res, l == (resCursor ?: res), advice?.scale, Modifier.weight(1f)) { onRes(l) } }
-                        }
-                    }
+        // The explanation line (one line, same height on every tab).
+        Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            when {
+                showRes -> {
+                    Text("Tags: how fast the game runs here.", fontSize = 11.sp, color = c.textDim, maxLines = 1, modifier = Modifier.weight(1f))
+                    if (advice != null) Text(
+                        "★ ${io.github.hiramrg.delphis.core.Resolution.forScale(advice.scale).short} suits this device", fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold, color = Color(0xFF6BCB77), maxLines = 1,
+                    )
                 }
-            } else {
-                Column(Modifier.fillMaxWidth().height(area), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    io.github.hiramrg.delphis.core.Resolution.Level.entries.chunked(3).forEach { row ->
-                        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            row.forEach { l -> ResolutionCard(l, l == res, l == (resCursor ?: res), advice?.scale, true, Modifier.weight(1f).fillMaxHeight()) { onRes(l) } }
-                        }
-                    }
-                }
-                // Short screens (a phone held sideways) keep only the ★ line above: the reason would push the buttons off.
-                if (advice != null && androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp >= 480) Text(
-                    resolutionWhy(advice), fontSize = 11.sp, lineHeight = 14.sp, color = c.textDim,
-                )
-            }
-        } else if (!showLook) {
-            BoxWithConstraints(Modifier.fillMaxWidth().height(area)) {
-                val w = (maxWidth - 16.dp) / 3
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { ScreenChoices(choice!!, gameId, useHack, colour, w, showSub = !compact, cardH = area, onPick = onPick) }
-            }
-        } else {
-            Column(Modifier.fillMaxWidth().height(area), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                io.github.hiramrg.delphis.core.Looks.Look.entries.chunked(3).forEach { row ->
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEach { l -> LookCard(l, l == look, l == (lookCursor ?: look), Modifier.weight(1f).fillMaxHeight()) { onLook(l) } }
-                    }
+                showLook -> Text("Tags: extra battery use (Light, Medium).", fontSize = 11.sp, color = c.textDim, maxLines = 1, modifier = Modifier.weight(1f))
+                else -> {
+                    Text(if (choice!!.shape == Shape.WIDE) "How to fill 16:9." else "What goes in the sides.", fontSize = 11.sp, color = c.textDim, maxLines = 1, modifier = Modifier.weight(1f))
+                    Segmented(listOf(Shape.STANDARD to "4:3", Shape.WIDE to "16:9"), choice.shape, { onPick(choice.copy(shape = it)) })
+                    if (keys) KeyIcon(if (inGame != null) "X" else "Y")
                 }
             }
         }
-        // In the game: one note line of fixed height, so the panel never changes size.
-        if (inGame != null) Text(
-            if (!inGame.changed) (if (keys) "D-pad moves, ${PadGlyphs.letter(pickKey)} picks. Changes apply when the game starts again." else "Tap to pick. Changes apply when the game starts again.")
-            else if (inGame.autosave) "Changes need the game to start again. Your progress is autosaved first."
-            else "Changes need the game to start again, from its last save.",
-            fontSize = 11.sp, lineHeight = 14.sp, color = c.textDim, maxLines = 2,
-            modifier = Modifier.fillMaxWidth().height(34.dp).padding(top = 4.dp),
-        )
+        // The cards: the same 3 × 2 grid for Look and Sharpness.
+        if (showLook || showRes) Column(Modifier.fillMaxWidth().height(area), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (showLook) io.github.hiramrg.delphis.core.Looks.Look.entries.chunked(3).forEach { row ->
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { l -> LookCard(l, l == look, l == (lookCursor ?: look), Modifier.weight(1f).fillMaxHeight()) { onLook(l) } }
+                }
+            } else io.github.hiramrg.delphis.core.Resolution.Level.entries.chunked(3).forEach { row ->
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { l -> SharpnessCard(l, l == res, l == (resCursor ?: res), advice?.scale, Modifier.weight(1f).fillMaxHeight()) { onRes(l) } }
+                }
+            }
+        } else BoxWithConstraints(Modifier.fillMaxWidth().height(area)) {
+            val w = (maxWidth - 16.dp) / 3
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { ScreenChoices(choice!!, gameId, useHack, colour, w, showSub = !compact, cardH = area, onPick = onPick) }
+        }
+        // Controls line and status line, always both, fixed height.
+        Column(Modifier.fillMaxWidth().height(36.dp).padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            if (keys) HintText(
+                if (showLook || showRes) "✚ Move   ${glyph(pickKey)} Pick   L1 R1 Tabs" else "✚ Choose   L1 R1 Tabs",
+                fontSize = 11.sp, color = c.textDim,
+            ) else Text(if (showLook || showRes) "Tap a card to pick it." else "Tap a card to choose.", fontSize = 11.sp, color = c.textDim, maxLines = 1)
+            Text(
+                when {
+                    inGame == null -> "Applies when you press Play."
+                    !changed -> "Nothing changed yet."
+                    inGame.autosave -> "Applies when the game starts again (autosaved first)."
+                    else -> "Applies when the game starts again, from its last save."
+                },
+                fontSize = 11.sp, color = if (changed) Color(0xFFF5C26B) else c.textDim, maxLines = 1,
+            )
+        }
     }
 }
+
+/** The glyph HintText turns into the controller's button icon. */
+private fun glyph(key: String) = when (key) { "A" -> "Ⓐ"; "B" -> "Ⓑ"; "X" -> "Ⓧ"; "Y" -> "Ⓨ"; else -> key }
 
 /** The in-game Picture panel's choices: whether something changed, and what "Next time" / "Apply & restart" do. */
 class PictureInGame(val changed: Boolean, val autosave: Boolean, val onNextTime: () -> Unit, val onApply: () -> Unit)
@@ -350,6 +331,40 @@ private fun ResolutionCard(l: io.github.hiramrg.delphis.core.Resolution.Level, o
     }
 }
 
+/** A Sharpness card: the same card as Look, with the scene blurrier at lower levels. */
+@Composable
+private fun SharpnessCard(l: io.github.hiramrg.delphis.core.Resolution.Level, on: Boolean, cursor: Boolean, recommended: Int?, modifier: Modifier, onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(12.dp)
+    val fit = recommended?.let { io.github.hiramrg.delphis.core.Resolution.fit(l, it) }
+    val blur = when (l.scale) { 0 -> 0.6.dp; 1 -> 1.6.dp; 2 -> 0.9.dp; 3 -> 0.4.dp; else -> 0.dp }
+    BoxWithConstraints(
+        modifier
+            .then(if (cursor) Modifier.shadow(10.dp, shape, ambientColor = Sel, spotColor = Sel) else Modifier)
+            .focusRing(shape).clip(shape).background(Color(0xFF20252B))
+            .border(if (cursor) 3.dp else 2.dp, if (cursor) Sel else if (on) Color(0xFF6BCB77) else c.cardBorder, shape).clickable(onClick = onClick),
+    ) {
+        LookPreview(io.github.hiramrg.delphis.core.Looks.Look.ORIGINAL, blur)
+        Row(
+            Modifier.align(Alignment.BottomStart).fillMaxWidth().height(maxOf(24.dp, maxHeight * 0.36f))
+                .background(Brush.horizontalGradient(0f to (if (on) Color(0xEB103042) else Color(0xB80A0C0F)), 0.6f to (if (on) Color(0xEB103042) else Color(0xB80A0C0F)), 1f to Color(0x260A0C0F)))
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(if (l.scale == 0) "Dolphin's" else l.label, fontSize = 12.5.sp, fontWeight = FontWeight.Black, color = Color.White, maxLines = 1, softWrap = false)
+            if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF6BCB77))
+            Spacer(Modifier.weight(1f))
+            when (fit) {
+                io.github.hiramrg.delphis.core.Resolution.Fit.RECOMMENDED -> CostTag("★ Best", Color(0xFF7FE0A0), Color(0xE61F4A2E))
+                io.github.hiramrg.delphis.core.Resolution.Fit.MAYBE -> CostTag("Slower", Color(0xFFF5C26B), Color(0xE64A3A14))
+                io.github.hiramrg.delphis.core.Resolution.Fit.SLOW -> CostTag("Too slow", Color(0xFFFF9A9A), Color(0xE64A1F1F))
+                io.github.hiramrg.delphis.core.Resolution.Fit.FAST -> CostTag("Faster", Color(0xFFCFD6DD), Color(0xE62A3038))
+                null -> {}
+            }
+        }
+    }
+}
+
 @Composable
 private fun LookCard(l: io.github.hiramrg.delphis.core.Looks.Look, on: Boolean, cursor: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = LocalWii.current
@@ -393,10 +408,11 @@ private fun CostTag(text: String, fg: Color, bg: Color) {
  * look's effect on it: roughly what the look does, not real shader output.
  */
 @Composable
-private fun LookPreview(l: io.github.hiramrg.delphis.core.Looks.Look) {
+private fun LookPreview(l: io.github.hiramrg.delphis.core.Looks.Look, blur: androidx.compose.ui.unit.Dp? = null) {
     val vivid = l == io.github.hiramrg.delphis.core.Looks.Look.VIVID; val sharp = l == io.github.hiramrg.delphis.core.Looks.Look.SHARP
     fun col(base: Long, strong: Long) = Color(if (vivid) strong else base)
-    Canvas(Modifier.fillMaxSize().then(if (l == io.github.hiramrg.delphis.core.Looks.Look.SOFT) Modifier.blur(1.2.dp) else Modifier)) {
+    val b = blur ?: if (l == io.github.hiramrg.delphis.core.Looks.Look.SOFT) 1.2.dp else 0.dp
+    Canvas(Modifier.fillMaxSize().then(if (b > 0.dp) Modifier.blur(b) else Modifier)) {
         val w = size.width; val h = size.height
         fun X(u: Float) = w * u / 200f
         fun Y(u: Float) = h * u / 110f

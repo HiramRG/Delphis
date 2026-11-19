@@ -1032,7 +1032,7 @@ open class NowPlayingActivity : ComponentActivity() {
                         fun move(d: Int, rows: Int) {
                             when (shown) {
                                 1 -> (lookCursor ?: gameLook)?.let { l -> lookCursor = lookStep(l, d * rows) }
-                                2 -> (resCursor ?: gameRes)?.let { r -> resCursor = io.github.hiramrg.delphis.core.Resolution.step(r, d * (if (rows == 1) 1 else if (resources.configuration.screenHeightDp < 480) 3 else 2)) }
+                                2 -> (resCursor ?: gameRes)?.let { r -> resCursor = io.github.hiramrg.delphis.core.Resolution.step(r, d * rows) }
                                 else -> if (rows == 1) screenChoice?.let { c -> val n = screenStep(c, d); screenChoice = n; screenGid?.let { prefs.setScreenFor(it, n) } }
                             }
                         }

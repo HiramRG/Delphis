@@ -104,6 +104,10 @@
         </receiver>
         <!-- Presses Dolphin's "Exit Emulation" so games close cleanly (see res/xml/dolphin_exit_service.xml). -->
         <service
+            android:name=".platform.ExitWatchService"
+            android:exported="false"
+            android:stopWithTask="false" />
+        <service
             android:name=".platform.DolphinExitService"
             android:exported="true"
             android:label="@string/exit_service_label"

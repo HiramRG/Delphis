@@ -797,6 +797,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onResume() {
+        startExitWatch()
         super.onResume()
         goFullScreen()
         setupVersion++ // re-read things that can change in system settings (e.g. the close-games helper)
@@ -834,6 +835,11 @@ class MainActivity : ComponentActivity() {
         MenuCompanion.close()
         io.github.hiramrg.delphis.platform.MenuMusic.pause()
         super.onStop()
+    }
+
+    /** Keeps the swipe-away watcher running while Delphis is open (see ExitWatchService). */
+    private fun startExitWatch() {
+        runCatching { startService(android.content.Intent(this, io.github.hiramrg.delphis.platform.ExitWatchService::class.java)) }
     }
 
     override fun onDestroy() {
