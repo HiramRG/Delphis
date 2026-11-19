@@ -225,8 +225,10 @@ fun BoxScope.PicturePanel(
                 Segmented(listOf(Shape.STANDARD to "4:3", Shape.WIDE to "16:9"), choice.shape, { onPick(choice.copy(shape = it)) })
                 if (keys) KeyIcon(if (inGame != null) "X" else "Y")
             } else {
-                CapsLabel("Applies when the game starts", Modifier.weight(1f))
-                if (!compact) Text("Only the final picture: same game speed", fontSize = 11.sp, color = c.textDim, maxLines = 1)
+                // The tags on the cards: how much extra battery each look uses (Original: none).
+                if (!compact) CapsLabel("Applies when the game starts", Modifier.weight(1f))
+                Text("Tags show extra battery use: Light or Medium.", fontSize = 11.sp, color = c.textDim, maxLines = 1,
+                    modifier = if (compact) Modifier.weight(1f) else Modifier)
             }
         }
         if (showRes) {
@@ -366,8 +368,8 @@ private fun LookCard(l: io.github.hiramrg.delphis.core.Looks.Look, on: Boolean, 
             if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color.White)
             Spacer(Modifier.weight(1f))
             when (l.cost) {
-                io.github.hiramrg.delphis.core.Looks.Cost.LIGHT -> CostTag("⚡ Light", Color(0xFF7FE0A0), Color(0xE61F4A2E))
-                io.github.hiramrg.delphis.core.Looks.Cost.MEDIUM -> CostTag("⚡⚡ Medium", Color(0xFFF5C26B), Color(0xE64A3A14))
+                io.github.hiramrg.delphis.core.Looks.Cost.LIGHT -> CostTag("Light", Color(0xFF7FE0A0), Color(0xE61F4A2E))
+                io.github.hiramrg.delphis.core.Looks.Cost.MEDIUM -> CostTag("Medium", Color(0xFFF5C26B), Color(0xE64A3A14))
                 else -> {}
             }
         }
@@ -386,10 +388,9 @@ private fun CostTag(text: String, fg: Color, bg: Color) {
  */
 @Composable
 private fun LookPreview(l: io.github.hiramrg.delphis.core.Looks.Look) {
-    val L = io.github.hiramrg.delphis.core.Looks.Look
-    val vivid = l == L.VIVID; val sharp = l == L.SHARP
+    val vivid = l == io.github.hiramrg.delphis.core.Looks.Look.VIVID; val sharp = l == io.github.hiramrg.delphis.core.Looks.Look.SHARP
     fun col(base: Long, strong: Long) = Color(if (vivid) strong else base)
-    Canvas(Modifier.fillMaxSize().then(if (l == L.SOFT) Modifier.blur(1.2.dp) else Modifier)) {
+    Canvas(Modifier.fillMaxSize().then(if (l == io.github.hiramrg.delphis.core.Looks.Look.SOFT) Modifier.blur(1.2.dp) else Modifier)) {
         val w = size.width; val h = size.height
         fun X(u: Float) = w * u / 200f
         fun Y(u: Float) = h * u / 110f
@@ -416,8 +417,8 @@ private fun LookPreview(l: io.github.hiramrg.delphis.core.Looks.Look) {
         drawOval(col(0xFFB07CE8, 0xFFB45CFF), Offset(X(157f), Y(54f)), Size(X(18f), Y(16f)))
         drawCircle(Color.White, X(1.8f), Offset(X(163f), Y(60f))); drawCircle(Color.White, X(1.8f), Offset(X(169f), Y(60f)))
         drawCircle(Color(0xFF222222), X(0.9f), Offset(X(163.4f), Y(60.3f))); drawCircle(Color(0xFF222222), X(0.9f), Offset(X(169.4f), Y(60.3f)))
-        if (l == L.SCANLINES || l == L.CRT) { var y = 0f; while (y < h) { drawRect(Color.Black.copy(alpha = if (l == L.CRT) 0.14f else 0.28f), Offset(0f, y), Size(w, 1.4f)); y += 3.5f } }
-        if (l == L.CRT) {
+        if (l == io.github.hiramrg.delphis.core.Looks.Look.SCANLINES || l == io.github.hiramrg.delphis.core.Looks.Look.CRT) { var y = 0f; while (y < h) { drawRect(Color.Black.copy(alpha = if (l == io.github.hiramrg.delphis.core.Looks.Look.CRT) 0.14f else 0.28f), Offset(0f, y), Size(w, 1.4f)); y += 3.5f } }
+        if (l == io.github.hiramrg.delphis.core.Looks.Look.CRT) {
             drawRect(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)), center = Offset(w / 2, h / 2), radius = w * 0.62f))
             drawRoundRect(Color(0xFF0B0D10), Offset(2f, 2f), Size(w - 4f, h - 4f), CornerRadius(w * 0.08f, h * 0.18f), style = androidx.compose.ui.graphics.drawscope.Stroke(5f))
         }
