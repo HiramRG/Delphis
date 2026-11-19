@@ -137,7 +137,9 @@ fun RumbleCard(act: MainActivity) {
         ) {
             val opts = if (one) listOf(R to "Controller", io.github.hiramrg.delphis.core.Rumble.Mode.DEVICE to deviceWord, io.github.hiramrg.delphis.core.Rumble.Mode.OFF to "Off")
             else listOf(io.github.hiramrg.delphis.core.Rumble.Mode.DEVICE to "Thor", io.github.hiramrg.delphis.core.Rumble.Mode.OFF to "Off")
-            Segmented(opts, mode, { mode = it; prefs.rumble = it; result = null })
+            // The Thor has no "Controller" choice: its own controls are the device, so that counts as "Thor".
+            val shown = if (!one && mode == R) io.github.hiramrg.delphis.core.Rumble.Mode.DEVICE else mode
+            Segmented(opts, shown, { mode = it; prefs.rumble = it; result = null })
         }
         RowDivider()
         SettingRow(
