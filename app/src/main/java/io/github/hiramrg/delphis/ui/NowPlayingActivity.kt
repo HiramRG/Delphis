@@ -1344,11 +1344,8 @@ open class NowPlayingActivity : ComponentActivity() {
                     val preview: @Composable (Modifier) -> Unit = { m ->
                         Column(m.clip(RoundedCornerShape(12.dp)).background(if (c.dark) Color(0xFF1F2329) else c.bar).padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             CapsLabel("Preview · " + candidate.name)
-                            // The drawing when its labels are big enough to read, otherwise the list of controls.
-                            var tooSmall by remember(candidate.id) { mutableStateOf(false) }
-                            val scale = androidx.compose.ui.platform.LocalDensity.current.density / resources.displayMetrics.density
-                            if (tooSmall) ControlsList(candidate, Modifier.weight(1f).fillMaxWidth())
-                            else ControlsMap(candidate, Modifier.weight(1f).fillMaxWidth(), onFit = { fs -> if (fs * scale < MIN_MAP_FONT && !tooSmall) tooSmall = true })
+                            // The list of controls: the drawing's labels don't fit beside the layout list.
+                            ControlsList(candidate, Modifier.weight(1f).fillMaxWidth())
                         }
                     }
                     if (wide) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

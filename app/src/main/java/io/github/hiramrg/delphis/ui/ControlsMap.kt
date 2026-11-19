@@ -107,6 +107,9 @@ fun ControlsMap(preset: Preset, modifier: Modifier = Modifier, onFit: ((Float) -
 /** Below this label size (dp ≈ pt) the diagram is hard to read, so the card opens on the list. */
 const val MIN_MAP_FONT = 10f
 
+/** Below this height the drawing's labels can't all fit at a readable size. */
+val MIN_MAP_HEIGHT = 120.dp
+
 /** Order of the list: the Thor's left side top to bottom, then the right side. */
 private val LIST_ORDER = listOf(L2, L1, LEFT_STICK, L3, DPAD, SELECT, GYRO, MOTION, R2, R1, FACE_EAST, FACE_SOUTH, FACE_NORTH, FACE_WEST, RIGHT_STICK, R3, START)
 
@@ -417,8 +420,11 @@ fun ControlsSwitchable(preset: Preset, prefs: io.github.hiramrg.delphis.platform
             if (toggleKey != null) KeyIcon(toggleKey)
             if (keysAround) KeyIcon("R2")
         }
-        if (list) ControlsList(preset, Modifier.weight(1f).fillMaxWidth())
-        else ControlsMap(preset, Modifier.weight(1f).fillMaxWidth(), onFit = { fs -> if (fs * scale < MIN_MAP_FONT && !tooSmall) tooSmall = true })
+        // A short card (a phone's panel) can't hold the drawing and its labels: the list, decided from the size up front.
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            if (list || (!PadGlyphs.thorBody && maxHeight < MIN_MAP_HEIGHT)) ControlsList(preset, Modifier.fillMaxSize())
+            else ControlsMap(preset, Modifier.fillMaxSize(), onFit = { fs -> if (fs * scale < MIN_MAP_FONT && !tooSmall) tooSmall = true })
+        }
     }
 }
 
