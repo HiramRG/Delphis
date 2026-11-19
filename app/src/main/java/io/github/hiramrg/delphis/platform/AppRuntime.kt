@@ -57,15 +57,30 @@ object CrashLog {
 
     fun read(): String? = runCatching { file?.takeIf { it.exists() }?.readText() }.getOrNull()
 
-    /** A short timestamped line in the event log (kept to the last 30 lines). */
+    /**
+     * A short timestamped line in the event log (the last 120 lines; it survives closing and updates).
+     * Lines about closing Delphis and Dolphin are also kept apart (the last 12), so a game played
+     * afterwards can't push them out of the report.
+     */
     fun event(text: String) {
         runCatching {
-            val f = File(file?.parentFile ?: return, "events.txt")
+            val dir = file?.parentFile ?: return
             val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
-            val lines = (if (f.exists()) f.readLines() else emptyList()) + "$time  $text"
-            f.writeText(lines.takeLast(30).joinToString("\n"))
+            fun add(name: String, keep: Int) {
+                val f = File(dir, name)
+                val lines = (if (f.exists()) f.readLines() else emptyList()) + "$time  $text"
+                f.writeText(lines.takeLast(keep).joinToString("\n"))
+            }
+            add("events.txt", 120)
+            if (EXIT_WORDS.any { text.startsWith(it) }) add("exits.txt", 12)
         }
     }
+
+    private val EXIT_WORDS = listOf("exit:", "dismiss ", "Delphis swiped", "Delphis closed")
+
+    fun exits(): String? = runCatching {
+        File(file?.parentFile ?: return null, "exits.txt").takeIf { it.exists() }?.readText()
+    }.getOrNull()
 
     fun events(): String? = runCatching {
         File(file?.parentFile ?: return null, "events.txt").takeIf { it.exists() }?.readText()

@@ -166,6 +166,8 @@ internal fun buildReport(act: MainActivity): String = buildString {
     appendLine(runCatching { bridge.dsuClientSettings() }.getOrNull() ?: "(couldn't read)")
     appendLine("events:")
     appendLine(io.github.hiramrg.delphis.platform.CrashLog.events() ?: "(none)")
+    appendLine("closing Delphis / Dolphin (last 12, kept apart from the events above):")
+    appendLine(io.github.hiramrg.delphis.platform.CrashLog.exits() ?: "(none yet)")
     appendLine("last crash / failed launch:")
     appendLine(io.github.hiramrg.delphis.platform.CrashLog.read() ?: "(none)")
     appendLine()
