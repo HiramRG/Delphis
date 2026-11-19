@@ -57,6 +57,9 @@ object Pads {
             calibrated = ControllerProfile.NINTENDO_FACE_BUTTONS.map { (k, v) -> ControllerProfile.slotKey(k) to listOf(v) }.toMap(),
         )
         else -> ControllerProfile(devices = pad.qualifiers)
+    }.let { p ->
+        // Every player follows Settings: their own controller's motor, the device's, or none.
+        if (pad == null || pad.builtIn) p else p.copy(rumble = prefs.rumble, rumbleBuiltIn = false)
     }
 
     /** True when [players] means gyro / tilt / trackpad presets are off (several players, or the Thor sitting out). */

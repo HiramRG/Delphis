@@ -324,6 +324,12 @@ class Prefs(context: Context) {
     var defaultLook: io.github.hiramrg.delphis.core.Looks.Look
         get() = io.github.hiramrg.delphis.core.Looks.byName(sp.getString("look_default", null)) ?: io.github.hiramrg.delphis.core.Looks.Look.ORIGINAL
         set(v) = sp.edit().putString("look_default", v.name).apply()
+    /** Rumble: the controller (default on phones and tablets), the device itself (default on the Thor), or off. */
+    var rumble: io.github.hiramrg.delphis.core.Rumble.Mode
+        get() = io.github.hiramrg.delphis.core.Rumble.byName(sp.getString("rumble", null))
+            ?: if (DeviceInfo.oneScreen(context)) io.github.hiramrg.delphis.core.Rumble.Mode.PAD else io.github.hiramrg.delphis.core.Rumble.Mode.DEVICE
+        set(v) = sp.edit().putString("rumble", v.name).apply()
+
     /** The game's resolution (Dolphin's own setting until one is picked). */
     fun resolutionFor(gameId: String): io.github.hiramrg.delphis.core.Resolution.Level =
         io.github.hiramrg.delphis.core.Resolution.byName(sp.getString("res_$gameId", null)) ?: io.github.hiramrg.delphis.core.Resolution.Level.DOLPHIN

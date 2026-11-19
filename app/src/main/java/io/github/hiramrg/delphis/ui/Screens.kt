@@ -2261,6 +2261,7 @@ private fun ControlsSettings(act: MainActivity) {
         ) { PanelBtn(if (prefs.calibratedDeviceName == null) "Start" else "Redo", null, prefs.calibratedDeviceName == null) { act.screen = Screen.ControllerCheck } }
     }
     SwitchRow("Invert motion steering", "For the Mario Kart \"tilt the Thor\" layout, if turning left steers right.", invert) { invert = it; prefs.invertMotion = it }
+    RumbleCard(act)
     Text("Gamepad name override (leave empty to use the checked/detected one)", fontSize = 13.sp)
     OutlinedTextField(
         value = deviceName, onValueChange = { deviceName = it; prefs.deviceName = it.ifBlank { null } },

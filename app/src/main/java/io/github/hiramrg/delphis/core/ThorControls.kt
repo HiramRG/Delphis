@@ -67,6 +67,9 @@ data class ControllerProfile(
     val gyroSpeed: Double = 4.5,
     /** Which rotation moves the gyro pointer left/right. */
     val gyroHorizontal: GyroHorizontal = GyroHorizontal.UPRIGHT,
+    /** Where the game's rumble goes (see [Rumble]); [rumbleBuiltIn] = these are the device's own controls (the Thor). */
+    val rumble: Rumble.Mode = Rumble.Mode.OFF,
+    val rumbleBuiltIn: Boolean = false,
 ) {
     val dolphinDevice: String get() = devices.first()
     val sensorDevice: String get() = "Android/0/Device Sensors"

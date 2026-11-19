@@ -125,6 +125,9 @@ object DeviceInfo {
             gyroHorizontal = prefs.gyroHorizontal,
             gyroInvertX = prefs.gyroInvertX,
             gyroInvertY = prefs.gyroInvertY,
+            rumble = prefs.rumble,
+            // Two screens: these are the Thor's own controls, so "device" rumble also tries their motor.
+            rumbleBuiltIn = !oneScreen(prefs.context),
         )
     }
 

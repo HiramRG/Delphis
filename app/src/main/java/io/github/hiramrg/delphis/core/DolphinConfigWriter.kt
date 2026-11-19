@@ -67,6 +67,9 @@ object DolphinConfigWriter {
             options.remove("IR/Auto-Hide")
         }
 
+        // Rumble: the game's motor goes to the controller (or the device itself), see Rumble.
+        Rumble.expression(controller.rumble, controller.devices, controller.rumbleBuiltIn)?.let { lines["Rumble/Motor"] = it }
+
         return buildString {
             appendLine("[Profile]")
             appendLine("Device = ${controller.dolphinDevice}")

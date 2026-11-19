@@ -82,6 +82,7 @@ fun ControllersSettings(act: MainActivity) {
     // The button that opens Delphis' menu during a game, named for the connected controller.
     val names = remember(pads) { ShortcutNames.forConnected() }
     var shortcut by remember { mutableIntStateOf(prefs.menuShortcut) }
+    RumbleCard(act)
     CapsLabel("In-game menu")
     GroupCard {
         Column(Modifier.padding(horizontal = 8.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -113,4 +114,43 @@ fun ControllersSettings(act: MainActivity) {
         }
     }
     LaunchedEffect(act.shortcutTest) { if (act.shortcutTest != null) shortcut = prefs.menuShortcut }
+}
+
+/**
+ * Settings → Controllers (one screen) / Controls (the Thor): where the game's rumble goes, and a button to
+ * feel the motor. Off the Thor: Controller / This device / Off; on the Thor: Thor / Off.
+ */
+@Composable
+fun RumbleCard(act: MainActivity) {
+    val c = LocalWii.current
+    val prefs = act.prefs
+    var mode by remember { mutableStateOf(prefs.rumble) }
+    var result by remember { mutableStateOf<String?>(null) }
+    val one = act.oneScreen
+    val deviceWord = if (one) (if (androidx.compose.ui.platform.LocalConfiguration.current.smallestScreenWidthDp >= 600) "Tablet" else "Phone") else "Thor"
+    val R = io.github.hiramrg.delphis.core.Rumble.Mode.PAD
+    CapsLabel("Rumble")
+    GroupCard {
+        SettingRow(
+            "Rumble",
+            if (one) "When the game shakes the Wii Remote or GameCube controller, feel it." else "When the game shakes the Wii Remote or GameCube controller, feel it in the Thor.",
+        ) {
+            val opts = if (one) listOf(R to "Controller", io.github.hiramrg.delphis.core.Rumble.Mode.DEVICE to deviceWord, io.github.hiramrg.delphis.core.Rumble.Mode.OFF to "Off")
+            else listOf(io.github.hiramrg.delphis.core.Rumble.Mode.DEVICE to "Thor", io.github.hiramrg.delphis.core.Rumble.Mode.OFF to "Off")
+            Segmented(opts, mode, { mode = it; prefs.rumble = it; result = null })
+        }
+        RowDivider()
+        SettingRow(
+            "Try it",
+            result ?: when (mode) {
+                R -> DeviceInfo.gamepads().firstOrNull()?.name ?: "No controller connected"
+                io.github.hiramrg.delphis.core.Rumble.Mode.DEVICE -> if (one) "This ${deviceWord.lowercase()}'s own motor" else "The Thor's built-in motor"
+                else -> "Rumble is off"
+            },
+        ) { PanelBtn("Vibrate", null, true) { result = io.github.hiramrg.delphis.platform.RumbleTest.buzz(act, mode) } }
+    }
+    Text(
+        "Only games that use rumble vibrate. " + if (one) "Some Bluetooth controllers can't vibrate on Android; \"Try it\" shows whether yours can." else "An extra controller for player 2–4 rumbles too when it has a motor.",
+        fontSize = 11.5.sp, lineHeight = 15.sp, color = c.textDim, modifier = Modifier.padding(horizontal = 6.dp),
+    )
 }
