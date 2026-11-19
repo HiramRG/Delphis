@@ -121,13 +121,15 @@ private val LIST_ORDER = listOf(L2, L1, LEFT_STICK, L3, DPAD, SELECT, GYRO, MOTI
  * same place. Labels wrap to two lines; nothing is cut (it scrolls in the extreme case instead).
  */
 @Composable
-fun ControlsList(preset: Preset, modifier: Modifier = Modifier) {
+fun ControlsList(preset: Preset, modifier: Modifier = Modifier, columns: Int = 2) {
     val c = LocalWii.current
     val actions = preset.mappings.groupBy { it.control }.mapValues { (_, ms) -> mapLabel(ms.first().action) }
     val all = LIST_ORDER.filter { actions[it] != null }
     if (all.isEmpty()) return
-    val n = (all.size + 1) / 2
+    val n = if (columns == 1) all.size else (all.size + 1) / 2
     val gap = 4.dp
+    // The badge rail: wide enough for word badges ("Options", "Create", "Select").
+    val rail = if (all.any { mapBadgeName(it).length > 4 }) 60.dp else 40.dp
     androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
         val rowH = minOf(34.dp, (maxHeight - gap * (n - 1)) / n).coerceAtLeast(22.dp)
         val fs = if (rowH >= 27.dp) 11.sp else 10.5.sp
@@ -136,14 +138,14 @@ fun ControlsList(preset: Preset, modifier: Modifier = Modifier) {
             Modifier.fillMaxWidth().androidxVerticalScroll(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            listOf(all.take(n), all.drop(n)).forEach { col ->
+            (if (columns == 1) listOf(all) else listOf(all.take(n), all.drop(n))).forEach { col ->
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(gap)) {
                     col.forEach { k ->
                         Row(
                             Modifier.fillMaxWidth().heightIn(min = rowH).clip(RoundedCornerShape(9.dp)).background(rowBg).padding(horizontal = 8.dp, vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Box(Modifier.width(40.dp), contentAlignment = Alignment.Center) { ControlBadge(k) }
+                            Box(Modifier.width(rail), contentAlignment = Alignment.Center) { ControlBadge(k) }
                             androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
                             Text(actions[k]!!, fontSize = fs, fontWeight = FontWeight.Bold, lineHeight = (fs.value * 1.15f).sp, color = c.text, maxLines = 2, overflow = TextOverflow.Visible)
                         }

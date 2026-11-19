@@ -1345,7 +1345,7 @@ open class NowPlayingActivity : ComponentActivity() {
                         Column(m.clip(RoundedCornerShape(12.dp)).background(if (c.dark) Color(0xFF1F2329) else c.bar).padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             CapsLabel("Preview · " + candidate.name)
                             // The list of controls: the drawing's labels don't fit beside the layout list.
-                            ControlsList(candidate, Modifier.weight(1f).fillMaxWidth())
+                            ControlsList(candidate, Modifier.weight(1f).fillMaxWidth(), columns = 1)
                         }
                     }
                     if (wide) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
