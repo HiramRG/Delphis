@@ -5,14 +5,15 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 48
+    const val RELEASE = 49
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("Picture with the controller.", "One screen: the in-game Picture panel now works with buttons: LB / RB switch tabs, the D-pad picks, A Done, B Cancel."),
-        Item("Bottom bar on one line.", "With a big interface size the button hints no longer drop to a second line: the clock makes room, and the hints shrink a little if needed."),
-        Item("Touch buttons switched off from Dolphin's menu.", "When a controller is connected, Delphis turns Dolphin's touch buttons off from Dolphin's own menu once the game starts.", fix = true),
+        Item("New Look cards.", "Each look is shown on a little game scene, with the chosen one glowing blue."),
+        Item("Apply & restart, or Next time.", "In the game's Picture panel: apply a change now (the game restarts after an autosave) or keep it for the next time you play."),
+        Item("Dolphin closes with Delphis.", "Exiting Delphis now checks that Dolphin's card is really gone from Recent apps, and tries again if not.", fix = true),
+        Item("Exit button.", "The empty box next to \"Exit\" is gone.", fix = true),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

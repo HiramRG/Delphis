@@ -948,6 +948,7 @@ open class NowPlayingActivity : ComponentActivity() {
             // Picture: ▭ Screen (GameCube; the sides change right away, shape / 16:9 fill need a restart)
             // and ✦ Look (needs a restart). Touch only here: in game the Thor's buttons belong to Dolphin.
             val pictureActions = remember { arrayOfNulls<() -> Unit>(2) } // cancel, done (for the controller keys)
+            var pictureChanged by remember { mutableStateOf(false) }
             if (showPicture && (screenChoice != null || gameLook != null || gameRes != null)) {
                 val sc = screenChoice
                 val needsRestart = (runningScreen != null && sc != null && (sc.shape != runningScreen.shape ||
@@ -974,7 +975,13 @@ open class NowPlayingActivity : ComponentActivity() {
                     note = if (needsRestart) "Dolphin applies this when the game starts." else null,
                     compact = true,
                     keys = panelMode && !PadGlyphs.touch,
+                    inGame = if (!panelMode) null else PictureInGame(
+                        changed = needsRestart, autosave = s.info.gameId?.let { prefs.autoSaveFor(it) } == true,
+                        onNextTime = { showPicture = false },
+                        onApply = { showPicture = false; applyAndRestart(s, preset, remember = false) },
+                    ),
                 )
+                SideEffect { pictureChanged = needsRestart }
                 pictureActions[0] = {
                     resBefore?.let { r -> gameRes = r; gid?.let { prefs.setResolutionFor(it, r) } }
                     pictureBefore?.let { (bs, bl) ->
@@ -985,7 +992,7 @@ open class NowPlayingActivity : ComponentActivity() {
                 }
                 pictureActions[1] = {
                     showPicture = false
-                    if (needsRestart) restartAction = { applyAndRestart(s, preset, remember = false) }
+                    if (needsRestart) { if (panelMode) applyAndRestart(s, preset, remember = false) else restartAction = { applyAndRestart(s, preset, remember = false) } }
                 }
             }
 
@@ -1025,14 +1032,16 @@ open class NowPlayingActivity : ComponentActivity() {
                             KeyEvent.KEYCODE_DPAD_RIGHT to { move(1, 1) },
                             KeyEvent.KEYCODE_DPAD_UP to { move(-1, 3) },
                             KeyEvent.KEYCODE_DPAD_DOWN to { move(1, 3) },
-                            KeyEvent.KEYCODE_BUTTON_Y to {
+                            // Bottom = Apply & restart (Close when nothing changed), right = Cancel, left = Next time.
+                            KeyEvent.KEYCODE_BUTTON_B to { if (pictureChanged) pictureActions[1]?.invoke() else pictureActions[0]?.invoke() },
+                            KeyEvent.KEYCODE_BUTTON_A to { pictureActions[0]?.invoke() },
+                            KeyEvent.KEYCODE_BUTTON_Y to { if (pictureChanged) showPicture = false }, // Next time: keep the change, keep playing
+                            KeyEvent.KEYCODE_BUTTON_X to { // Screen tab: 4:3 / 16:9
                                 if (shown == 0) screenChoice?.let { c ->
                                     val n = c.copy(shape = if (c.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD else io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE)
                                     screenChoice = n; screenGid?.let { prefs.setScreenFor(it, n) }
                                 }
                             },
-                            KeyEvent.KEYCODE_BUTTON_B to { pictureActions[1]?.invoke() },
-                            KeyEvent.KEYCODE_BUTTON_A to { pictureActions[0]?.invoke() },
                         )
                     }
                     mode != Mode.VIEW || showBrightness -> emptyMap()
