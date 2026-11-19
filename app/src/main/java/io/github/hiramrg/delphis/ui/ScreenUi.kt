@@ -203,13 +203,13 @@ fun BoxScope.PicturePanel(
             Spacer(Modifier.weight(1f))
             PanelBtn("Cancel", if (keys) (if (inGame != null) "A" else "B") else null, false, onClick = onCancel)
             if (inGame != null) {
-                PanelBtn("Next time", if (keys) "Y" else null, false, enabled = changed, onClick = inGame.onNextTime)
+                PanelBtn("Later", if (keys) "Y" else null, false, enabled = changed, onClick = inGame.onNextTime)
                 PanelBtn("Apply & restart", if (keys) "⊕" else null, true, enabled = changed, onClick = inGame.onApply)
             } else PanelBtn(doneLabel, if (keys) "⊕" else null, true, onClick = onDone)
         },
     ) {
-        val shortCompact = compact && androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 480
-        val area = if (shortCompact) 104.dp else if (compact) 150.dp else 190.dp
+        val short = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 480
+        val area = if (compact) (if (short) 104.dp else 150.dp) else (if (short) 130.dp else 190.dp)
         // The explanation line (one line, same height on every tab).
         Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             when {
@@ -236,7 +236,7 @@ fun BoxScope.PicturePanel(
                 }
             } else io.github.hiramrg.delphis.core.Resolution.Level.entries.chunked(3).forEach { row ->
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    row.forEach { l -> SharpnessCard(l, l == res, l == (resCursor ?: res), advice?.scale, Modifier.weight(1f).fillMaxHeight()) { onRes(l) } }
+                    row.forEach { l -> SharpnessCard(l, l == res, l == (resCursor ?: res), advice?.scale, compact, Modifier.weight(1f).fillMaxHeight()) { onRes(l) } }
                 }
             }
         } else BoxWithConstraints(Modifier.fillMaxWidth().height(area)) {
@@ -253,8 +253,8 @@ fun BoxScope.PicturePanel(
                 when {
                     inGame == null -> "Applies when you press Play."
                     !changed -> "Nothing changed yet."
-                    inGame.autosave -> "Applies when the game starts again (autosaved first)."
-                    else -> "Applies when the game starts again, from its last save."
+                    inGame.autosave -> "Restarts the game to apply (autosaved first). Later: next time you play."
+                    else -> "Restarts from the last save to apply. Later: next time you play."
                 },
                 fontSize = 11.sp, color = if (changed) Color(0xFFF5C26B) else c.textDim, maxLines = 1,
             )
@@ -333,7 +333,7 @@ private fun ResolutionCard(l: io.github.hiramrg.delphis.core.Resolution.Level, o
 
 /** A Sharpness card: the same card as Look, with the scene blurrier at lower levels. */
 @Composable
-private fun SharpnessCard(l: io.github.hiramrg.delphis.core.Resolution.Level, on: Boolean, cursor: Boolean, recommended: Int?, modifier: Modifier, onClick: () -> Unit) {
+private fun SharpnessCard(l: io.github.hiramrg.delphis.core.Resolution.Level, on: Boolean, cursor: Boolean, recommended: Int?, small: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(12.dp)
     val fit = recommended?.let { io.github.hiramrg.delphis.core.Resolution.fit(l, it) }
@@ -351,7 +351,8 @@ private fun SharpnessCard(l: io.github.hiramrg.delphis.core.Resolution.Level, on
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(if (l.scale == 0) "Dolphin's" else l.label, fontSize = 12.5.sp, fontWeight = FontWeight.Black, color = Color.White, maxLines = 1, softWrap = false)
+            // Small cards (the in-game menu) show just "2×" so the tag fits beside it.
+            Text(if (l.scale == 0) "Dolphin's" else if (small) l.short else l.label, fontSize = 12.5.sp, fontWeight = FontWeight.Black, color = Color.White, maxLines = 1, softWrap = false)
             if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF6BCB77))
             Spacer(Modifier.weight(1f))
             when (fit) {
