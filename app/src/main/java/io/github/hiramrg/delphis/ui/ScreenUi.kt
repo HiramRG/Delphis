@@ -241,7 +241,7 @@ fun BoxScope.PicturePanel(
         }
         // Controls line and status line, always both, fixed height.
         Column(Modifier.fillMaxWidth().height(46.dp).padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            if (keys) HintText(
+            if (keys && !PadGlyphs.touch) HintText(
                 if (showLook || showRes) "✚ Move   ${glyph(pickKey)} Pick   L1 R1 Tabs" else "✚ Choose   L1 R1 Tabs",
                 fontSize = 11.sp, color = c.textDim, lineHeight = 20.sp,
             ) else Text(if (showLook || showRes) "Tap a card to pick it." else "Tap a card to choose.", fontSize = 11.sp, lineHeight = 20.sp, color = c.textDim, maxLines = 1)
