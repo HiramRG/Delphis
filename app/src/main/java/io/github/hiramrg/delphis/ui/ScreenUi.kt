@@ -184,11 +184,7 @@ fun BoxScope.PicturePanel(
     val changed = inGame?.changed ?: false
     PopupPanel(
         "Picture · $gameTitle",
-        when {
-            showRes -> "Sharpness · how sharp?"
-            showLook -> "Look · what style?"
-            else -> "Screen · " + (if (choice!!.shape == Shape.WIDE) "16:9" else "4:3")
-        },
+        when { showRes -> "Sharpness"; showLook -> "Look"; else -> "Screen" },
         Modifier.align(if (compact) Alignment.TopCenter else Alignment.Center).padding(top = if (compact) 6.dp else 0.dp)
             .fillMaxWidth(if (compact) 0.97f else 0.9f).clickable(enabled = false) {},
         corner = if (tabs.size > 1) ({
@@ -214,13 +210,13 @@ fun BoxScope.PicturePanel(
         Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             when {
                 showRes -> {
-                    Text("Tags: how fast the game runs here.", fontSize = 11.sp, color = c.textDim, maxLines = 1, modifier = Modifier.weight(1f))
+                    Text("How sharp the picture is. Tags: game speed here.", fontSize = 11.sp, color = c.textDim, maxLines = 1, modifier = Modifier.weight(1f))
                     if (advice != null) Text(
                         "★ ${io.github.hiramrg.delphis.core.Resolution.forScale(advice.scale).short} suits this device", fontSize = 11.sp,
                         fontWeight = FontWeight.Bold, color = Color(0xFF6BCB77), maxLines = 1,
                     )
                 }
-                showLook -> Text("Tags: extra battery use (Light, Medium).", fontSize = 11.sp, color = c.textDim, maxLines = 1, modifier = Modifier.weight(1f))
+                showLook -> Text("The picture's style. Tags: extra battery use.", fontSize = 11.sp, color = c.textDim, maxLines = 1, modifier = Modifier.weight(1f))
                 else -> {
                     Text(if (choice!!.shape == Shape.WIDE) "How to fill 16:9." else "What goes in the sides.", fontSize = 11.sp, color = c.textDim, maxLines = 1, modifier = Modifier.weight(1f))
                     Segmented(listOf(Shape.STANDARD to "4:3", Shape.WIDE to "16:9"), choice.shape, { onPick(choice.copy(shape = it)) })
@@ -244,11 +240,11 @@ fun BoxScope.PicturePanel(
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { ScreenChoices(choice!!, gameId, useHack, colour, w, showSub = !compact, cardH = area, onPick = onPick) }
         }
         // Controls line and status line, always both, fixed height.
-        Column(Modifier.fillMaxWidth().height(36.dp).padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        Column(Modifier.fillMaxWidth().height(46.dp).padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             if (keys) HintText(
                 if (showLook || showRes) "✚ Move   ${glyph(pickKey)} Pick   L1 R1 Tabs" else "✚ Choose   L1 R1 Tabs",
-                fontSize = 11.sp, color = c.textDim,
-            ) else Text(if (showLook || showRes) "Tap a card to pick it." else "Tap a card to choose.", fontSize = 11.sp, color = c.textDim, maxLines = 1)
+                fontSize = 11.sp, color = c.textDim, lineHeight = 20.sp,
+            ) else Text(if (showLook || showRes) "Tap a card to pick it." else "Tap a card to choose.", fontSize = 11.sp, lineHeight = 20.sp, color = c.textDim, maxLines = 1)
             Text(
                 when {
                     inGame == null -> "Applies when you press Play."
@@ -256,7 +252,7 @@ fun BoxScope.PicturePanel(
                     inGame.autosave -> "Restarts the game to apply (autosaved first). Later: next time you play."
                     else -> "Restarts from the last save to apply. Later: next time you play."
                 },
-                fontSize = 11.sp, color = if (changed) Color(0xFFF5C26B) else c.textDim, maxLines = 1,
+                fontSize = 11.sp, lineHeight = 14.sp, color = if (changed) Color(0xFFF5C26B) else c.textDim, maxLines = 1,
             )
         }
     }
