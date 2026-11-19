@@ -109,7 +109,7 @@ fun ControlsMap(preset: Preset, modifier: Modifier = Modifier, onFit: ((Float) -
 const val MIN_MAP_FONT = 10f
 
 /** Below this height the drawing's labels can't all fit at a readable size. */
-val MIN_MAP_HEIGHT = 120.dp
+val MIN_MAP_HEIGHT = 90.dp
 
 /** Order of the list: the Thor's left side top to bottom, then the right side. */
 private val LIST_ORDER = listOf(L2, L1, LEFT_STICK, L3, DPAD, SELECT, GYRO, MOTION, R2, R1, FACE_EAST, FACE_SOUTH, FACE_NORTH, FACE_WEST, RIGHT_STICK, R3, START)
