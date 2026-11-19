@@ -275,11 +275,11 @@ fun BoxScope.PicturePanel(
         }
         // In the game: one note line of fixed height, so the panel never changes size.
         if (inGame != null) Text(
-            if (!inGame.changed) (if (keys) "Move with the D-pad, pick with ${PadGlyphs.letter(pickKey)}. Changes apply when the game starts again." else "Tap to pick. Changes apply when the game starts again.")
+            if (!inGame.changed) (if (keys) "D-pad moves, ${PadGlyphs.letter(pickKey)} picks. Changes apply when the game starts again." else "Tap to pick. Changes apply when the game starts again.")
             else if (inGame.autosave) "Changes need the game to start again. Your progress is autosaved first."
             else "Changes need the game to start again, from its last save.",
             fontSize = 11.sp, lineHeight = 14.sp, color = c.textDim, maxLines = 2,
-            modifier = Modifier.fillMaxWidth().height(30.dp).padding(top = 4.dp),
+            modifier = Modifier.fillMaxWidth().height(34.dp).padding(top = 4.dp),
         )
     }
 }
