@@ -228,6 +228,28 @@ class LayoutCheckTest {
             inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Picture · ${if (tab == 1) "Look" else "Sharpness"} (Thor)")
         }
         TestHooks.pictureTab = null
+        // Change controls, in the same box (controller on one screen, touch on the Thor).
+        TestHooks.inGameChange = true
+        run {
+            val (g, preset, _) = inGame.first()
+            TestHooks.padVendor = 0x045e
+            inGameMenu(phone, InGameMenuActivity::class.java, session(g, preset), "In-game Change controls · Xbox")
+            inGameMenu(tablet, InGameMenuActivity::class.java, session(g, preset), "In-game Change controls · Xbox")
+            TestHooks.padVendor = null
+            inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Change controls (Thor)")
+        }
+        TestHooks.inGameChange = false
+        // The autosave couldn't be loaded when the game started.
+        run {
+            val (g, preset, _) = inGame.first()
+            io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = io.github.hiramrg.delphis.platform.ResumeNotice.Failed(g.info.gameId!!, System.currentTimeMillis())
+            TestHooks.padVendor = 0x045e
+            inGameMenu(tablet, InGameMenuActivity::class.java, session(g, preset), "In-game autosave not loaded · Xbox")
+            TestHooks.padVendor = null
+            io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = io.github.hiramrg.delphis.platform.ResumeNotice.Failed(g.info.gameId!!, System.currentTimeMillis())
+            inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game autosave not loaded (Thor)")
+            io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = null
+        }
         TestHooks.padVendor = null
 
         step("done")

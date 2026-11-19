@@ -438,6 +438,16 @@ class MainActivity : ComponentActivity() {
         goFullScreen()
         prefs = Prefs(this)
         bridge = DolphinBridge(this, prefs)
+        // The report shows the first start after each update, and whether the close-games helper was back by then.
+        runCatching {
+            val build = packageManager.getPackageInfo(packageName, 0).longVersionCode
+            val meta = getSharedPreferences("delphis_meta", MODE_PRIVATE)
+            val last = meta.getLong("last_build", -1L)
+            if (last != build) {
+                if (last >= 0) io.github.hiramrg.delphis.platform.CrashLog.event("first start after update: build $last → $build (helper ${if (io.github.hiramrg.delphis.platform.DolphinExitService.running) "running" else "not running yet"})")
+                meta.edit().putLong("last_build", build).apply()
+            }
+        }
         library = GameLibrary(this, prefs)
         covers = CoverArt(this)
         store = PresetStore(this)
@@ -561,6 +571,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
+        if (raw.action == KeyEvent.ACTION_DOWN) PadGlyphs.used(raw)
         // One screen: controllers that don't report standard keys (e.g. a Switch Pro Controller) are translated.
         // (Not on the Controller check, which records exactly what the controller sends.)
         val event = if (screen == Screen.ControllerCheck) raw else io.github.hiramrg.delphis.platform.PadKeys.translate(raw, prefs, oneScreen)
@@ -618,7 +629,11 @@ class MainActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    private val triggerKeys = io.github.hiramrg.delphis.platform.TriggerKeys()
+
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        // Triggers that are only axes (Xbox) still reach the L2 / R2 shortcuts (not on the Controller check).
+        if (screen != Screen.ControllerCheck) triggerKeys.onMotion(event) { dispatchKeyEvent(it) }
         io.github.hiramrg.delphis.platform.MenuSounds.onMotion(event)
         motionListener?.let { if (it(event)) return true }
         return super.dispatchGenericMotionEvent(event)
@@ -636,6 +651,7 @@ class MainActivity : ComponentActivity() {
     fun exitAll() {
         exitPrompt = false
         exiting = true
+        io.github.hiramrg.delphis.platform.DolphinExitService.exitRunning = true
         lifecycleScope.launch {
             val pkg = bridge.installedPackage()
             io.github.hiramrg.delphis.platform.CrashLog.event("exit: closing Delphis (Dolphin: ${pkg ?: "not found"}, helper ${if (io.github.hiramrg.delphis.platform.DolphinExitService.isEnabled(this@MainActivity)) "on" else "OFF"})")

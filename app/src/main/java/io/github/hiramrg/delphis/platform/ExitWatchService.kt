@@ -18,6 +18,7 @@ class ExitWatchService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val main = rootIntent?.component?.className?.endsWith(".MainActivity") == true
+        if (DolphinExitService.exitRunning) return // Exit Delphis already handled Dolphin
         if (!main || GameWatch.session != null) { CrashLog.event("Delphis swiped away${if (GameWatch.session != null) " during a game: Dolphin kept" else ""}"); return }
         val pkg = DolphinBridge(applicationContext, Prefs(applicationContext)).installedPackage() ?: return
         val label = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault("Dolphin")

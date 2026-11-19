@@ -62,14 +62,35 @@ object PadGlyphs {
     var brand by mutableStateOf<PadBrand?>(null)
         internal set
 
-    /** Reads the connected controller again (one screen); call when controllers come and go. */
+    /** The controller whose buttons were pressed last (its id), so the icons follow the one in your hands. */
+    private var lastUsedId = -1
+    private var oneScreenNow = false
+
+    /** Reads the connected controllers again (one screen); call when controllers come and go. */
     fun update(oneScreen: Boolean) {
+        oneScreenNow = oneScreen
         thorBody = !oneScreen
         val fake = io.github.hiramrg.delphis.platform.TestHooks.padVendor
-        brand = if (!oneScreen) null else fake?.let { PadBrand.forVendor(it) } ?: io.github.hiramrg.delphis.platform.DeviceInfo.gamepads().firstOrNull()?.let { PadBrand.forVendor(it.vendorId) }
+        // The last one used while it's still connected, otherwise the first one connected.
+        val pads = io.github.hiramrg.delphis.platform.DeviceInfo.gamepads()
+        val pad = pads.firstOrNull { it.id == lastUsedId } ?: pads.firstOrNull()
+        brand = if (!oneScreen) null else fake?.let { PadBrand.forVendor(it) } ?: pad?.let { PadBrand.forVendor(it.vendorId) }
         labels = if (!oneScreen) io.github.hiramrg.delphis.core.ButtonLabels.NINTENDO
         else fake?.let { io.github.hiramrg.delphis.core.ButtonLabels.forVendor(it) }
-            ?: io.github.hiramrg.delphis.platform.DeviceInfo.gamepads().firstOrNull()?.let { io.github.hiramrg.delphis.core.ButtonLabels.forVendor(it.vendorId) }
+            ?: pad?.let { io.github.hiramrg.delphis.core.ButtonLabels.forVendor(it.vendorId) }
+    }
+
+    /**
+     * A button was pressed (one screen): if it came from another controller than the last one, the icons switch
+     * to that controller (e.g. the Xbox one is still paired but you picked up the Switch one).
+     */
+    fun used(e: android.view.KeyEvent) {
+        if (!oneScreenNow || io.github.hiramrg.delphis.platform.TestHooks.padVendor != null) return
+        val d = e.device ?: return
+        if (d.isVirtual || !d.isExternal || d.id == lastUsedId) return
+        if (d.sources and android.view.InputDevice.SOURCE_GAMEPAD != android.view.InputDevice.SOURCE_GAMEPAD) return
+        lastUsedId = d.id
+        update(true)
     }
 
     /** [padText] with a controller, [touchText] without one. */

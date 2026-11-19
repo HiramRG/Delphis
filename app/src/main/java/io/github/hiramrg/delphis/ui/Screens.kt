@@ -1462,6 +1462,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         PlayersDialog(
             game.info.title, pads, playerSetup, onChange = { playerSetup = it; act.prefs.setPlayerSetup(gameId!!, it) }, onDismiss = { showPlayers = false },
             onChecked = { pad, byLabel -> act.prefs.setPadByLabel(pad.key, byLabel) },
+            translate = { e -> io.github.hiramrg.delphis.platform.PadKeys.translate(e, act.prefs, act.oneScreen) },
         )
     }
 
@@ -1525,8 +1526,8 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             return@rememberUpdatedState true
         }
         if (showScreen && hasPicture) {
-            // Picture panel open: L1 / R1 = Screen / Look tab; Screen: Ⓨ = 4:3 / 16:9, ◀ ▶ = card;
-            // Look: the D-pad moves on the grid. Ⓐ Done, Ⓑ Cancel; nothing else reaches the page.
+            // Picture panel open: L2 / R2 (or L1 / R1) = Screen / Look / Sharpness; Screen: Ⓨ = 4:3 / 16:9, the D-pad
+            // = option; Look / Sharpness: the D-pad moves on the list (two columns). Ⓐ Done, Ⓑ Cancel; nothing else reaches the page.
             val shownTab = if (pictureTab in picTabs) pictureTab else picTabs.first()
             val onLook = shownTab == 1
             val onRes = shownTab == 2
@@ -1536,19 +1537,20 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             if (onRes && rc != null && e.action == KeyEvent.ACTION_DOWN) when (e.keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT -> { resCursor = io.github.hiramrg.delphis.core.Resolution.step(rc, -1); return@rememberUpdatedState true }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> { resCursor = io.github.hiramrg.delphis.core.Resolution.step(rc, 1); return@rememberUpdatedState true }
-                KeyEvent.KEYCODE_DPAD_UP -> { resCursor = io.github.hiramrg.delphis.core.Resolution.step(rc, -3); return@rememberUpdatedState true }
-                KeyEvent.KEYCODE_DPAD_DOWN -> { resCursor = io.github.hiramrg.delphis.core.Resolution.step(rc, 3); return@rememberUpdatedState true }
+                KeyEvent.KEYCODE_DPAD_UP -> { resCursor = io.github.hiramrg.delphis.core.Resolution.step(rc, -2); return@rememberUpdatedState true }
+                KeyEvent.KEYCODE_DPAD_DOWN -> { resCursor = io.github.hiramrg.delphis.core.Resolution.step(rc, 2); return@rememberUpdatedState true }
                 KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> { if (e.repeatCount == 0) setRes(rc); return@rememberUpdatedState true }
             }
             val lc = lookCursor ?: lk
             if (e.action == KeyEvent.ACTION_DOWN) when (e.keyCode) {
-                KeyEvent.KEYCODE_BUTTON_L1 -> if (e.repeatCount == 0) picTabs.getOrNull(picTabs.indexOf(shownTab) - 1)?.let { pictureTab = it }
-                KeyEvent.KEYCODE_BUTTON_R1 -> if (e.repeatCount == 0) picTabs.getOrNull(picTabs.indexOf(shownTab) + 1)?.let { pictureTab = it }
+                // L2 / R2 switch Screen / Look / Sharpness, as in the in-game menu (L1 / R1 too).
+                KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_L2 -> if (e.repeatCount == 0) picTabs.getOrNull(picTabs.indexOf(shownTab) - 1)?.let { pictureTab = it }
+                KeyEvent.KEYCODE_BUTTON_R1, KeyEvent.KEYCODE_BUTTON_R2 -> if (e.repeatCount == 0) picTabs.getOrNull(picTabs.indexOf(shownTab) + 1)?.let { pictureTab = it }
                 KeyEvent.KEYCODE_BUTTON_Y -> if (!onLook && !onRes && sc != null && e.repeatCount == 0) setScreen(sc.copy(shape = if (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD else io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE))
                 KeyEvent.KEYCODE_DPAD_LEFT -> if (onLook && lc != null) lookCursor = lookStep(lc, -1) else if (!onRes && sc != null) setScreen(screenStep(sc, -1))
                 KeyEvent.KEYCODE_DPAD_RIGHT -> if (onLook && lc != null) lookCursor = lookStep(lc, 1) else if (!onRes && sc != null) setScreen(screenStep(sc, 1))
-                KeyEvent.KEYCODE_DPAD_UP -> if (onLook && lc != null) lookCursor = lookStep(lc, -3)
-                KeyEvent.KEYCODE_DPAD_DOWN -> if (onLook && lc != null) lookCursor = lookStep(lc, 3)
+                KeyEvent.KEYCODE_DPAD_UP -> if (onLook && lc != null) lookCursor = lookStep(lc, -2) else if (!onRes && sc != null) setScreen(screenStep(sc, -2))
+                KeyEvent.KEYCODE_DPAD_DOWN -> if (onLook && lc != null) lookCursor = lookStep(lc, 2) else if (!onRes && sc != null) setScreen(screenStep(sc, 2))
                 // Ⓐ picks the card under the glow (the Screen tab's cards change right away, so there Ⓐ is Done).
                 KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER -> if (e.repeatCount == 0) { if (onLook && lc != null) setLook(lc) else showScreen = false }
                 KeyEvent.KEYCODE_BUTTON_START -> if (e.repeatCount == 0) showScreen = false

@@ -63,6 +63,8 @@ import io.github.hiramrg.delphis.platform.GameWatch
 import io.github.hiramrg.delphis.platform.PresetStore
 import io.github.hiramrg.delphis.platform.Prefs
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -269,6 +271,7 @@ open class NowPlayingActivity : ComponentActivity() {
 
     override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
         if (!panelMode) return super.dispatchKeyEvent(raw)
+        if (raw.action == KeyEvent.ACTION_DOWN) PadGlyphs.used(raw)
         // One screen: controllers that don't report standard keys (e.g. a Switch Pro Controller) are translated.
         val event = io.github.hiramrg.delphis.platform.PadKeys.translate(raw, prefs, true)
         // The action runs when the button is let go, so the whole press stays here: acting on the press
@@ -290,6 +293,14 @@ open class NowPlayingActivity : ComponentActivity() {
         if (super.dispatchKeyEvent(event)) return true
         if (event !== raw) io.github.hiramrg.delphis.platform.PadKeys.fallback(event)?.let { return super.dispatchKeyEvent(it) }
         return false
+    }
+
+    private val triggerKeys = io.github.hiramrg.delphis.platform.TriggerKeys()
+
+    /** One screen: triggers that are only axes (Xbox) still reach the menu's L2 / R2 shortcuts. */
+    override fun dispatchGenericMotionEvent(event: android.view.MotionEvent): Boolean {
+        if (panelMode && triggerKeys.onMotion(event) { dispatchKeyEvent(it) }) return true
+        return super.dispatchGenericMotionEvent(event)
     }
 
     /** One screen: a controller connected while the game runs (it only works after a restart, and the touch buttons stay until then). */
@@ -546,7 +557,7 @@ open class NowPlayingActivity : ComponentActivity() {
         val preset = remember(s.presetId, startPlayers) {
             resolve(s.presetId).let { if (io.github.hiramrg.delphis.platform.Pads.multiplayer(startPlayers)) io.github.hiramrg.delphis.core.Players.multiplayerPreset(it) else it }
         }
-        var mode by remember { mutableStateOf(Mode.VIEW) }
+        var mode by remember { mutableStateOf(if (io.github.hiramrg.delphis.platform.TestHooks.inGameChange) Mode.CHANGE else Mode.VIEW) }
         // ☀ pill: the bottom screen's normal brightness (awake, or dimming off). The dimmed level is set in Settings.
         var brightness by remember { mutableIntStateOf(prefs.bottomBrightness ?: (systemBrightness() * 100).roundToInt()) }
         var brightnessChosen by remember { mutableStateOf(prefs.bottomBrightness != null) }
@@ -569,6 +580,14 @@ open class NowPlayingActivity : ComponentActivity() {
         // Bottom-screen trackpad (trackpad presets): Map / Trackpad switch, finger-on-pad state, speed.
         // (One screen has no second screen to use as a trackpad: such presets show their map there.)
         var padView by remember(preset.id) { mutableStateOf(preset.isTrackpad && !panelMode) }
+        // Change controls: the layout under the cursor, and the game's layouts (no gyro / trackpad ones with 2+ players).
+        var changeCandidate by remember { mutableStateOf<Preset?>(null) }
+        val changeGroups = remember(s.key, startPlayers.size) {
+            val suggestion = GameDatabase.suggest(s.info)
+            val many = startPlayers.size > 1
+            fun ok(list: List<Preset>) = if (many) list.filter { !it.isTrackpad && !it.isGyro() } else list
+            PresetGroups(ok(store.withEdits(s.key, suggestion.choices)), ok(store.withEdits(s.key, suggestion.alternatives)), ok(store.mine(s.key)))
+        }
         var padActive by remember { mutableStateOf(false) }
         var padBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
         var padSpeed by remember(s.key) { mutableStateOf(prefs.trackpadSpeed(s.key)) }
@@ -596,6 +615,41 @@ open class NowPlayingActivity : ComponentActivity() {
         var lookCursor by remember { mutableStateOf(gameLook) }
         var resCursor by remember { mutableStateOf(gameRes) }
         fun openPicture(tab: Int) { pictureBefore = screenChoice to gameLook; resBefore = gameRes; lookCursor = gameLook; resCursor = gameRes; pictureTab = tab; showBrightness = false; showPicture = true }
+        val picTabs = pictureTabs(screenChoice != null, gameLook != null, gameRes != null)
+        val picShown = if (pictureTab in picTabs) pictureTab else picTabs.first()
+        val hasPicture = screenChoice != null || gameLook != null || gameRes != null
+        // What needs a restart: the shape / 16:9 fill (the sides change right away), the look, the sharpness.
+        val pictureChanged = run {
+            val sc = screenChoice
+            (runningScreen != null && sc != null && (sc.shape != runningScreen.shape ||
+                (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE && sc.fill != runningScreen.fill))) ||
+                (gameLook != null && gameLook != runningLook) || (gameRes != null && gameRes != runningRes)
+        }
+        /** Cancel: back to what was set when the Picture tab opened, then the Controls tab. */
+        fun cancelPicture() {
+            resBefore?.let { r -> gameRes = r; gid?.let { prefs.setResolutionFor(it, r) } }
+            pictureBefore?.let { (bs, bl) ->
+                if (bs != null) { screenChoice = bs; screenGid?.let { prefs.setScreenFor(it, bs) } }
+                if (bl != null) { gameLook = bl; lookGid?.let { prefs.setLookFor(it, bl) } }
+            }
+            showPicture = false
+        }
+        // The autosave couldn't be loaded when the game started: offer it (one screen: the menu opens for it).
+        val resumeFailed = io.github.hiramrg.delphis.platform.ResumeNotice.failed.value?.takeIf { it.gameId == gid }
+        LaunchedEffect(resumeFailed) {
+            if (resumeFailed == null || !panelMode) return@LaunchedEffect
+            while (GameLauncher.busy) delay(300)
+            delay(500)
+            DolphinExitService.openMenu()
+        }
+        val loadAutosave = {
+            io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = null
+            if (panelMode) resumeGame()
+            gid?.let { id -> this@NowPlayingActivity.lifecycleScope.launch { delay(700); bridge.loadAutosaveNow(id) } }
+            Unit
+        }
+        // The Map / List toggle: L2 / R2 on one screen bump this.
+        var controlsToggle by remember { mutableIntStateOf(0) }
         val sideColour by produceState(android.graphics.Color.rgb(75, 58, 143), screenGid) {
             screenGid?.let { value = io.github.hiramrg.delphis.platform.SideFill.colourOf(io.github.hiramrg.delphis.platform.CoverArt(this@NowPlayingActivity).load(it)) }
         }
@@ -733,7 +787,7 @@ open class NowPlayingActivity : ComponentActivity() {
                         val resumeFocus = remember { androidx.compose.ui.focus.FocusRequester() }
                         LaunchedEffect(openSignal) { delay(150); runCatching { resumeFocus.requestFocus() } }
                         // D-pad down goes straight to the action buttons instead of stopping at the map's toggle.
-                        PanelBtn("▶ Resume", "B", false, Modifier.focusRequester(resumeFocus).focusProperties { if (mode == Mode.VIEW && !(preset.isTrackpad && padView)) down = changeFocus }) { resumeGame() }
+                        PanelBtn("▶ Resume", if (showPicture) null else "B", false, Modifier.focusRequester(resumeFocus).focusProperties { if (mode == Mode.VIEW && !(preset.isTrackpad && padView)) down = changeFocus }) { resumeGame() }
                     } else {
                         // Trackpad on screen: the action row is replaced by the pad's controls, so Quit stays up here.
                         if (preset.isTrackpad && padView && mode == Mode.VIEW) TopChip("Quit") { if (prefs.skipExitWarning) closingGame { backToMainMenu() } else confirmExit = true }
@@ -747,7 +801,7 @@ open class NowPlayingActivity : ComponentActivity() {
                 val tabs = buildList {
                     add(0)
                     if (achievements != null) add(1)
-                    if (screenChoice != null || gameLook != null || gameRes != null) add(2)
+                    if (hasPicture) add(2)
                 }
                 val tab = when { showPicture -> 2; showAchievements -> 1; else -> 0 }
                 fun selectTab(t: Int) {
@@ -760,8 +814,7 @@ open class NowPlayingActivity : ComponentActivity() {
                 }
                 LaunchedEffect(tabStep) {
                     val (seq, dir) = tabStep
-                    // The Picture panel is a pop-up with its own Cancel / Done: L1 / R1 wait until it's closed.
-                    if (seq == 0 || mode != Mode.VIEW || tabs.size < 2 || showPicture) return@LaunchedEffect
+                    if (seq == 0 || mode != Mode.VIEW || tabs.size < 2) return@LaunchedEffect
                     selectTab(tabs[(tabs.indexOf(tab).coerceAtLeast(0) + dir + tabs.size) % tabs.size])
                 }
                 if (mode == Mode.VIEW && tabs.size > 1) Row(
@@ -794,7 +847,24 @@ open class NowPlayingActivity : ComponentActivity() {
                 // ---------------- middle
                 when (mode) {
                     // Same Thor button map as the game page.
-                    Mode.VIEW -> if (showAchievements && achievements != null) {
+                    Mode.VIEW -> if (showPicture && hasPicture) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 10.dp) {
+                        // Picture: the second tab of the same box (the box, the card and the buttons stay put).
+                        val keys = panelMode && !PadGlyphs.touch
+                        PictureChoices(
+                            picTabs, picShown, { pictureTab = it },
+                            screenChoice, screenGid, prefs.gcUseHack, { ch -> screenChoice = ch; screenGid?.let { prefs.setScreenFor(it, ch) } },
+                            gameLook, lookCursor, { l -> gameLook = l; lookCursor = l; lookGid?.let { prefs.setLookFor(it, l) } },
+                            gameRes, resCursor, { l -> gameRes = l; resCursor = l; gid?.let { prefs.setResolutionFor(it, l) } },
+                            resAdvice, keys = keys,
+                            status = when {
+                                !pictureChanged -> pictureExplain(picShown, screenChoice, resAdvice)
+                                s.info.gameId?.let { prefs.autoSaveFor(it) } == true -> "Changed. Apply & restart (autosaved first), or Later for next time."
+                                else -> "Changed. Apply & restart (from the last save), or Later for next time."
+                            },
+                            statusWarn = pictureChanged, shapeKey = if (keys) "X" else null,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else if (showAchievements && achievements != null) {
                         val shape = RoundedCornerShape(16.dp)
                         AchievementList(
                             achievements,
@@ -813,7 +883,7 @@ open class NowPlayingActivity : ComponentActivity() {
                             )
                         }
                     } else if (!preset.isTrackpad || panelMode) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 8.dp) {
-                        ControlsSwitchable(preset, prefs, s.key, Modifier.fillMaxSize())
+                        ControlsSwitchable(preset, prefs, s.key, Modifier.fillMaxSize(), toggle = controlsToggle, keysAround = panelMode && !PadGlyphs.touch)
                     } else Column(Modifier.weight(1f).fillMaxWidth()) {
                         Segmented(
                             listOf(false to "▦ Map", true to "◎ Trackpad"), padView, { padView = it },
@@ -849,9 +919,7 @@ open class NowPlayingActivity : ComponentActivity() {
                             ControlsSwitchable(preset, prefs, s.key, Modifier.fillMaxSize())
                         }
                     }
-                    Mode.CHANGE -> LayoutSwitcher(s, preset, onCancel = { mode = Mode.VIEW }) { chosen ->
-                        restartAction = { mode = Mode.VIEW; applyAndRestart(s, chosen, remember = true) }
-                    }
+                    Mode.CHANGE -> LayoutSwitcher(s, changeGroups, changeCandidate ?: preset, preset, multiplayer = startPlayers.size > 1) { changeCandidate = it }
                     Mode.EDIT -> PresetEditor(
                         base = preset, customId = store.customIdFor(s.key), saveLabel = "Save & restart",
                         modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -896,10 +964,45 @@ open class NowPlayingActivity : ComponentActivity() {
                             { padSpeed = it; prefs.setTrackpadSpeed(s.key, it) },
                         )
                     }
+                } else if (mode == Mode.VIEW && showPicture && hasPicture) {
+                    // Picture: always the same buttons in the same places, dimmed until something changed.
+                    val apply = { applyAndRestart(s, preset, remember = false); showPicture = false }
+                    if (panelMode && !PadGlyphs.touch) {
+                        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PanelBtn("Apply & restart", "⊕", true, Modifier.weight(1.25f), enabled = pictureChanged) { apply() }
+                            PanelBtn("Later", "Y", false, Modifier.weight(1f), enabled = pictureChanged) { showPicture = false }
+                        }
+                        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PanelBtn("Cancel", "A", false, Modifier.weight(1f)) { cancelPicture() }
+                        }
+                        Box(Modifier.fillMaxWidth().padding(top = 5.dp), contentAlignment = Alignment.Center) {
+                            HintText(pictureHint(picTabs, picShown, "B"), fontSize = 11.sp, color = LocalWii.current.textDim, lineHeight = 16.sp)
+                        }
+                    } else Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PanelBtn("Cancel", null, false, Modifier.weight(1f)) { cancelPicture() }
+                        PanelBtn("Later", null, false, Modifier.weight(1f), enabled = pictureChanged) { showPicture = false }
+                        PanelBtn("Apply & restart", null, true, Modifier.weight(1.6f), enabled = pictureChanged) { apply() }
+                    }
+                } else if (mode == Mode.CHANGE) {
+                    val cand = changeCandidate ?: preset
+                    val canUse = cand.id != preset.id || !s.applied
+                    val use = { restartAction = { mode = Mode.VIEW; changeCandidate = null; applyAndRestart(s, cand, remember = true) } }
+                    if (panelMode && !PadGlyphs.touch) {
+                        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PanelBtn("Use this layout", "B", true, Modifier.weight(1.25f), enabled = canUse) { use() }
+                            PanelBtn("Cancel", "A", false, Modifier.weight(1f)) { mode = Mode.VIEW; changeCandidate = null }
+                        }
+                        Box(Modifier.fillMaxWidth().padding(top = 5.dp), contentAlignment = Alignment.Center) {
+                            HintText("✚ Choose   Ⓑ Use   Ⓐ Back to the menu", fontSize = 11.sp, color = LocalWii.current.textDim, lineHeight = 16.sp)
+                        }
+                    } else Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PanelBtn("Cancel", null, false, Modifier.weight(1f)) { mode = Mode.VIEW; changeCandidate = null }
+                        PanelBtn("Use this layout", null, true, Modifier.weight(1.6f), enabled = canUse) { use() }
+                    }
                 } else if (mode == Mode.VIEW) {
                     // The same actions on the Thor and on one screen: change or edit the controls, restart, quit.
                     // One screen: each shows its own controller button, so they sit in two rows to keep every label whole.
-                    val change: @Composable (Modifier) -> Unit = { m -> PanelBtn("Change", if (panelMode && !PadGlyphs.touch) "Y" else null, true, m.focusRequester(changeFocus)) { showBrightness = false; mode = Mode.CHANGE } }
+                    val change: @Composable (Modifier) -> Unit = { m -> PanelBtn("Change", if (panelMode && !PadGlyphs.touch) "Y" else null, true, m.focusRequester(changeFocus)) { showBrightness = false; changeCandidate = preset; mode = Mode.CHANGE } }
                     val edit: @Composable (Modifier) -> Unit = { m -> PanelBtn("✎ Edit", null, false, m) { showBrightness = false; mode = Mode.EDIT } }
                     val restart: @Composable (Modifier) -> Unit = { m ->
                         PanelBtn("Restart", if (panelMode && !PadGlyphs.touch) "⊖" else null, false, m) {
@@ -954,67 +1057,19 @@ open class NowPlayingActivity : ComponentActivity() {
                 )
             }
 
-            // Picture: ▭ Screen (GameCube; the sides change right away, shape / 16:9 fill need a restart)
-            // and ✦ Look (needs a restart). Touch only here: in game the Thor's buttons belong to Dolphin.
-            val pictureActions = remember { arrayOfNulls<() -> Unit>(2) } // cancel, done (for the controller keys)
-            var pictureChanged by remember { mutableStateOf(false) }
-            if (showPicture && (screenChoice != null || gameLook != null || gameRes != null)) {
-                val sc = screenChoice
-                val needsRestart = (runningScreen != null && sc != null && (sc.shape != runningScreen.shape ||
-                    (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE && sc.fill != runningScreen.fill))) ||
-                    (gameLook != null && gameLook != runningLook) || (gameRes != null && gameRes != runningRes)
-                PicturePanel(
-                    s.info.title, pictureTab, { pictureTab = it },
-                    sc, screenGid, prefs.gcUseHack, sideColour, { ch -> screenChoice = ch; screenGid?.let { prefs.setScreenFor(it, ch) } },
-                    gameLook, { l -> gameLook = l; lookCursor = l; lookGid?.let { prefs.setLookFor(it, l) } },
-                    res = gameRes, onRes = { l -> gameRes = l; resCursor = l; gid?.let { prefs.setResolutionFor(it, l) } }, advice = resAdvice,
-                    lookCursor = lookCursor, resCursor = resCursor, pickKey = "B",
-                    onCancel = {
-                        resBefore?.let { r -> gameRes = r; gid?.let { prefs.setResolutionFor(it, r) } }
-                        pictureBefore?.let { (bs, bl) ->
-                            if (bs != null) { screenChoice = bs; screenGid?.let { prefs.setScreenFor(it, bs) } }
-                            if (bl != null) { gameLook = bl; lookGid?.let { prefs.setLookFor(it, bl) } }
-                        }
-                        showPicture = false
-                    },
-                    onDone = {
-                        showPicture = false
-                        if (needsRestart) restartAction = { applyAndRestart(s, preset, remember = false) }
-                    },
-                    doneLabel = if (needsRestart) "Restart game" else "Done",
-                    note = if (needsRestart) "Dolphin applies this when the game starts." else null,
-                    compact = true,
-                    keys = panelMode && !PadGlyphs.touch,
-                    inGame = PictureInGame( // the Thor's bottom screen too (touch: no button icons)
-                        changed = needsRestart, autosave = s.info.gameId?.let { prefs.autoSaveFor(it) } == true,
-                        onNextTime = { showPicture = false },
-                        onApply = { showPicture = false; applyAndRestart(s, preset, remember = false) },
-                    ),
-                )
-                SideEffect { pictureChanged = needsRestart }
-                pictureActions[0] = {
-                    resBefore?.let { r -> gameRes = r; gid?.let { prefs.setResolutionFor(it, r) } }
-                    pictureBefore?.let { (bs, bl) ->
-                        if (bs != null) { screenChoice = bs; screenGid?.let { prefs.setScreenFor(it, bs) } }
-                        if (bl != null) { gameLook = bl; lookGid?.let { prefs.setLookFor(it, bl) } }
-                    }
-                    showPicture = false
-                }
-                pictureActions[1] = {
-                    showPicture = false
-                    if (needsRestart) { if (panelMode) applyAndRestart(s, preset, remember = false) else restartAction = { applyAndRestart(s, preset, remember = false) } }
-                }
-            }
-
             // In-window dialogs (no separate dialog window, so Dolphin keeps gamepad focus).
             // One screen: a button for every action, so nobody has to steer the focus with a stick.
             // The map needs room: the panel widens while it shows (not with touch controls, which show a card instead).
-            if (panelMode) SideEffect { setPanelWide(mode == Mode.VIEW && !showPicture && !showAchievements && !PadGlyphs.touch) }
+            if (panelMode) SideEffect { setPanelWide(!PadGlyphs.touch) }
             if (panelMode) SideEffect {
                 val quit = { showBrightness = false; if (prefs.skipExitWarning) closingGame { backToMainMenu() } else { exitDontAsk = false; confirmExit = true } }
                 val restart = { showBrightness = false; plainRestart = true; restartAction = { applyAndRestart(s, preset, remember = false) } }
                 val pending = restartAction
                 panelKeys = when {
+                    resumeFailed != null -> mapOf(
+                        KeyEvent.KEYCODE_BUTTON_B to { loadAutosave() },
+                        KeyEvent.KEYCODE_BUTTON_A to { io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = null },
+                    )
                     confirmExit -> mapOf(
                         KeyEvent.KEYCODE_BUTTON_B to { confirmExit = false; if (exitDontAsk) prefs.skipExitWarning = true; closingGame { backToMainMenu() } },
                         KeyEvent.KEYCODE_BUTTON_A to { confirmExit = false },
@@ -1024,49 +1079,65 @@ open class NowPlayingActivity : ComponentActivity() {
                         KeyEvent.KEYCODE_BUTTON_B to { restartAction = null; pending() },
                         KeyEvent.KEYCODE_BUTTON_A to { restartAction = null },
                     )
-                    showPicture -> {
-                        // Picture panel: L1 / R1 tabs, D-pad picks, bottom button Done, right button Cancel.
-                        val tabs = pictureTabs(screenChoice != null, gameLook != null, gameRes != null)
-                        val shown = if (pictureTab in tabs) pictureTab else tabs.first()
-                        // The D-pad only moves the glow (Look / Sharpness); the Screen tab's cards change right away.
-                        fun move(d: Int, rows: Int) {
-                            when (shown) {
-                                1 -> (lookCursor ?: gameLook)?.let { l -> lookCursor = lookStep(l, d * rows) }
-                                2 -> (resCursor ?: gameRes)?.let { r -> resCursor = io.github.hiramrg.delphis.core.Resolution.step(r, d * rows) }
-                                else -> if (rows == 1) screenChoice?.let { c -> val n = screenStep(c, d); screenChoice = n; screenGid?.let { prefs.setScreenFor(it, n) } }
+                    showPicture && mode == Mode.VIEW -> {
+                        // Picture tab: L1 / R1 still switch the big tabs (handled below), L2 / R2 Screen / Look /
+                        // Sharpness, the D-pad moves the glow (two columns), bottom = pick, Menu = Apply & restart,
+                        // right = Cancel, left = Later, top = 4:3 / 16:9 on the Screen tab.
+                        fun move(d: Int) {
+                            when (picShown) {
+                                1 -> (lookCursor ?: gameLook)?.let { l -> lookCursor = lookStep(l, d) }
+                                2 -> (resCursor ?: gameRes)?.let { r -> resCursor = io.github.hiramrg.delphis.core.Resolution.step(r, d) }
+                                else -> screenChoice?.let { c -> val n = screenStep(c, d); screenChoice = n; screenGid?.let { prefs.setScreenFor(it, n) } }
                             }
                         }
                         fun pick() {
-                            when (shown) {
+                            when (picShown) {
                                 1 -> lookCursor?.let { n -> gameLook = n; lookGid?.let { prefs.setLookFor(it, n) } }
                                 2 -> resCursor?.let { n -> gameRes = n; gid?.let { prefs.setResolutionFor(it, n) } }
                             }
                         }
                         mapOf(
-                            KeyEvent.KEYCODE_BUTTON_L1 to { tabs.getOrNull(tabs.indexOf(shown) - 1)?.let { pictureTab = it } },
-                            KeyEvent.KEYCODE_BUTTON_R1 to { tabs.getOrNull(tabs.indexOf(shown) + 1)?.let { pictureTab = it } },
-                            KeyEvent.KEYCODE_DPAD_LEFT to { move(-1, 1) },
-                            KeyEvent.KEYCODE_DPAD_RIGHT to { move(1, 1) },
-                            KeyEvent.KEYCODE_DPAD_UP to { move(-1, 3) },
-                            KeyEvent.KEYCODE_DPAD_DOWN to { move(1, 3) },
-                            // Bottom = pick, Start = Apply & restart, right = Cancel / Close, left = Next time.
+                            KeyEvent.KEYCODE_BUTTON_L2 to { picTabs.getOrNull(picTabs.indexOf(picShown) - 1)?.let { pictureTab = it } },
+                            KeyEvent.KEYCODE_BUTTON_R2 to { picTabs.getOrNull(picTabs.indexOf(picShown) + 1)?.let { pictureTab = it } },
+                            KeyEvent.KEYCODE_DPAD_LEFT to { move(-1) },
+                            KeyEvent.KEYCODE_DPAD_RIGHT to { move(1) },
+                            KeyEvent.KEYCODE_DPAD_UP to { move(-2) },
+                            KeyEvent.KEYCODE_DPAD_DOWN to { move(2) },
                             KeyEvent.KEYCODE_BUTTON_B to { pick() },
-                            KeyEvent.KEYCODE_BUTTON_START to { if (pictureChanged) pictureActions[1]?.invoke() },
-                            KeyEvent.KEYCODE_BUTTON_A to { pictureActions[0]?.invoke() },
-                            KeyEvent.KEYCODE_BUTTON_Y to { if (pictureChanged) showPicture = false }, // Next time: keep the change, keep playing
-                            KeyEvent.KEYCODE_BUTTON_X to { // Screen tab: 4:3 / 16:9
-                                if (shown == 0) screenChoice?.let { c ->
+                            KeyEvent.KEYCODE_BUTTON_START to { if (pictureChanged) { applyAndRestart(s, preset, remember = false); showPicture = false } else resumeGame() },
+                            KeyEvent.KEYCODE_BUTTON_A to { cancelPicture() },
+                            KeyEvent.KEYCODE_BUTTON_Y to { if (pictureChanged) showPicture = false },
+                            KeyEvent.KEYCODE_BUTTON_X to {
+                                if (picShown == 0) screenChoice?.let { c ->
                                     val n = c.copy(shape = if (c.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD else io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE)
                                     screenChoice = n; screenGid?.let { prefs.setScreenFor(it, n) }
                                 }
                             },
                         )
                     }
+                    mode == Mode.CHANGE -> {
+                        // Change controls: the D-pad moves through the list, bottom = use it, right = back.
+                        val order = changeGroups.ordered
+                        fun step(d: Int) {
+                            if (order.isEmpty()) return
+                            val i = order.indexOfFirst { it.id == (changeCandidate ?: preset).id }
+                            changeCandidate = order[(if (i < 0) 0 else i + d).coerceIn(0, order.lastIndex)]
+                        }
+                        val cand = changeCandidate ?: preset
+                        mapOf(
+                            KeyEvent.KEYCODE_DPAD_UP to { step(-1) },
+                            KeyEvent.KEYCODE_DPAD_DOWN to { step(1) },
+                            KeyEvent.KEYCODE_BUTTON_B to { if (cand.id != preset.id || !s.applied) restartAction = { mode = Mode.VIEW; changeCandidate = null; applyAndRestart(s, cand, remember = true) } },
+                            KeyEvent.KEYCODE_BUTTON_A to { mode = Mode.VIEW; changeCandidate = null },
+                        )
+                    }
                     mode != Mode.VIEW || showBrightness -> emptyMap()
                     else -> mapOf(
                         KeyEvent.KEYCODE_BUTTON_A to { resumeGame() },
                         KeyEvent.KEYCODE_BUTTON_START to { resumeGame() },
-                        KeyEvent.KEYCODE_BUTTON_Y to { showBrightness = false; mode = Mode.CHANGE },
+                        KeyEvent.KEYCODE_BUTTON_Y to { showBrightness = false; changeCandidate = preset; mode = Mode.CHANGE },
+                        KeyEvent.KEYCODE_BUTTON_L2 to { if (!showAchievements) controlsToggle++ },
+                        KeyEvent.KEYCODE_BUTTON_R2 to { if (!showAchievements) controlsToggle++ },
                         KeyEvent.KEYCODE_BUTTON_X to quit,
                         KeyEvent.KEYCODE_BUTTON_SELECT to restart,
                     )
@@ -1086,6 +1157,15 @@ open class NowPlayingActivity : ComponentActivity() {
                     confirm = if (plainRestart) "Restart" else "Save & restart", dismiss = "Cancel",
                     onDismiss = { restartAction = null; plainRestart = false },
                     onConfirm = { restartAction = null; plainRestart = false; closingGame(action) },
+                )
+            }
+            resumeFailed?.let { f ->
+                OverlayDialog(
+                    title = "Your autosave wasn't loaded",
+                    body = "The game started from its own save instead. Your autosave from ${io.github.hiramrg.delphis.platform.ResumeNotice.whenText(this@NowPlayingActivity, f.savedAt)} is still here: load it to continue where you left off.",
+                    confirm = "Load it", dismiss = "Not now",
+                    onDismiss = { io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = null },
+                    onConfirm = { loadAutosave() },
                 )
             }
             // One screen: a controller connected mid-game. Dolphin only picks controllers up when a game starts.
@@ -1246,34 +1326,38 @@ open class NowPlayingActivity : ComponentActivity() {
 
     /** Pick another preset (built-in or your edited one), preview it, then apply with a restart. */
     @Composable
-    private fun ColumnScope.LayoutSwitcher(s: GameSession, current: Preset, onCancel: () -> Unit, onApply: (Preset) -> Unit) {
-        val suggestion = remember(s.key) { GameDatabase.suggest(s.info) }
-        val groups = remember(s.key) {
-            io.github.hiramrg.delphis.ui.PresetGroups(store.withEdits(s.key, suggestion.choices), store.withEdits(s.key, suggestion.alternatives), store.mine(s.key))
-        }
-        var candidate by remember { mutableStateOf(current) }
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val wide = maxWidth > maxHeight * 1.05f
-            val list: @Composable (Modifier) -> Unit = { m ->
-                PresetChooser(groups, selected = current, focused = candidate, gameTitle = s.info.title, isEdited = { store.isEdited(it.id) }, modifier = m) { candidate = it }
-            }
-            val preview: @Composable (Modifier) -> Unit = { m ->
-                Column(m) {
-                    ControlsOverview(candidate, Modifier.weight(1f).fillMaxWidth())
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Spacer(Modifier.weight(1f))
-                        OutlinedButton(onClick = onCancel) { Text("Cancel") }
-                        PrimaryGlowButton("Use this preset", Icons.Filled.Check, onClick = { onApply(candidate) }, enabled = candidate.id != current.id || !s.applied, fontSize = 14.sp)
+    /**
+     * Change controls, in the same box as the menu: the game's layouts on the left (the D-pad moves the ring),
+     * the highlighted one drawn on the right. The buttons under it are the menu's own (Use this layout / Cancel).
+     */
+    @Composable
+    private fun ColumnScope.LayoutSwitcher(s: GameSession, groups: PresetGroups, candidate: Preset, current: Preset, multiplayer: Boolean, onCandidate: (Preset) -> Unit) {
+        val c = LocalWii.current
+        WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 10.dp) {
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Change controls", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.text, modifier = Modifier.weight(1f), maxLines = 1)
+                    if (multiplayer) Text("Gyro and trackpad layouts are hidden with 2+ players", fontSize = 10.5.sp, color = c.textDim, maxLines = 2, textAlign = TextAlign.End, modifier = Modifier.weight(1.4f))
+                }
+                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                    val wide = maxWidth > maxHeight * 1.05f
+                    val list: @Composable (Modifier) -> Unit = { m ->
+                        PresetChooser(groups, selected = current, focused = candidate, gameTitle = s.info.title, isEdited = { store.isEdited(it.id) }, modifier = m) { onCandidate(it) }
+                    }
+                    val preview: @Composable (Modifier) -> Unit = { m ->
+                        Column(m.clip(RoundedCornerShape(12.dp)).background(if (c.dark) Color(0xFF1F2329) else c.bar).padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            CapsLabel("Preview · " + candidate.name)
+                            ControlsMap(candidate, Modifier.weight(1f).fillMaxWidth())
+                        }
+                    }
+                    if (wide) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        list(Modifier.weight(0.44f).fillMaxHeight())
+                        preview(Modifier.weight(0.56f).fillMaxHeight())
+                    } else Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        preview(Modifier.weight(0.55f).fillMaxWidth())
+                        list(Modifier.weight(0.45f).fillMaxWidth())
                     }
                 }
-            }
-            if (wide) Row(Modifier.fillMaxSize()) {
-                list(Modifier.weight(0.42f).fillMaxHeight())
-                Spacer(Modifier.width(8.dp))
-                preview(Modifier.weight(0.58f).fillMaxHeight())
-            } else Column(Modifier.fillMaxSize()) {
-                preview(Modifier.weight(0.55f).fillMaxWidth())
-                list(Modifier.weight(0.45f).fillMaxWidth())
             }
         }
     }

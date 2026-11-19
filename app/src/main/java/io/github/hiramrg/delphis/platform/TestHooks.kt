@@ -13,6 +13,9 @@ object TestHooks {
     /** The layout check opens the game page's Picture panel on this tab (2 = Resolution); null = closed. */
     @Volatile @JvmField var pictureTab: Int? = null
 
+    /** The layout check opens the in-game menu on Change controls. */
+    @Volatile @JvmField var inGameChange = false
+
     /** The layout check pretends this controller is connected (one screen): vendor id, e.g. 0x045e = Xbox. */
     @Volatile @JvmField var padVendor: Int? = null
 

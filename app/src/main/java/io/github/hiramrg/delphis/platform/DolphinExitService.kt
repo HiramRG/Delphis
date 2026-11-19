@@ -26,6 +26,8 @@ class DolphinExitService : AccessibilityService() {
 
     companion object {
         @Volatile private var instance: DolphinExitService? = null
+        /** Whether the helper is running right now (Android restarts it after an update). */
+        val running: Boolean get() = instance != null
 
         /** True while Android has the service running (the user turned it on). */
         val isRunning: Boolean get() = instance != null
@@ -69,7 +71,7 @@ class DolphinExitService : AccessibilityService() {
         suspend fun quickSave(pkg: String): StateResult? = instance?.pressQuickSave(pkg)
 
         /** See [pressQuickLoad]. Null when the service isn't running. */
-        suspend fun quickLoad(pkg: String): StateResult? = instance?.pressQuickLoad(pkg)
+        suspend fun quickLoad(pkg: String, bootMs: Long = 6000): StateResult? = instance?.pressQuickLoad(pkg, bootMs)
         suspend fun syncTouchButtons(pkg: String, show: Boolean): String = instance?.syncTouchButtonsImpl(pkg, show) ?: "helper off"
 
         /** Covers the top screen with the loading screen (no-op without the service). Returns whether it's showing. */
@@ -156,6 +158,8 @@ class DolphinExitService : AccessibilityService() {
             }
             return true
         }
+        /** Set while "Exit Delphis" runs, so its own task removal doesn't start a second Recent-apps pass. */
+        @Volatile var exitRunning = false
         fun hideExit(delayMs: Long = 0) { instance?.let { s -> s.handler.post { s.loading.hide(delayMs); s.exitBottom.hide(delayMs) } } }
 
         // ---- bottom-screen trackpad: served to Dolphin as a DSU pad (see DsuServer); kept here for the callers
@@ -519,12 +523,32 @@ class DolphinExitService : AccessibilityService() {
         if (!click(button)) { performGlobalAction(GLOBAL_ACTION_BACK); return "Overlay controls didn't open" }
         // The pop-up's rows: a title, and a check box for the items that can be ticked.
         data class Row(val title: String, val checked: Boolean?, val node: AccessibilityNodeInfo)
-        fun rows(): List<Row> = dolphinRoots(pkg).flatMap { root ->
-            runCatching { root.findAccessibilityNodeInfosByViewId("android:id/title") }.getOrDefault(emptyList())
-        }.mapNotNull { t ->
-            val row = t.parent ?: return@mapNotNull null
-            val box = (0 until row.childCount).mapNotNull { row.getChild(it) }.firstOrNull { it.isCheckable }
-            Row(t.text?.toString().orEmpty(), box?.isChecked ?: row.isChecked.takeIf { row.isCheckable }, row)
+        // Dolphin's pop-up is an AppCompat menu, so its rows' title id is Dolphin's own ("<pkg>:id/title"), not
+        // Android's; and some versions use other layouts. So: both ids, then any row with a check box and a text.
+        fun rows(): List<Row> {
+            val roots = dolphinRoots(pkg)
+            val byId = roots.flatMap { root ->
+                listOf("android:id/title", "$pkg:id/title").flatMap { id -> runCatching { root.findAccessibilityNodeInfosByViewId(id) }.getOrDefault(emptyList()) }
+            }.mapNotNull { t ->
+                val row = t.parent ?: return@mapNotNull null
+                val box = (0 until row.childCount).mapNotNull { row.getChild(it) }.firstOrNull { it.isCheckable }
+                Row(t.text?.toString().orEmpty(), box?.isChecked ?: row.isChecked.takeIf { row.isCheckable }, row)
+            }
+            if (byId.isNotEmpty()) return byId
+            val found = mutableListOf<Row>()
+            fun textIn(n: AccessibilityNodeInfo, depth: Int = 0): String? =
+                n.text?.toString()?.takeIf { it.isNotBlank() } ?: if (depth > 3) null
+                else (0 until n.childCount).firstNotNullOfOrNull { i -> n.getChild(i)?.let { textIn(it, depth + 1) } }
+            fun walk(n: AccessibilityNodeInfo, depth: Int) {
+                if (depth > 12) return
+                val kids = (0 until n.childCount).mapNotNull { n.getChild(it) }
+                val box = kids.firstOrNull { it.isCheckable } ?: n.takeIf { it.isCheckable }
+                val title = if (box != null) textIn(n) else null
+                if (box != null && title != null) { found += Row(title, box.isChecked, n); return }
+                kids.forEach { walk(it, depth + 1) }
+            }
+            roots.forEach { walk(it, 0) }
+            return found
         }
         waitFor(1500) { rows().isNotEmpty() }
         val items = rows()
@@ -581,10 +605,41 @@ class DolphinExitService : AccessibilityService() {
                 n = n.parent
             }
             if (pressed && gone()) { gone = true; break }
-            // Swipe the card up, from its picture (below the name) and then from the name itself.
-            val r = android.graphics.Rect(); label.getBoundsInScreen(r)
-            for (dy in listOf(r.height() * 4 + 200, r.height() / 2)) {
-                if (swipeUp(label, dy)) tried += "swipe +$dy"
+            // Swipe the card up. The swipe has to start on the card's picture: find the card around the name, bring
+            // it to the middle if it's at the side (Samsung's Recent apps shows it cut off at the edge), then swipe
+            // from the card's middle and from points a third and half a screen below the name.
+            var lab = label
+            val screen = android.graphics.Rect().also { r -> runCatching { lab.window?.getBoundsInScreen(r) } }
+            if (screen.isEmpty) screen.set(0, 0, resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
+            fun cardOf(l: AccessibilityNodeInfo): android.graphics.Rect? {
+                val lr = android.graphics.Rect(); l.getBoundsInScreen(lr)
+                var n: AccessibilityNodeInfo? = l.parent
+                repeat(5) {
+                    val node = n ?: return null
+                    val r = android.graphics.Rect(); node.getBoundsInScreen(r)
+                    if (r.height() >= lr.height() * 3 && r.width() >= lr.width() && r.width() < screen.width() * 0.95f) return r
+                    n = node.parent
+                }
+                return null
+            }
+            var card = cardOf(lab)
+            val off = (card?.centerX() ?: android.graphics.Rect().also { lab.getBoundsInScreen(it) }.centerX()) - screen.centerX()
+            if (kotlin.math.abs(off) > screen.width() * 0.15f) {
+                val y = (card?.centerY() ?: screen.centerY()).toFloat()
+                if (swipe(screen.centerX().toFloat(), y, (screen.centerX() - off).toFloat().coerceIn(10f, screen.right - 10f), y, lab, 300)) tried += "centred card (moved ${-off})"
+                delay(700)
+                lab = findLabel() ?: run { if (gone()) { gone = true }; null } ?: break
+                card = cardOf(lab)
+            }
+            val lr = android.graphics.Rect(); lab.getBoundsInScreen(lr)
+            val starts = listOfNotNull(
+                card?.let { it.centerY() + it.height() / 8 },
+                lr.centerY() + (screen.height() * 0.33f).toInt(),
+                lr.centerY() + (screen.height() * 0.5f).toInt(),
+            ).map { it.coerceAtMost(screen.bottom - 40) }.distinct()
+            for (y0 in starts) {
+                val x = (card?.centerX() ?: lr.centerX()).toFloat()
+                if (swipe(x, y0.toFloat(), x, (screen.top + 10).toFloat(), lab, 320)) tried += "swipe from y $y0 of ${screen.height()}"
                 if (gone()) { gone = true; break }
             }
             if (gone) break
@@ -599,13 +654,12 @@ class DolphinExitService : AccessibilityService() {
         return gone
     }
 
-    /** Swipes a Recents card up (from just below its label, where the card's picture is). */
-    private suspend fun swipeUp(label: AccessibilityNodeInfo, below: Int = 260): Boolean {
-        val r = android.graphics.Rect(); label.getBoundsInScreen(r)
-        val path = android.graphics.Path().apply { moveTo(r.centerX().toFloat(), (r.centerY() + below).toFloat()); lineTo(r.centerX().toFloat(), 20f) }
+    /** A straight swipe from (x0, y0) to (x1, y1) on the display [on] is shown on. */
+    private suspend fun swipe(x0: Float, y0: Float, x1: Float, y1: Float, on: AccessibilityNodeInfo, ms: Long): Boolean {
+        val path = android.graphics.Path().apply { moveTo(x0, y0); lineTo(x1, y1) }
         val builder = android.accessibilityservice.GestureDescription.Builder()
-            .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 250))
-        if (android.os.Build.VERSION.SDK_INT >= 30) runCatching { label.window?.displayId?.let { builder.setDisplayId(it) } }
+            .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, ms))
+        if (android.os.Build.VERSION.SDK_INT >= 30) runCatching { on.window?.displayId?.let { builder.setDisplayId(it) } }
         val result = kotlinx.coroutines.CompletableDeferred<Boolean>()
         val sent = dispatchGesture(builder.build(), object : GestureResultCallback() {
             override fun onCompleted(g: android.accessibilityservice.GestureDescription?) { result.complete(true) }

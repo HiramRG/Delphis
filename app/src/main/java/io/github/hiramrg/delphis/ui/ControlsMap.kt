@@ -394,7 +394,7 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
  * opens on the list when the diagram's text would get too small to read. The switch is remembered per game.
  */
 @Composable
-fun ControlsSwitchable(preset: Preset, prefs: io.github.hiramrg.delphis.platform.Prefs, gameKey: String?, modifier: Modifier = Modifier, toggle: Int = 0, toggleKey: String? = null) {
+fun ControlsSwitchable(preset: Preset, prefs: io.github.hiramrg.delphis.platform.Prefs, gameKey: String?, modifier: Modifier = Modifier, toggle: Int = 0, toggleKey: String? = null, keysAround: Boolean = false) {
     val saved = androidx.compose.runtime.remember(gameKey) { androidx.compose.runtime.mutableStateOf(gameKey?.let { prefs.controlsView(it) }) }
     var tooSmall by androidx.compose.runtime.remember(preset.id) { androidx.compose.runtime.mutableStateOf(false) }
     // Too small to read (a short phone panel): the list, whatever was picked before.
@@ -407,9 +407,12 @@ fun ControlsSwitchable(preset: Preset, prefs: io.github.hiramrg.delphis.platform
     androidx.compose.runtime.LaunchedEffect(toggle) { if (toggle != lastToggle) { lastToggle = toggle; set(!list) } }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // One-screen menu: L2 / R2 around the toggle, like Look / Sharpness in the Picture tab.
+            if (keysAround) KeyIcon("L2")
             // "Thor" only on the Thor; elsewhere the drawing is a plain controller.
             Segmented(listOf(false to (if (PadGlyphs.thorBody) "Thor" else "Map"), true to "List"), list, { v -> set(v) }, height = 28.dp)
             if (toggleKey != null) KeyIcon(toggleKey)
+            if (keysAround) KeyIcon("R2")
         }
         if (list) ControlsList(preset, Modifier.weight(1f).fillMaxWidth())
         else ControlsMap(preset, Modifier.weight(1f).fillMaxWidth(), onFit = { fs -> if (fs * scale < MIN_MAP_FONT && !tooSmall) tooSmall = true })

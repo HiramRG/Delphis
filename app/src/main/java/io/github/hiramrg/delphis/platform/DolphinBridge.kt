@@ -564,10 +564,32 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
     /** After launching: loads the game's Quick Save state once it has booted. */
     private suspend fun autoResume(gameId: String) {
         val pkg = installedPackage() ?: return
+        ResumeNotice.failed.value = null
+        // Right after Delphis is updated Android restarts its helper, and without it Quick Load can't be pressed:
+        // wait for it (up to 15 s) instead of giving up.
+        val helperAtStart = DolphinExitService.running
+        if (!helperAtStart) kotlinx.coroutines.withTimeoutOrNull(15_000) { while (!DolphinExitService.running) kotlinx.coroutines.delay(300) }
+        val savedAt = stateTime(gameId)
         val result = DolphinExitService.quickLoad(pkg)
         if (result == DolphinExitService.StateResult.SAVE_STATES_OFF) prefs.saveStatesOff = true
         if (result == DolphinExitService.StateResult.DONE) prefs.saveStatesOff = false
-        CrashLog.event("resume $gameId: $result")
+        CrashLog.event(
+            "resume $gameId: ${result ?: "helper not running"} (autosave from " +
+                (savedAt?.let { java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date(it)) } ?: "none") +
+                (if (helperAtStart) "" else if (DolphinExitService.running) ", waited for the helper" else ", helper never came back") + ")",
+        )
+        // Not loaded (and not because save states are off): the in-game menu offers to load it.
+        if (savedAt != null && result != DolphinExitService.StateResult.DONE && result != DolphinExitService.StateResult.SAVE_STATES_OFF) {
+            ResumeNotice.failed.value = ResumeNotice.Failed(gameId, savedAt)
+        }
+    }
+
+    /** "Load it" after a failed resume: presses Dolphin's Quick Load now (the game must be in front). */
+    suspend fun loadAutosaveNow(gameId: String): Boolean {
+        val pkg = installedPackage() ?: return false
+        val result = DolphinExitService.quickLoad(pkg, bootMs = 0)
+        CrashLog.event("load autosave of $gameId by hand: ${result ?: "helper not running"}")
+        return result == DolphinExitService.StateResult.DONE
     }
 
     // ------------------------------------------------------------------ earlier autosaves

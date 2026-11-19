@@ -85,6 +85,8 @@ fun PlayersRow(players: List<Pad>, onChange: (() -> Unit)?, modifier: Modifier =
 fun PlayersDialog(
     title: String, pads: List<Pad>, setup: PlayerSetup, onChange: (PlayerSetup) -> Unit, onDismiss: () -> Unit,
     onChecked: (Pad, Boolean) -> Unit = { _, _ -> },
+    /** One screen: the activity's key translation (a dialog's keys skip the activity), so buttons mean the same here. */
+    translate: (android.view.KeyEvent) -> android.view.KeyEvent = { it },
 ) {
     val c = LocalWii.current
     val focus = remember { FocusRequester() }
@@ -129,24 +131,24 @@ fun PlayersDialog(
                         if (code == AndroidKey.KEYCODE_BUTTON_B || code == AndroidKey.KEYCODE_BACK) { record(pending, false); return@onPreviewKeyEvent true }
                     }
                     val pad = padAt(index)
-                    when (e.key.nativeKeyCode) {
-                        AndroidKey.KEYCODE_DPAD_DOWN -> { if (holding && pad != null) moveBy(pad, 1) else index = (index + 1).coerceAtMost(rows - 1); true }
+                    val onDone = index == rows // the Done button, under the last row
+                    when (translate(e.nativeKeyEvent).keyCode) {
+                        AndroidKey.KEYCODE_DPAD_DOWN -> { if (holding && pad != null) moveBy(pad, 1) else index = (index + 1).coerceAtMost(rows); true }
                         AndroidKey.KEYCODE_DPAD_UP -> { if (holding && pad != null) moveBy(pad, -1) else index = (index - 1).coerceAtLeast(0); true }
                         AndroidKey.KEYCODE_BUTTON_A, AndroidKey.KEYCODE_DPAD_CENTER, AndroidKey.KEYCODE_ENTER -> {
-                            if (pad == null) thor?.let { toggle(it) } else holding = !holding; true
+                            when { onDone -> onDismiss(); pad == null -> thor?.let { toggle(it) }; else -> holding = !holding }; true
                         }
                         AndroidKey.KEYCODE_BUTTON_X -> { (pad ?: thor)?.let { toggle(it) }; true }
-                        AndroidKey.KEYCODE_BUTTON_B, AndroidKey.KEYCODE_BACK -> { if (holding) holding = false else onDismiss(); true }
+                        // Back drops a player that's picked up; otherwise it closes, from anywhere. Start is Done too.
+                        AndroidKey.KEYCODE_BUTTON_B, AndroidKey.KEYCODE_BACK, AndroidKey.KEYCODE_ESCAPE -> { if (holding) holding = false else onDismiss(); true }
+                        AndroidKey.KEYCODE_BUTTON_START -> { holding = false; onDismiss(); true }
                         else -> true
                     }
                 }
                 .padding(horizontal = 18.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Players · $title", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                WiiButton("Ⓑ Done", onDismiss, fontSize = 13.sp)
-            }
+            Text("Players · $title", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val rowShape = RoundedCornerShape(14.dp)
             pending?.let { p ->
                 Row(
@@ -206,7 +208,16 @@ fun PlayersDialog(
                     Text("▼", fontSize = 15.sp, color = c.textDim, modifier = Modifier.clip(CircleShape).clickable { index = row; moveBy(p, 1) }.padding(6.dp))
                 }
             }
-            HintLine("✚ choose · Ⓐ pick up / drop to reorder · Ⓧ play / sit out · up to 4 players")
+            // Done: a normal button the D-pad reaches (it's the row under the last player).
+            val doneShape = RoundedCornerShape(50)
+            Box(
+                Modifier.fillMaxWidth().padding(top = 2.dp)
+                    .then(if (index == rows && !holding) Modifier.border(3.dp, c.accent, doneShape).padding(3.dp) else Modifier.padding(3.dp)),
+            ) { PanelBtn("Done", "⊕", true, Modifier.fillMaxWidth().alpha(if (holding) 0.45f else 1f)) { onDismiss() } }
+            HintLine(
+                if (holding) "✚ Move it up / down · Ⓐ Drop it here"
+                else "✚ Choose · Ⓐ Pick up to reorder · Ⓧ Play / sit out · Ⓑ or ⊕ Done",
+            )
         }
     }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
