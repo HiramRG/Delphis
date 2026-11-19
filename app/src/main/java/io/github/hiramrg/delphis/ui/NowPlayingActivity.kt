@@ -574,7 +574,7 @@ open class NowPlayingActivity : ComponentActivity() {
         val screenGid = gid?.takeIf { s.info.platform == io.github.hiramrg.delphis.core.Platform.GAMECUBE }
         var screenChoice by remember { mutableStateOf(screenGid?.let { prefs.screenFor(it) }) }
         val runningScreen = remember(startedAt) { screenGid?.let { prefs.screenFor(it) } }
-        var showPicture by remember { mutableStateOf(panelMode && io.github.hiramrg.delphis.platform.TestHooks.pictureTab != null) }
+        var showPicture by remember { mutableStateOf(io.github.hiramrg.delphis.platform.TestHooks.pictureTab != null) }
         // Looks: the game's post-processing shader; a change applies when the game starts again.
         val lookGid = gid?.takeIf { prefs.looksEnabled }
         var gameLook by remember { mutableStateOf(lookGid?.let { prefs.lookFor(it) }) }
@@ -975,7 +975,7 @@ open class NowPlayingActivity : ComponentActivity() {
                     note = if (needsRestart) "Dolphin applies this when the game starts." else null,
                     compact = true,
                     keys = panelMode && !PadGlyphs.touch,
-                    inGame = if (!panelMode) null else PictureInGame(
+                    inGame = PictureInGame( // the Thor's bottom screen too (touch: no button icons)
                         changed = needsRestart, autosave = s.info.gameId?.let { prefs.autoSaveFor(it) } == true,
                         onNextTime = { showPicture = false },
                         onApply = { showPicture = false; applyAndRestart(s, preset, remember = false) },

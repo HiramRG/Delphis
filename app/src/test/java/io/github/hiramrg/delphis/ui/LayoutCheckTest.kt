@@ -220,6 +220,13 @@ class LayoutCheckTest {
             inGameMenu(phone, InGameMenuActivity::class.java, session(g, preset), "In-game Picture · ${if (tab == 1) "Look" else "Sharpness"} · Xbox")
             inGameMenu(tablet, InGameMenuActivity::class.java, session(g, preset), "In-game Picture · ${if (tab == 1) "Look" else "Sharpness"} · Xbox")
         }
+        // The Thor: the same Picture panel on its bottom screen (touch).
+        TestHooks.padVendor = null
+        for (tab in listOf(1, 2)) {
+            TestHooks.pictureTab = tab
+            val (g, preset, _) = inGame.first()
+            inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Picture · ${if (tab == 1) "Look" else "Sharpness"} (Thor)")
+        }
         TestHooks.pictureTab = null
         TestHooks.padVendor = null
 
