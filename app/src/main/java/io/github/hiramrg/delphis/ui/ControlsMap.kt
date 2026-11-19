@@ -262,6 +262,7 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     var fs = if (wide) 12.5f else 11f
     lateinit var leftL: List<TextLayoutResult>; lateinit var rightL: List<TextLayoutResult>
     var bs = 0f; var badgeH = 0f
+    var fits = true
     fun badgeW(k: ThorControl) = if (isChip(k)) chipW(k, bs) else badgeH
     while (true) {
         // Badges and gaps shrink with the text, so a short card still fits every row.
@@ -274,7 +275,8 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
         rightL = right.map { fitted(mapLabel(actions[it]!!), fs, colW - rRail - 6f, TextAlign.Start, lines) }
         fun colH(ls: List<TextLayoutResult>) = ls.sumOf { maxOf(h(it), badgeH).toDouble() }.toFloat() + rowGap * (ls.size - 1).coerceAtLeast(0)
         val twoLines = (leftL + rightL).all { it.lineCount <= 2 }
-        if ((twoLines && maxOf(colH(leftL), colH(rightL)) <= H - 6f) || fs <= 6f) break
+        if (twoLines && maxOf(colH(leftL), colH(rightL)) <= H - 6f) break
+        if (fs <= 6f) { fits = false; break }
         fs -= 0.5f
     }
     fun colH(ls: List<TextLayoutResult>) = ls.sumOf { maxOf(h(it), badgeH).toDouble() }.toFloat() + rowGap * (ls.size - 1).coerceAtLeast(0)
@@ -385,7 +387,8 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
 
     column(left, leftL, onLeft = true)
     column(right, rightL, onLeft = false)
-    return fs
+    // Labels that still don't fit at the smallest size: report 0 so the card shows the list instead.
+    return if (fits) fs else 0f
 }
 
 
