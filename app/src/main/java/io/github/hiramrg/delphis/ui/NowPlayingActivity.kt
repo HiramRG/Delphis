@@ -251,6 +251,8 @@ open class NowPlayingActivity : ComponentActivity() {
      * B = bottom, A = right, Y = left, X = top), kept up to date by the composition.
      */
     private var panelKeys: Map<Int, () -> Unit> = emptyMap()
+    /** Shortcuts pressed but not yet let go (they run on release). */
+    private val heldShortcuts = HashMap<Int, () -> Unit>()
 
     /** One screen: the panel's width. [wide] (the controls map showing) = 60% of the screen, so the drawing can be big. */
     private fun panelWidth(wide: Boolean): Int {
@@ -269,11 +271,15 @@ open class NowPlayingActivity : ComponentActivity() {
         if (!panelMode) return super.dispatchKeyEvent(raw)
         // One screen: controllers that don't report standard keys (e.g. a Switch Pro Controller) are translated.
         val event = io.github.hiramrg.delphis.platform.PadKeys.translate(raw, prefs, true)
+        // The action runs when the button is let go, so the whole press stays here: acting on the press
+        // sent its release (and sometimes the press) to the game once the menu closed.
+        if (event.action == KeyEvent.ACTION_UP) heldShortcuts.remove(event.keyCode)?.let { action ->
+            CrashLog.event("menu shortcut ${KeyEvent.keyCodeToString(event.keyCode)}")
+            action()
+            return true
+        }
         panelKeys[event.keyCode]?.let { action ->
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                CrashLog.event("menu shortcut ${KeyEvent.keyCodeToString(event.keyCode)}")
-                action()
-            }
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) heldShortcuts[event.keyCode] = action
             return true
         }
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 &&
