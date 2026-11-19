@@ -970,12 +970,11 @@ open class NowPlayingActivity : ComponentActivity() {
                     // Picture: always the same buttons in the same places, dimmed until something changed.
                     val apply = { applyAndRestart(s, preset, remember = false); showPicture = false }
                     if (panelMode && !PadGlyphs.touch) {
-                        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PanelBtn("Apply & restart", "⊕", true, Modifier.weight(1.25f), enabled = pictureChanged) { apply() }
-                            PanelBtn("Later", "Y", false, Modifier.weight(1f), enabled = pictureChanged) { showPicture = false }
-                        }
+                        // One row, so the list gets the room (on a phone the panel is short).
                         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PanelBtn("Cancel", "A", false, Modifier.weight(1f)) { cancelPicture() }
+                            PanelBtn("Later", "Y", false, Modifier.weight(1f), enabled = pictureChanged) { showPicture = false }
+                            PanelBtn("Apply & restart", "⊕", true, Modifier.weight(1.6f), enabled = pictureChanged) { apply() }
                         }
                         Box(Modifier.fillMaxWidth().padding(top = 5.dp), contentAlignment = Alignment.Center) {
                             HintText(pictureHint(picTabs, picShown, "B"), fontSize = 11.sp, color = LocalWii.current.textDim, lineHeight = 16.sp)

@@ -243,7 +243,9 @@ private fun resTag(l: io.github.hiramrg.delphis.core.Resolution.Level, recommend
 }
 
 /** The shortest an option row may be (name and its few words, one line each). */
-private val MIN_ROW = 38.dp
+private val MIN_ROW = 32.dp
+/** The shortest a row may be with just the name. */
+private val MIN_ROW_BRIEF = 22.dp
 
 /**
  * The Picture choices as a plain list (no pictures), the same on the game page, the one-screen menu and the
@@ -291,8 +293,10 @@ fun PictureChoices(
             }
         }
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-        // Three rows of two when there's room for rows tall enough to read; on a short panel (a phone) two rows of three.
-        val cols = if (maxHeight >= MIN_ROW * 3 + 12.dp) 2 else 3
+        // Three rows of two. A short panel (a phone) drops the few words under each name; only when even
+        // that doesn't fit, two rows of three.
+        val brief = maxHeight < MIN_ROW * 3 + 12.dp
+        val cols = if (maxHeight >= MIN_ROW_BRIEF * 3 + 12.dp) 2 else 3
         androidx.compose.runtime.SideEffect { onColumns(cols) }
         val rows = (6 + cols - 1) / cols
         // The Screen tab: the shape switch on the first row, its options after it.
@@ -308,7 +312,7 @@ fun PictureChoices(
                 } else for (col in 0 until cols) {
                     val cell = laid.getOrNull(r * cols + col)
                     if (cell == null) Spacer(Modifier.weight(1f))
-                    else OptionCell(cell.name, cell.sub, cell.tag, cell.on, cell.cursor, Modifier.weight(1f).fillMaxHeight(), cell.onClick)
+                    else OptionCell(cell.name, if (brief) null else cell.sub, cell.tag, cell.on, cell.cursor, Modifier.weight(1f).fillMaxHeight(), cell.onClick)
                 }
             }
         }
@@ -321,7 +325,7 @@ fun PictureChoices(
 }
 
 @Composable
-private fun OptionCell(name: String, sub: String, tag: OptTag?, on: Boolean, cursor: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun OptionCell(name: String, sub: String?, tag: OptTag?, on: Boolean, cursor: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(12.dp)
     val green = Color(0xFF6BCB77)
@@ -345,7 +349,7 @@ private fun OptionCell(name: String, sub: String, tag: OptTag?, on: Boolean, cur
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             Text(name, fontSize = 12.5.sp, lineHeight = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 1, onTextLayout = { TextFit.check(name, it) })
-            Text(sub, fontSize = 10.sp, lineHeight = 12.sp, color = c.textDim, maxLines = 1, onTextLayout = { TextFit.check(sub, it) })
+            if (sub != null) Text(sub, fontSize = 10.sp, lineHeight = 12.sp, color = c.textDim, maxLines = 1, onTextLayout = { TextFit.check(sub, it) })
         }
         if (tag != null) Row(
             Modifier.clip(RoundedCornerShape(7.dp)).background(tag.bg).padding(horizontal = 5.dp, vertical = 1.dp),
