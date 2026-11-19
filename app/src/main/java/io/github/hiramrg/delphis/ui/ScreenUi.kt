@@ -242,8 +242,8 @@ private fun resTag(l: io.github.hiramrg.delphis.core.Resolution.Level, recommend
     null -> null
 }
 
-/** The choices on one screen and the Thor alike: one row per option, two columns, three rows. */
-const val PICTURE_ROWS = 3
+/** The shortest an option row may be (name and its few words, one line each). */
+private val MIN_ROW = 38.dp
 
 /**
  * The Picture choices as a plain list (no pictures), the same on the game page, the one-screen menu and the
@@ -261,6 +261,8 @@ fun PictureChoices(
     keys: Boolean, status: String, statusWarn: Boolean = false, modifier: Modifier = Modifier,
     /** The key that switches 4:3 / 16:9 on the Screen tab (null = none shown). */
     shapeKey: String? = null,
+    /** How many columns the list uses (2, or 3 when it's too short for three rows): the D-pad's up / down step. */
+    onColumns: (Int) -> Unit = {},
 ) {
     val c = LocalWii.current
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -285,24 +287,31 @@ fun PictureChoices(
                     Cell(Sides.PATTERN.label, "A calm pattern", null, ch.sides == Sides.PATTERN, false, { onPick(ch.copy(sides = Sides.PATTERN)) }),
                     Cell(Sides.COLOUR.label, "From the cover", null, ch.sides == Sides.COLOUR, false, { onPick(ch.copy(sides = Sides.COLOUR)) }),
                 )
-                // The first row holds the shape switch (it spans both columns).
-                listOf<Cell?>(null, null) + opts
+                opts
             }
         }
-        Column(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (r in 0 until PICTURE_ROWS) Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+        // Three rows of two when there's room for rows tall enough to read; on a short panel (a phone) two rows of three.
+        val cols = if (maxHeight >= MIN_ROW * 3 + 12.dp) 2 else 3
+        androidx.compose.runtime.SideEffect { onColumns(cols) }
+        val rows = (6 + cols - 1) / cols
+        // The Screen tab: the shape switch on the first row, its options after it.
+        val laid: List<Cell?> = if (shown == 0) List(cols) { null } + cells else cells
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (r in 0 until rows) Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (shown == 0 && r == 0) {
                     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Shape", fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
                         ShapeSwitch(choice!!.shape, { onPick(choice.copy(shape = it)) })
                         if (shapeKey != null) KeyIcon(shapeKey)
                     }
-                } else for (col in 0..1) {
-                    val cell = cells.getOrNull(r * 2 + col)
+                } else for (col in 0 until cols) {
+                    val cell = laid.getOrNull(r * cols + col)
                     if (cell == null) Spacer(Modifier.weight(1f))
                     else OptionCell(cell.name, cell.sub, cell.tag, cell.on, cell.cursor, Modifier.weight(1f).fillMaxHeight(), cell.onClick)
                 }
             }
+        }
         }
         Text(
             status, fontSize = 11.sp, lineHeight = 13.sp, maxLines = 2, color = if (statusWarn) Color(0xFFF5C26B) else c.textDim,

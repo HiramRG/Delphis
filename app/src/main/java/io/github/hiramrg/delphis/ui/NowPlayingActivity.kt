@@ -648,6 +648,8 @@ open class NowPlayingActivity : ComponentActivity() {
             gid?.let { id -> this@NowPlayingActivity.lifecycleScope.launch { delay(700); bridge.loadAutosaveNow(id) } }
             Unit
         }
+        // The Picture list's columns (2, or 3 on a short panel): the D-pad's up / down step.
+        var pictureCols by remember { mutableIntStateOf(2) }
         // The Map / List toggle: L2 / R2 on one screen bump this.
         var controlsToggle by remember { mutableIntStateOf(0) }
         val sideColour by produceState(android.graphics.Color.rgb(75, 58, 143), screenGid) {
@@ -862,7 +864,7 @@ open class NowPlayingActivity : ComponentActivity() {
                                 else -> "Changed. Apply & restart (from the last save), or Later for next time."
                             },
                             statusWarn = pictureChanged, shapeKey = if (keys) "X" else null,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize(), onColumns = { pictureCols = it },
                         )
                     } else if (showAchievements && achievements != null) {
                         val shape = RoundedCornerShape(16.dp)
@@ -1101,8 +1103,8 @@ open class NowPlayingActivity : ComponentActivity() {
                             KeyEvent.KEYCODE_BUTTON_R2 to { picTabs.getOrNull(picTabs.indexOf(picShown) + 1)?.let { pictureTab = it } },
                             KeyEvent.KEYCODE_DPAD_LEFT to { move(-1) },
                             KeyEvent.KEYCODE_DPAD_RIGHT to { move(1) },
-                            KeyEvent.KEYCODE_DPAD_UP to { move(-2) },
-                            KeyEvent.KEYCODE_DPAD_DOWN to { move(2) },
+                            KeyEvent.KEYCODE_DPAD_UP to { move(-pictureCols) },
+                            KeyEvent.KEYCODE_DPAD_DOWN to { move(pictureCols) },
                             KeyEvent.KEYCODE_BUTTON_B to { pick() },
                             KeyEvent.KEYCODE_BUTTON_START to { if (pictureChanged) { applyAndRestart(s, preset, remember = false); showPicture = false } else resumeGame() },
                             KeyEvent.KEYCODE_BUTTON_A to { cancelPicture() },
@@ -1339,21 +1341,59 @@ open class NowPlayingActivity : ComponentActivity() {
                 }
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                     val wide = maxWidth > maxHeight * 1.05f
-                    val list: @Composable (Modifier) -> Unit = { m ->
-                        PresetChooser(groups, selected = current, focused = candidate, gameTitle = s.info.title, isEdited = { store.isEdited(it.id) }, modifier = m) { onCandidate(it) }
-                    }
+                    val list: @Composable (Modifier) -> Unit = { m -> LayoutList(groups, candidate, current, s.info.title, m, onCandidate) }
                     val preview: @Composable (Modifier) -> Unit = { m ->
                         Column(m.clip(RoundedCornerShape(12.dp)).background(if (c.dark) Color(0xFF1F2329) else c.bar).padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             CapsLabel("Preview · " + candidate.name)
-                            ControlsMap(candidate, Modifier.weight(1f).fillMaxWidth())
+                            // The drawing when its labels are big enough to read, otherwise the list of controls.
+                            var tooSmall by remember(candidate.id) { mutableStateOf(false) }
+                            val scale = androidx.compose.ui.platform.LocalDensity.current.density / resources.displayMetrics.density
+                            if (tooSmall) ControlsList(candidate, Modifier.weight(1f).fillMaxWidth())
+                            else ControlsMap(candidate, Modifier.weight(1f).fillMaxWidth(), onFit = { fs -> if (fs * scale < MIN_MAP_FONT && !tooSmall) tooSmall = true })
                         }
                     }
                     if (wide) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        list(Modifier.weight(0.44f).fillMaxHeight())
-                        preview(Modifier.weight(0.56f).fillMaxHeight())
+                        list(Modifier.weight(0.4f).fillMaxHeight())
+                        preview(Modifier.weight(0.6f).fillMaxHeight())
                     } else Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         preview(Modifier.weight(0.55f).fillMaxWidth())
                         list(Modifier.weight(0.45f).fillMaxWidth())
+                    }
+                }
+            }
+        }
+    }
+
+    /** The game's layouts as short rows: section names, the layout's name (two lines at most), "In use" on the current one. */
+    @Composable
+    private fun LayoutList(groups: PresetGroups, candidate: Preset, current: Preset, title: String, modifier: Modifier, onPick: (Preset) -> Unit) {
+        val c = LocalWii.current
+        val state = androidx.compose.foundation.lazy.rememberLazyListState()
+        val rows = remember(groups) {
+            groups.sections.flatMap { (key, t, list) -> listOf<Any>(when (key) { "suggested" -> "Suggested"; else -> t ?: "Suggested" }) + list }
+        }
+        LaunchedEffect(candidate.id) {
+            val i = rows.indexOfFirst { it is Preset && it.id == candidate.id }
+            if (i >= 0) runCatching { state.animateScrollToItem((i - 1).coerceAtLeast(0)) }
+        }
+        androidx.compose.foundation.lazy.LazyColumn(modifier, state = state, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            items(rows.size) { i ->
+                when (val it = rows[i]) {
+                    is String -> CapsLabel(it, Modifier.padding(top = if (i == 0) 0.dp else 4.dp))
+                    is Preset -> {
+                        val shape = RoundedCornerShape(10.dp)
+                        val ring = it.id == candidate.id
+                        Row(
+                            Modifier.fillMaxWidth().heightIn(min = 38.dp).clip(shape).background(if (c.dark) Color(0xFF2E343C) else c.card)
+                                .border(2.dp, if (ring) c.accent else c.cardBorder, shape).clickable { onPick(it) }.padding(horizontal = 9.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(it.name, fontSize = 12.sp, lineHeight = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 2, modifier = Modifier.weight(1f), onTextLayout = { r -> TextFit.check(it.name, r) })
+                            if (it.id == current.id) Text(
+                                "In use", fontSize = 9.5.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF7FE0A0), maxLines = 1, softWrap = false,
+                                modifier = Modifier.clip(RoundedCornerShape(7.dp)).background(Color(0xFF1F3B2A)).padding(horizontal = 5.dp, vertical = 1.dp),
+                            )
+                        }
                     }
                 }
             }
