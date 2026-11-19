@@ -351,7 +351,7 @@ private fun LookCard(l: io.github.hiramrg.delphis.core.Looks.Look, on: Boolean, 
     val c = LocalWii.current
     val shape = RoundedCornerShape(12.dp)
     // The scene fills the card; the name sits on a dark strip at the bottom. The chosen look glows blue.
-    Box(
+    BoxWithConstraints(
         modifier
             .then(if (on) Modifier.shadow(10.dp, shape, ambientColor = Sel, spotColor = Sel) else Modifier)
             .focusRing(shape).clip(shape).background(Color(0xFF20252B))
@@ -359,7 +359,8 @@ private fun LookCard(l: io.github.hiramrg.delphis.core.Looks.Look, on: Boolean, 
     ) {
         LookPreview(l)
         Row(
-            Modifier.align(Alignment.BottomStart).fillMaxWidth().fillMaxHeight(0.36f)
+            // At least tall enough for the name and tag, even on a phone's small cards.
+            Modifier.align(Alignment.BottomStart).fillMaxWidth().height(maxOf(24.dp, maxHeight * 0.36f))
                 .background(Brush.horizontalGradient(0f to (if (on) Color(0xEB103042) else Color(0xB80A0C0F)), 0.6f to (if (on) Color(0xEB103042) else Color(0xB80A0C0F)), 1f to Color(0x260A0C0F)))
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
