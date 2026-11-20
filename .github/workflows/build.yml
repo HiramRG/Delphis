@@ -84,8 +84,10 @@ jobs:
               --rotation-min-sdk-version 28 --out "$2" "$1"
           }
           sign app/build/outputs/apk/release/app-release-unsigned.apk dist/Delphis.apk
-          sign app/build/outputs/apk/debug/app-debug.apk dist/Delphis-debug.apk
-          rm -f dist/*.idsig
+          # The debug build is for testing only: kept in the CI download, never published in a release.
+          mkdir -p ci-only
+          sign app/build/outputs/apk/debug/app-debug.apk ci-only/Delphis-debug.apk
+          rm -f dist/*.idsig ci-only/*.idsig
           {
             echo "build-tools: $(basename "$BT")"
             "$BT/apksigner" verify -v --print-certs dist/Delphis.apk
@@ -118,7 +120,9 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: delphis-apk
-          path: dist/Delphis*
+          path: |
+            dist/Delphis*
+            ci-only/Delphis-debug.apk
       # Publish the newest build as a GitHub Release so the APK can be downloaded from any
       # browser or the GitHub app (Releases section on the repo's main page).
       - name: Publish "latest" release
@@ -152,7 +156,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           for asset in $(gh release view latest --json assets -q '.assets[].name'); do
-            case "$asset" in Delphis*) ;; *) gh release delete-asset latest "$asset" -y ;; esac
+            case "$asset" in Delphis.apk|Delphis-SHA256SUMS.txt) ;; *) gh release delete-asset latest "$asset" -y ;; esac
           done
       # Beta channel: builds pushed to the beta branch go to the "beta" pre-release, which Delphis
       # installs when Settings → Updates → Update channel is Beta. Stable ("latest") only changes from main.
@@ -188,7 +192,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           for asset in $(gh release view beta --json assets -q '.assets[].name'); do
-            case "$asset" in Delphis*) ;; *) gh release delete-asset beta "$asset" -y ;; esac
+            case "$asset" in Delphis.apk|Delphis-SHA256SUMS.txt) ;; *) gh release delete-asset beta "$asset" -y ;; esac
           done
       # Save the result and any errors to a hidden ref (refs/ci/<branch>; not shown on the site) so
       # they can be read with plain git: git fetch origin refs/ci/<branch>.

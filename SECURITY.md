@@ -37,6 +37,27 @@ trackpad movement to Dolphin. It can't be reached from the network.
 * Your RetroAchievements web API key is stored encrypted with a key that never leaves your device. Delphis never
   stores your RetroAchievements password: it's only used once to sign Dolphin in.
 
+## Known limitations
+
+Things worth knowing before you install, stated plainly:
+
+* **The accessibility helper is powerful.** Android lets any accessibility service read and act on every app.
+  Delphis limits itself in its own code (see the table above), but Android can't enforce that: you're trusting
+  the code, which is public here. You can turn the helper off in Android's Accessibility settings at any time;
+  Delphis still launches games, but can't autosave, close games cleanly or open its menu on phones and tablets.
+* **Dolphin keeps its RetroAchievements sign-in unencrypted.** When you sign Dolphin in from Delphis, the token
+  is saved where Dolphin itself saves it, in plain text in Dolphin's `Config/RetroAchievements.ini`. That's
+  Dolphin's design, the same as signing in from Dolphin. Signing out (in Delphis or Dolphin) removes it.
+* **Some services learn which games you have.** Cover art is downloaded from GameTDB by game ID, and
+  RetroAchievements sees the games you play while signed in, as it does for any emulator.
+* **No store review.** Delphis isn't on Google Play, so no store checks each release. What you can check instead
+  is under "Checking a download" below.
+* **The signing key is being replaced.** An older, password-protected copy of Delphis' signing key is in this
+  repository's history. A new key that only exists in GitHub's secrets is coming; once you have a build signed
+  with it, Android refuses updates signed with the older keys.
+* **Older releases included a debug build** (`Delphis-debug.apk`), meant for testing only. Releases from
+  November 2026 on publish only `Delphis.apk`; don't install the debug build.
+
 ## Checking a download
 
 Every APK is built from this repository by GitHub Actions, not on anyone's computer, and signed with Delphis' key.
