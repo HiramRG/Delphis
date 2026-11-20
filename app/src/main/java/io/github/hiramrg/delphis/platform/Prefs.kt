@@ -269,9 +269,15 @@ class Prefs(context: Context) {
     var raUser: String?
         get() = sp.getString("ra_user", null)
         set(v) = sp.edit().putString("ra_user", v).apply()
+    /** The RetroAchievements web API key, kept encrypted (see [SecretBox]); an older plain copy is encrypted on first read. */
     var raKey: String?
-        get() = sp.getString("ra_key", null)
-        set(v) = sp.edit().putString("ra_key", v).apply()
+        get() {
+            val stored = sp.getString("ra_key", null) ?: return null
+            if (SecretBox.isSealed(stored)) return SecretBox.open(stored)
+            SecretBox.seal(stored)?.let { sp.edit().putString("ra_key", it).apply() }
+            return stored
+        }
+        set(v) = sp.edit().putString("ra_key", v?.let { SecretBox.seal(it) ?: it }).apply()
     var raPopups: Boolean
         get() = sp.getBoolean("ra_popups", true)
         set(v) = sp.edit().putBoolean("ra_popups", v).apply()

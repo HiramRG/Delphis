@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -131,6 +132,11 @@ class Updater(private val context: Context) {
         var hops = 0
         while (true) {
             TestHooks.net()
+            // Only GitHub over https, for the first address and every redirect.
+            if (!io.github.hiramrg.delphis.core.UpdateSource.allowed(url)) {
+                CrashLog.event("update refused: download moved to ${url.host}")
+                error("The download didn't come from GitHub, so it wasn't used. Nothing was installed.")
+            }
             conn = (url.openConnection() as HttpURLConnection).apply {
                 instanceFollowRedirects = false
                 connectTimeout = 10000; readTimeout = 20000
@@ -155,7 +161,37 @@ class Updater(private val context: Context) {
                 }
             }
         }
+        verify(file)?.let { why ->
+            file.delete()
+            CrashLog.event("update refused: $why")
+            error("The download didn't pass Delphis' check ($why). Nothing was installed.")
+        }
         file
+    }
+
+    /**
+     * Checks a downloaded APK before it goes to Android: it must be Delphis, signed with Delphis' own key, and not
+     * older than this build. Returns why it failed, or null when it's fine. (Android refuses a different key anyway;
+     * this stops a bad file early, with a clear message, on every install path.)
+     */
+    @Suppress("DEPRECATION")
+    fun verify(apk: File): String? {
+        val pm = context.packageManager
+        val flags = PackageManager.GET_SIGNING_CERTIFICATES
+        val archive = pm.getPackageArchiveInfo(apk.path, flags) ?: return "not an Android app"
+        if (archive.packageName != context.packageName) return "it's a different app"
+        val mine = runCatching { pm.getPackageInfo(context.packageName, flags) }.getOrNull() ?: return null
+        if (archive.longVersionCode < mine.longVersionCode) return "it's an older build"
+        fun certs(info: android.content.pm.PackageInfo): Set<String> {
+            val si = info.signingInfo ?: return emptySet()
+            val all = (si.apkContentsSigners.orEmpty() + if (si.hasMultipleSigners()) emptyArray() else si.signingCertificateHistory.orEmpty())
+            return all.map { it.toCharsString() }.toSet()
+        }
+        val theirs = certs(archive)
+        // Some older Androids can't read an unopened APK's signer: leave that check to Android's installer.
+        if (theirs.isEmpty()) { CrashLog.event("update check: couldn't read the download's signature; Android will check it"); return null }
+        if (theirs.intersect(certs(mine)).isEmpty()) return "it isn't signed with Delphis' key"
+        return null
     }
 
     /** Android requires the user to allow "Install unknown apps" for Delphis once. */

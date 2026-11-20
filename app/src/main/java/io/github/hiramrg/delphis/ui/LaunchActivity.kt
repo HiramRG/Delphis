@@ -39,6 +39,12 @@ class LaunchActivity : Activity() {
             finish(); return
         }
         val uri = if (raw.startsWith("/")) Uri.fromFile(File(raw)) else Uri.parse(raw)
+        // Only game files, and never a link to Delphis' own files (see LaunchRequest).
+        if (!io.github.hiramrg.delphis.core.LaunchRequest.accept(uri.scheme, uri.authority, displayName(uri), packageName)) {
+            io.github.hiramrg.delphis.platform.CrashLog.event("start request refused: not a game file (${uri.scheme ?: "path"})")
+            Toast.makeText(this, "Delphis only starts Wii and GameCube game files.", Toast.LENGTH_LONG).show()
+            finish(); return
+        }
         val frontend = referrer?.takeIf { it.scheme == "android-app" }?.host
             ?.takeIf { it != packageName && !it.startsWith("org.dolphinemu") }
         val app = applicationContext

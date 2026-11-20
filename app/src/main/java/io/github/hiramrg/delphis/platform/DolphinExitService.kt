@@ -262,7 +262,8 @@ class DolphinExitService : AccessibilityService() {
         val top = topScreenApp()
         if (top != null && top in DolphinBridge.KNOWN_PACKAGES) return "in front"
         if (top == packageName) return "Delphis on screen"
-        if (top != null) return "another app on screen ($top)"
+        // Other apps aren't named in reports (only the home screen / System UI, which help with problems).
+        if (top != null) return if (top == "com.android.systemui" || looksLikeRecents(top)) "another app on screen ($top)" else "another app on screen"
         if (GameWatch.suspended.value) return "game in the background"
         return "in front"
     }
@@ -427,6 +428,15 @@ class DolphinExitService : AccessibilityService() {
     }
     override fun onInterrupt() = Unit
 
+    /** The apps that show Recent apps: the home app (Launcher3, Samsung's One UI Home…) and System UI. */
+    private fun recentsPackages(): Set<String> {
+        val home = runCatching {
+            packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0)?.activityInfo?.packageName
+        }.getOrNull()
+        return setOfNotNull(home, "com.android.systemui")
+    }
+    private fun looksLikeRecents(pkg: String) = Regex("launcher|quickstep|recents", RegexOption.IGNORE_CASE).containsMatchIn(pkg)
+
     private fun dolphinRoots(pkg: String): List<AccessibilityNodeInfo> {
         val roots = runCatching { windows.mapNotNull { it.root } }.getOrDefault(emptyList()) +
             listOfNotNull(runCatching { rootInActiveWindow }.getOrNull())
@@ -587,10 +597,12 @@ class DolphinExitService : AccessibilityService() {
             if (!performGlobalAction(GLOBAL_ACTION_RECENTS)) { CrashLog.event("dismiss $appLabel: Recent apps didn't open"); return false }
             delay(900)
         }
+        // Only the Recent apps screen is searched (the home app or System UI), never another app's window.
+        val recentsApps = recentsPackages()
         fun findLabel(): AccessibilityNodeInfo? {
             val roots = runCatching { windows.mapNotNull { it.root } }.getOrDefault(emptyList()) +
                 listOfNotNull(runCatching { rootInActiveWindow }.getOrNull())
-            return roots.filter { it.packageName?.toString() != packageName }
+            return roots.filter { it.packageName?.toString()?.let { p -> p in recentsApps || looksLikeRecents(p) } == true }
                 .firstNotNullOfOrNull { r -> runCatching { r.findAccessibilityNodeInfosByText(appLabel).firstOrNull() }.getOrNull() }
         }
         // Each try is checked: the card must really be gone from Recent apps (pressing "Close" isn't proof).

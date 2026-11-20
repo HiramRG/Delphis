@@ -48,13 +48,7 @@ object ProblemReport {
     }
 
     /** The Diagnostics report without usernames, keys, folder and file paths. */
-    fun sanitized(act: MainActivity): String = buildReport(act)
-        .replace(Regex("""content://\S+"""), "(folder)")
-        .replace(Regex("""/storage/\S+"""), "(path)")
-        .replace(Regex("""/sdcard/\S+"""), "(path)")
-        .replace(Regex("""Username=[^,\s]*"""), "Username=(hidden)")
-        .replace(Regex("""account=(?!\(not signed in\))[^,\n]+"""), "account=(hidden)")
-        .replace(Regex("""(?i)(api ?key|token)\s*[=:]\s*\S+"""), "$1=(hidden)")
+    fun sanitized(act: MainActivity): String = shareableReport(act, buildReport(act))
 
     fun send(act: MainActivity, area: Int, text: String) {
         val what = text.trim().ifEmpty { "(no description)" }

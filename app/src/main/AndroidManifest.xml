@@ -18,6 +18,11 @@
         <package android:name="org.dolphinemu.dolphinemu" />
         <package android:name="org.dolphinemu.dolphinemu.debug" />
         <package android:name="org.dolphinemu.dolphinemu.benchmark" />
+        <!-- The home app, which shows Recent apps: the helper only looks there to close Dolphin's card. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
     </queries>
 
     <application

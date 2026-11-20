@@ -32,14 +32,16 @@ fun DiagnosticsScreen(act: MainActivity) {
     val live = remember { mutableStateListOf<String>() }
     val capture = remember { InputCapture() }
     var report by remember { mutableStateOf("Collecting…") }
+    // What Copy / Share send: the same report with account names, keys and folder links hidden.
+    var shareText by remember { mutableStateOf("Collecting…") }
 
     val copyReport = {
-        act.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Delphis report", report))
-        Notices.done(act, "Report copied")
+        act.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Delphis report", shareText))
+        Notices.done(act, "Report copied", "Account names, keys and folder links are hidden.")
     }
     val shareReport = {
         act.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"; putExtra(Intent.EXTRA_TEXT, report)
+            type = "text/plain"; putExtra(Intent.EXTRA_TEXT, shareText)
         }, "Share report"))
     }
     DisposableEffect(Unit) {
@@ -64,6 +66,7 @@ fun DiagnosticsScreen(act: MainActivity) {
 
     LaunchedEffect(Unit) {
         report = withContext(Dispatchers.IO) { buildReport(act) }
+        shareText = withContext(Dispatchers.IO) { shareableReport(act, report) }
     }
 
     val c = LocalWii.current
@@ -119,6 +122,12 @@ private fun StatusRow(title: String, sub: String, ok: Boolean?) {
         if (ok == true) Text("✓", fontSize = 15.sp, fontWeight = FontWeight.Black, color = c.green)
         if (ok == false) Text("!", fontSize = 15.sp, fontWeight = FontWeight.Black, color = c.orange)
     }
+}
+
+/** The report as it leaves the device: account names, keys, folder links and paths hidden (see [ReportPrivacy]). */
+internal fun shareableReport(act: MainActivity, report: String): String {
+    val dolphinUser = runCatching { act.bridge.raStatus()?.user }.getOrNull()
+    return io.github.hiramrg.delphis.core.ReportPrivacy.sanitize(report, listOf(act.prefs.raUser, dolphinUser))
 }
 
 internal fun buildReport(act: MainActivity): String = buildString {
