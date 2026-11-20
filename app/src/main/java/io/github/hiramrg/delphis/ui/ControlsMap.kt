@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
+import io.github.hiramrg.delphis.ui.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -240,12 +240,12 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     fun w(l: TextLayoutResult) = l.size.width / s
     fun h(l: TextLayoutResult) = l.size.height / s
     fun measure(t: String, size: Float, color: Color, weight: FontWeight = FontWeight.ExtraBold) =
-        tm.measure(t, TextStyle(fontSize = (size * s).toSp(), fontWeight = weight, color = color))
+        tm.measure(plainText(t), TextStyle(fontSize = (size * s).toSp(), fontWeight = weight, color = color))
     fun fitted(t: String, size: Float, maxW: Float, a: TextAlign, maxLines: Int): TextLayoutResult {
         val cons = Constraints(maxWidth = (maxW * s).toInt().coerceAtLeast(1))
         val style = TextStyle(fontSize = (size * s).toSp(), fontWeight = FontWeight.Bold, color = c.text, lineHeight = (size * 1.18f * s).toSp(), textAlign = a)
-        val l = tm.measure(t, style, overflow = TextOverflow.Clip, maxLines = maxLines, constraints = cons)
-        return if (!l.hasVisualOverflow) l else tm.measure(t, style, overflow = TextOverflow.Visible, maxLines = maxLines + 3, constraints = cons)
+        val l = tm.measure(plainText(t), style, overflow = TextOverflow.Clip, maxLines = maxLines, constraints = cons)
+        return if (!l.hasVisualOverflow) l else tm.measure(plainText(t), style, overflow = TextOverflow.Visible, maxLines = maxLines + 3, constraints = cons)
     }
 
     // ---- rows (used controls only); gyro / tilt go under the shorter column

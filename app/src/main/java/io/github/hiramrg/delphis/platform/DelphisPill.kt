@@ -100,7 +100,7 @@ class DelphisPill(private val service: AccessibilityService, private val onTap: 
         }
         fun glass(stroke: Int) = GradientDrawable().apply { cornerRadius = dp(19f).toFloat(); setColor(0xC014171B.toInt()); setStroke(dp(1.5f), stroke) }
         fun text(t: String, size: Float, bold: Boolean, alpha: Float = 1f) = TextView(ctx).apply {
-            text = t; textSize = size; setTextColor(Color.WHITE); this.alpha = alpha; maxLines = 1
+            text = io.github.hiramrg.delphis.ui.plainText(t); textSize = size; setTextColor(Color.WHITE); this.alpha = alpha; maxLines = 1
             if (bold) typeface = Typeface.DEFAULT_BOLD
         }
 

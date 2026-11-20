@@ -78,7 +78,7 @@ class AchievementToast(private val service: android.accessibilityservice.Accessi
         }
         card.addView(img, LinearLayout.LayoutParams(dp(46f), dp(46f)).apply { marginEnd = dp(10f) })
         val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-        col.addView(TextView(ctx).apply { text = "🏆 ACHIEVEMENT UNLOCKED"; setTextColor(gold); textSize = 9.5f; typeface = Typeface.DEFAULT_BOLD; letterSpacing = 0.08f })
+        col.addView(TextView(ctx).apply { text = "ACHIEVEMENT UNLOCKED"; setTextColor(gold); textSize = 9.5f; typeface = Typeface.DEFAULT_BOLD; letterSpacing = 0.08f })
         col.addView(TextView(ctx).apply { text = u.title; setTextColor(Color.WHITE); textSize = 14f; typeface = Typeface.DEFAULT_BOLD; maxLines = 1 })
         col.addView(TextView(ctx).apply { text = u.description; setTextColor(0xFFA3ADB8.toInt()); textSize = 11f; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
         card.addView(col, LinearLayout.LayoutParams(0, -2, 1f))

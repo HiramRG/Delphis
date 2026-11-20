@@ -200,7 +200,7 @@ private fun DrawScope.drawDevice(g: ThorGeometry, preset: Preset, m: TextMeasure
     if (MOTION in used) {
         val motion = preset.mappings.first { it.control == MOTION }
         val y = g.body.bottom + g.u * 0.13f
-        drawCenteredText(m, "⟲  Tilt the Thor: ${motion.action}  ⟳", Offset(g.canvas.width / 2, y), (g.u * 0.065f).toSp(), Accent, bold = true)
+        drawCenteredText(m, "Tilt the Thor: ${motion.action}", Offset(g.canvas.width / 2, y), (g.u * 0.065f).toSp(), Accent, bold = true)
     }
 }
 
@@ -257,6 +257,6 @@ private fun DrawScope.drawCallouts(g: ThorGeometry, preset: Preset, m: TextMeasu
 }
 
 private fun DrawScope.drawCenteredText(m: TextMeasurer, text: String, center: Offset, size: TextUnit, color: Color, bold: Boolean = false) {
-    val layout = m.measure(text, TextStyle(fontSize = size, color = color, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal))
+    val layout = m.measure(plainText(text), TextStyle(fontSize = size, color = color, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal))
     drawText(layout, topLeft = center - Offset(layout.size.width / 2f, layout.size.height / 2f))
 }

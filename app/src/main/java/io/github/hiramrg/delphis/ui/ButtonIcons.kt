@@ -5,7 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
-import androidx.compose.material3.Text
+import io.github.hiramrg.delphis.ui.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -284,7 +284,10 @@ fun HintText(
     val inline = mutableMapOf<String, InlineTextContent>()
     val annotated: AnnotatedString = buildAnnotatedString {
         parts.forEachIndexed { n, (isKey, s) ->
-            if (!isKey) append(s)
+            // Plain words: emoji and symbols in them are drawn as icons too.
+            if (!isKey) symbolRuns(s).forEachIndexed { m, (isSymbol, run) ->
+                if (!isSymbol) append(run) else { val id = "s${n}_$m"; appendInlineContent(id, run); inline[id] = symbolInline(run, fontSize, color) }
+            }
             else {
                 val id = "k$n"
                 appendInlineContent(id, s)

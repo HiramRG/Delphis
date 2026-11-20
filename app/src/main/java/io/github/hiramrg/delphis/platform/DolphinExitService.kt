@@ -119,7 +119,7 @@ class DolphinExitService : AccessibilityService() {
             val first = prefs.firstPillFor(gameKey)
             val showFull = when (prefs.pillFull) { 0 -> true; 1 -> first; else -> false }
             val pads = DeviceInfo.gamepads()
-            val controller = pads.firstOrNull()?.let { "🎮 " + it.name } ?: "👆 Touch controls"
+            val controller = pads.firstOrNull()?.name ?: "Touch controls"
             s.handler.post {
                 s.lastPillState = null; s.keyLogs = 0
                 s.menuShortcut(true)

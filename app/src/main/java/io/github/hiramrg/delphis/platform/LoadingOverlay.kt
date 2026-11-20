@@ -67,9 +67,9 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
         handler.removeCallbacks(hideLater)
         if (root == null) runCatching { attach(displayId) }.onFailure { CrashLog.event("loading screen failed: ${it.message}"); return }
         phaseView?.text = phase.label
-        titleView?.text = title.orEmpty()
+        titleView?.text = io.github.hiramrg.delphis.ui.plainText(title.orEmpty())
         titleView?.visibility = if (title.isNullOrBlank()) View.GONE else View.VISIBLE
-        lineView?.text = line
+        lineView?.text = io.github.hiramrg.delphis.ui.plainText(line)
         dots.forEachIndexed { i, d -> (d.background as GradientDrawable).setColor(if (i == phase.step) pal.accent else pal.border) }
         setCover(coverName ?: title, gameId)
         // Never leave the screen covered if something goes wrong.

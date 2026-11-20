@@ -543,7 +543,7 @@ class MainActivity : ComponentActivity() {
                                 PanelBtn("Open settings", "A", true, onClick = open)
                             },
                         ) {
-                            androidx.compose.material3.Text(
+                            Text(
                                 "On the Thor, Android won't let Delphis force-close Dolphin, so a game that's still running in Dolphin " +
                                     "stops the next one from starting. Turn on \"Delphis – close games\" in Accessibility and Delphis " +
                                     "will press Dolphin's own \"Exit Emulation\" for you. It doesn't touch your controller input.",
