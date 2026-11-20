@@ -368,9 +368,12 @@ fun HomeScreen(act: MainActivity) {
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
         UpdateBanner(act)
-        HelperBanner(act)
         Row(Modifier.weight(1f).fillMaxWidth()) {
             HomeRail(act, favorites, rowsMode, hero != null)
+            // "Helper has stopped" sits above the games, beside the rail (the rail keeps its full height).
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+            HelperBanner(act)
+            Row(Modifier.weight(1f).fillMaxWidth()) {
             if (rowsMode) HomeRows(act, hero, recent, favorites, lastPlayed, playTime, { showFavPicker = true })
             else LazyVerticalGrid(
                 columns = GridCells.Adaptive(96.dp), state = grid,
@@ -428,7 +431,9 @@ fun HomeScreen(act: MainActivity) {
                     items(shown, key = { it.uri.toString() }) { g -> GameCard(act, g, g.key in favorites, playTime[g.key] ?: 0L) }
                 }
             }
-        }
+                    }
+            }
+}
         HomeBar(act, rowsMode, sortPopup)
     }
     val row = act.homeRow
