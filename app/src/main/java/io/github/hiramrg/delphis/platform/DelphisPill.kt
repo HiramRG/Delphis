@@ -17,13 +17,14 @@ import io.github.hiramrg.delphis.R
 
 /**
  * One screen (phones, tablets): the Delphis pill at the top centre of the game, the one spot Dolphin's
- * touch buttons never use. The full pill (icon · "Delphis menu" · ⊖ + Start · controller) shows for
- * [FULL_MS], then it shrinks to a small icon at the chosen opacity. A tap opens Delphis' in-game menu.
+ * touch buttons never use. The full pill ("Open Delphis' menu" over "Press the Home button, or − and + at the same
+ * time", with a countdown line) shows for [FULL_MS], then it shrinks to a small icon at the chosen opacity. A tap opens
+ * Delphis' in-game menu.
  * Achievement badges replace it while they show (see [hold]).
  */
 class DelphisPill(private val service: AccessibilityService, private val onTap: () -> Unit) {
     companion object {
-        const val FULL_MS = 3_000L
+        const val FULL_MS = 5_000L
         private const val ACCENT = 0xFF34BEED.toInt()
         private const val ACCENT_DARK = 0xFF0A2533.toInt()
     }
@@ -31,6 +32,7 @@ class DelphisPill(private val service: AccessibilityService, private val onTap: 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var root: FrameLayout? = null
     private var full: View? = null
+    private var countdown: View? = null
     private var small: View? = null
     private var wm: WindowManager? = null
     private var opacity = 0.6f
@@ -74,7 +76,12 @@ class DelphisPill(private val service: AccessibilityService, private val onTap: 
     private fun apply() {
         val on = visible && !held
         root?.visibility = if (on) View.VISIBLE else View.GONE
-        if (on && pendingFull) { pendingFull = false; handler.postDelayed({ shrink() }, FULL_MS) }
+        if (on && pendingFull) {
+            pendingFull = false
+            handler.postDelayed({ shrink() }, FULL_MS)
+            // The line under the text runs down while the full pill shows.
+            countdown?.let { v -> v.pivotX = 0f; v.scaleX = 1f; v.animate().scaleX(0f).setDuration(FULL_MS).setInterpolator(android.view.animation.LinearInterpolator()).start() }
+        }
     }
 
     fun stop() {
@@ -82,7 +89,8 @@ class DelphisPill(private val service: AccessibilityService, private val onTap: 
         handler.removeCallbacksAndMessages(null)
         held = false
         root?.let { v -> runCatching { wm?.removeView(v) } }
-        root = null; full = null; small = null
+        countdown?.animate()?.cancel()
+        root = null; full = null; small = null; countdown = null
     }
 
     private fun attach(controller: String, shortcut: String) {
@@ -104,15 +112,29 @@ class DelphisPill(private val service: AccessibilityService, private val onTap: 
             if (bold) typeface = Typeface.DEFAULT_BOLD
         }
 
+        // Two lines: "Open Delphis' menu" over the buttons to press, and a countdown line underneath.
+        val bar = View(ctx).apply { background = GradientDrawable().apply { cornerRadius = dp(1.5f).toFloat(); setColor(ACCENT) } }
         val fullPill = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.VERTICAL
             background = glass(ACCENT)
-            setPadding(dp(5f), dp(5f), dp(14f), dp(5f))
-            addView(icon(28f, ACCENT_DARK, ACCENT))
-            addView(text("Delphis menu", 12.5f, true).apply { setPadding(dp(9f), 0, 0, 0) })
-            addView(text(shortcut, 11.5f, true, 0.85f).apply { setPadding(dp(9f), 0, 0, 0) })
-            addView(View(ctx).apply { setBackgroundColor(0x40FFFFFF) }, LinearLayout.LayoutParams(dp(1f), dp(18f)).apply { marginStart = dp(9f); marginEnd = dp(9f) })
-            addView(text(controller, 11.5f, false, 0.85f))
+            setPadding(dp(6f), dp(6f), dp(16f), dp(5f))
+            val top = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                addView(icon(34f, ACCENT_DARK, ACCENT))
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(10f), 0, 0, 0)
+                    addView(text("Open Delphis' menu", 13.5f, true))
+                    addView(text(shortcut, 12f, true, 0.85f))
+                })
+            }
+            addView(top)
+            // The line spans the text (it starts under it, past the icon).
+            val track = FrameLayout(ctx).apply {
+                background = GradientDrawable().apply { cornerRadius = dp(1.5f).toFloat(); setColor(0x2EFFFFFF) }
+                addView(bar, FrameLayout.LayoutParams(-1, -1))
+            }
+            addView(track, LinearLayout.LayoutParams(-1, dp(3f)).apply { topMargin = dp(5f); marginStart = dp(44f) })
         }
         val smallPill = LinearLayout(ctx).apply {
             gravity = Gravity.CENTER
@@ -134,6 +156,6 @@ class DelphisPill(private val service: AccessibilityService, private val onTap: 
             PixelFormat.TRANSLUCENT,
         ).apply { gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL; y = dp(4f) }
         manager.addView(frame, params)
-        wm = manager; root = frame; full = fullPill; small = smallPill
+        wm = manager; root = frame; full = fullPill; small = smallPill; countdown = bar
     }
 }

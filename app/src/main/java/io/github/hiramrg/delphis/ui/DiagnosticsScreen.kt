@@ -144,7 +144,7 @@ internal fun buildReport(act: MainActivity): String = buildString {
     appendLine(bridge.baseConfigStatus())
     val roles = DeviceInfo.screenRoles(act, prefs.swapScreens)
     appendLine("screens: top=${roles.topDisplayId} bottom=${roles.bottomDisplayId} · mode=${listOf("automatic", "one", "two")[prefs.screenMode]} · second screen=${DeviceInfo.hasSecondScreen(act)}")
-    if (roles.bottomDisplayId == null) appendLine("  one screen: pill=${prefs.pillShown} (${prefs.pillOpacity}%, full=${listOf("every start", "new games", "never")[prefs.pillFull]}), touch when no controller=${prefs.touchWhenNoController}, warn=${prefs.warnNoController}, controllers=${DeviceInfo.gamepads().map { it.name }}")
+    if (roles.bottomDisplayId == null) appendLine("  one screen: pill=${prefs.pillShown} (${prefs.pillOpacity}%, full=${listOf("every start", "once per game", "never")[prefs.pillFull]}), touch when no controller=${prefs.touchWhenNoController}, warn=${prefs.warnNoController}, controllers=${DeviceInfo.gamepads().map { it.name }}")
     // RetroAchievements: Dolphin earns them (its own settings), Delphis only reads the account.
     appendLine("retroachievements (Dolphin): ")
     appendLine(bridge.achievementSettings())

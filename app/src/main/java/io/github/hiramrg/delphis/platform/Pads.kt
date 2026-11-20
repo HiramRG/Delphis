@@ -105,11 +105,12 @@ fun rememberPads(prefs: Prefs): List<Pad> {
 data class ShortcutNames(val home: String, val combo: String) {
     companion object {
         fun forVendor(vendorId: Int?): ShortcutNames = when (vendorId) {
-            null -> ShortcutNames("Home button", "Select + Start")
-            0x045e -> ShortcutNames("Xbox button", "View + Menu")
-            0x054c -> ShortcutNames("PS button", "Create + Options")
-            0x057e -> ShortcutNames("Home button", "− + +")
-            else -> ShortcutNames("Home button", "Select + Start")
+            // The combo reads as words ("− and +"), never "− + +".
+            null -> ShortcutNames("Home button", "Select and Start")
+            0x045e -> ShortcutNames("Xbox button", "View and Menu")
+            0x054c -> ShortcutNames("PS button", "Create and Options")
+            0x057e -> ShortcutNames("Home button", "− and +")
+            else -> ShortcutNames("Home button", "Select and Start")
         }
         /** For the first external controller connected now (the Thor's own names otherwise). */
         fun forConnected(): ShortcutNames = forVendor(DeviceInfo.gamepads().firstOrNull { it.isExternal }?.vendorId)

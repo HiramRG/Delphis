@@ -1434,8 +1434,8 @@ open class NowPlayingActivity : ComponentActivity() {
     private fun ExitDialog(dontAsk: Boolean, onDontAsk: (Boolean) -> Unit, onDismiss: () -> Unit, onConfirm: (Boolean) -> Unit) {
         OverlayDialog(
             title = "Back to main menu?",
-            body = "This will close the game and Dolphin. " +
-                if (autosaveOn()) "Your progress is autosaved, and the game continues from there next time you start it from Delphis." else "Any unsaved progress will be lost.",
+            body = "Closes the game. " +
+                if (autosaveOn()) "Your progress is autosaved and continues from there next time you start it from Delphis." else "Any unsaved progress will be lost.",
             confirm = "Close game", dismiss = "Keep playing",
             onDismiss = onDismiss, onConfirm = { onConfirm(dontAsk) },
         ) {

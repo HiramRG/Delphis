@@ -286,7 +286,8 @@ fun HomeScreen(act: MainActivity) {
     var holdingB by remember { mutableStateOf(false) }
     LaunchedEffect(holdingB) { if (holdingB) { delay(1000); if (holdingB) { holdingB = false; act.exitAll() } } }
     if (act.exitPrompt) ConfirmDialog(
-        "Delphis", "Exit Delphis?", "Closes Delphis on both screens and closes Dolphin too, so nothing keeps running in the background.",
+        "Delphis", "Exit Delphis?",
+        (if (act.oneScreen) "Closes Delphis." else "Closes Delphis on both screens.") + " Dolphin may stay in Recent apps, which doesn't affect your games or saves.",
         confirm = "Exit", onCancel = { act.exitPrompt = false },
     ) { act.exitAll() }
     val onKey by rememberUpdatedState<(KeyEvent) -> Boolean> { e ->
@@ -2535,9 +2536,9 @@ private fun PillSettings(act: MainActivity) {
             }
             RowDivider()
             Column(Modifier.padding(horizontal = 8.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text("Show the full pill", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
-                Text("With the shortcut and your controller, for 3 seconds when a game starts.", fontSize = 12.sp, color = c.textDim, lineHeight = 15.sp)
-                Segmented(listOf(0 to "Every game start", 1 to "New games only", 2 to "Never"), full, { full = it; prefs.pillFull = it })
+                Text("Show how to open the menu", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
+                Text("\"Open Delphis' menu\" and the buttons to press, at the top of the game for 5 seconds when it starts.", fontSize = 12.sp, color = c.textDim, lineHeight = 15.sp)
+                Segmented(listOf(0 to "Every game start", 1 to "Once per game", 2 to "Never"), full, { full = it; prefs.pillFull = it })
             }
         }
     }

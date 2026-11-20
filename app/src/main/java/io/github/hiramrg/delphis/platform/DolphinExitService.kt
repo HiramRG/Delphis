@@ -120,7 +120,7 @@ class DolphinExitService : AccessibilityService() {
 
         /**
          * One screen: a game started (or restarted). Puts up the Delphis pill (if it's on in Settings) and
-         * starts watching for ⊖ + Start. [gameKey] decides "new games only" for the full pill.
+         * starts watching for ⊖ + Start. [gameKey] decides "once per game" for the full pill.
          */
         fun gameStarted(context: Context, gameKey: String) {
             val s = instance ?: run { CrashLog.event("one screen game: \"close games\" isn't running, so no pill or shortcut"); return }
@@ -134,7 +134,7 @@ class DolphinExitService : AccessibilityService() {
                 s.menuShortcut(true)
                 s.shortcut = prefs.menuShortcut
                 CrashLog.event("one screen game: pill ${if (prefs.pillShown) "on" else "off"}, shortcut ${prefs.menuShortcutLabel}, key filter ${if (s.filterActive()) "on" else "NOT on"}")
-                s.pillArgs = if (prefs.pillShown) PillArgs(showFull, prefs.pillOpacity, controller, prefs.menuShortcutLabel) else null
+                s.pillArgs = if (prefs.pillShown) PillArgs(showFull, prefs.pillOpacity, controller, if (pads.isEmpty()) "Tap here to open it" else prefs.menuShortcutSentence) else null
                 s.pill.stop()
                 s.handler.removeCallbacks(s.pillCheck)
                 s.handler.post(s.pillCheck)

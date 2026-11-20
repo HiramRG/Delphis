@@ -396,7 +396,12 @@ class Prefs(context: Context) {
     /** The shortcut as the pill and Settings name it, in the connected controller's own words. */
     val menuShortcutLabel: String get() {
         val names = ShortcutNames.forConnected()
-        return when (menuShortcut) { 0 -> names.home; 1 -> names.combo; else -> names.home + " or " + names.combo }
+        return when (menuShortcut) { 0 -> "the ${names.home}"; 1 -> "${names.combo} together"; else -> "the ${names.home}, or ${names.combo} together" }
+    }
+    /** "Press the Home button, or − and + at the same time" (the pill's second line). */
+    val menuShortcutSentence: String get() {
+        val names = ShortcutNames.forConnected()
+        return "Press " + when (menuShortcut) { 0 -> "the ${names.home}"; 1 -> "${names.combo} at the same time"; else -> "the ${names.home}, or ${names.combo} at the same time" }
     }
     /**
      * Android 14+: Delphis can't end Dolphin's process, and Dolphin keeps the touch-controls setting it read when
@@ -413,9 +418,9 @@ class Prefs(context: Context) {
     var pillOpacity: Int
         get() = sp.getInt("pill_opacity", 60).coerceIn(20, 100)
         set(v) = sp.edit().putInt("pill_opacity", v.coerceIn(20, 100)).apply()
-    /** When the full pill (shortcut + controller) shows: 0 = every game start, 1 = new games only, 2 = never. */
+    /** When the pill shows how to open the menu (5 s): 0 = every game start (default), 1 = once per game, 2 = never. */
     var pillFull: Int
-        get() = sp.getInt("pill_full", 1).coerceIn(0, 2)
+        get() = sp.getInt("pill_full", 0).coerceIn(0, 2)
         set(v) = sp.edit().putInt("pill_full", v).apply()
     /** True the first time for [gameKey] (and marks it seen). */
     fun firstPillFor(gameKey: String): Boolean {

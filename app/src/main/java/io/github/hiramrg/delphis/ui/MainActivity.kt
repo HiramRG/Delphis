@@ -697,22 +697,16 @@ class MainActivity : ComponentActivity() {
             if (io.github.hiramrg.delphis.platform.GameWatch.session != null) runCatching {
                 bridge.closeDolphin(roles.topDisplayId, "Closing the game…")
             }
-            // "Closing Delphis and Dolphin" covers both screens while Recent apps is used behind it.
+            // A short "Closing Delphis" screen. Dolphin itself isn't removed from Recent apps any more (that never worked
+            // the same on every device): the game is already saved and closed, and the next game from Delphis starts
+            // Dolphin fresh. Older Androids (the Thor's 13) still let Delphis end Dolphin's background process.
             val last = lastGame()?.info
             io.github.hiramrg.delphis.platform.DolphinExitService.showExit(roles.topDisplayId, roles.bottomDisplayId, last?.title, last?.gameId)
+            pkg?.let { p -> runCatching { getSystemService(android.app.ActivityManager::class.java).killBackgroundProcesses(p) } }
             kotlinx.coroutines.delay(350)
-            pkg?.let { p ->
-                // No app may force-stop another, so Dolphin's card is removed from Recent apps (Android then
-                // ends its process); the background-process call is a fallback.
-                val label = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(p, 0)).toString() }.getOrDefault("Dolphin")
-                val gone = runCatching { io.github.hiramrg.delphis.platform.DolphinExitService.dismissFromRecents(label) }
-                    .onFailure { io.github.hiramrg.delphis.platform.CrashLog.event("exit: closing Dolphin failed: ${it.message}") }.getOrDefault(false)
-                if (!gone) io.github.hiramrg.delphis.platform.CrashLog.event("exit: Dolphin's card wasn't removed")
-                runCatching { getSystemService(android.app.ActivityManager::class.java).killBackgroundProcesses(p) }
-            }
             runCatching { io.github.hiramrg.delphis.platform.MenuMusic.stop() }
             MenuCompanion.close()
-            io.github.hiramrg.delphis.platform.DolphinExitService.hideExit(1200)
+            io.github.hiramrg.delphis.platform.DolphinExitService.hideExit(500)
             finishAndRemoveTask()
         }
     }
