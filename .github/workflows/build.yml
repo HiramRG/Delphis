@@ -110,6 +110,8 @@ jobs:
           cat Delphis-SHA256SUMS.txt
       - name: Proof of origin (build provenance)
         if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta') && github.event_name != 'pull_request'
+        # Never holds back a release if GitHub's signing service is having trouble (shown as a warning instead).
+        continue-on-error: true
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/Delphis*.apk
