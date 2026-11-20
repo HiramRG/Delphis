@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older: same as data_extraction_rules.xml. -->
+<full-backup-content>
+    <exclude domain="file" path="last-crash.txt" />
+    <exclude domain="file" path="events.txt" />
+    <exclude domain="file" path="exits.txt" />
+    <exclude domain="file" path="ra-progress/" />
+    <exclude domain="file" path="ra-badges/" />
+    <exclude domain="file" path="autosave-backups/" />
+    <exclude domain="file" path="covers/" />
+    <exclude domain="file" path="covers-hq/" />
+</full-backup-content>

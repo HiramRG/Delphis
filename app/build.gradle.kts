@@ -25,6 +25,12 @@ android {
     // Release APKs are built unsigned; CI signs both APKs with apksigner (see .github/workflows/build.yml
     // and signing/README.md), using the encrypted key in signing/ and the SIGNING_PASSWORD secret.
     buildTypes {
+        // The test build is a separate app (its own name on the device), so it can never install over, or read the
+        // data of, the real Delphis.
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = true
             // Drops unused resources (e.g. unused icons) for a smaller APK.

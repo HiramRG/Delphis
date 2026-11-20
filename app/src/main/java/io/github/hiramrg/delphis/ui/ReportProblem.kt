@@ -60,7 +60,7 @@ object ProblemReport {
             .appendQueryParameter("area", AREAS[area])
             .appendQueryParameter("device", device(act))
             .appendQueryParameter("versions", versions(act))
-            .appendQueryParameter("controller", controller(act))
+            .appendQueryParameter("controller", io.github.hiramrg.delphis.core.ReportPrivacy.sanitize(controller(act)))
             .build()
         runCatching {
             val clip = act.getSystemService(android.content.ClipboardManager::class.java)

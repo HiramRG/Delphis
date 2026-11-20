@@ -263,7 +263,7 @@ class DolphinExitService : AccessibilityService() {
         if (top != null && top in DolphinBridge.KNOWN_PACKAGES) return "in front"
         if (top == packageName) return "Delphis on screen"
         // Other apps aren't named in reports (only the home screen / System UI, which help with problems).
-        if (top != null) return if (top == "com.android.systemui" || looksLikeRecents(top)) "another app on screen ($top)" else "another app on screen"
+        if (top != null) return if (top in recentsPackages()) "another app on screen ($top)" else "another app on screen"
         if (GameWatch.suspended.value) return "game in the background"
         return "in front"
     }
@@ -435,7 +435,6 @@ class DolphinExitService : AccessibilityService() {
         }.getOrNull()
         return setOfNotNull(home, "com.android.systemui")
     }
-    private fun looksLikeRecents(pkg: String) = Regex("launcher|quickstep|recents", RegexOption.IGNORE_CASE).containsMatchIn(pkg)
 
     private fun dolphinRoots(pkg: String): List<AccessibilityNodeInfo> {
         val roots = runCatching { windows.mapNotNull { it.root } }.getOrDefault(emptyList()) +
@@ -466,10 +465,23 @@ class DolphinExitService : AccessibilityService() {
         return check()
     }
 
+    /**
+     * Back, for Dolphin's menu. Never sent while another app is in front (Back goes to whatever has focus):
+     * only Dolphin, Delphis itself or System UI may be the active window.
+     */
+    private fun dolphinBack(pkg: String): Boolean {
+        val active = runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull()
+        if (active != null && active != pkg && active != packageName && active != "com.android.systemui") {
+            CrashLog.event("Back not sent: another app is in front")
+            return false
+        }
+        return performGlobalAction(GLOBAL_ACTION_BACK)
+    }
+
     /** Opens Dolphin's in-game menu (Back toggles it) unless it's already open. */
     private suspend fun openMenu(pkg: String): Boolean {
         if (find(pkg, "menu_exit") != null) return true
-        performGlobalAction(GLOBAL_ACTION_BACK)
+        dolphinBack(pkg)
         return waitFor(1500) { find(pkg, "menu_exit") != null }
     }
 
@@ -506,7 +518,7 @@ class DolphinExitService : AccessibilityService() {
             val title = find(pkg, "text_game_title")?.text?.toString().orEmpty()
             if (title.isBlank()) {
                 CrashLog.event("resume: game not booted yet (attempt ${attempt + 1})")
-                performGlobalAction(GLOBAL_ACTION_BACK) // close the menu, try again later
+                dolphinBack(pkg) // close the menu, try again later
                 delay(3000)
                 return@repeat
             }
@@ -514,13 +526,13 @@ class DolphinExitService : AccessibilityService() {
             waitFor(1500) { find(pkg, "menu_quickload")?.isVisibleToUser == true }
             val load = find(pkg, "menu_quickload")?.takeIf { it.isVisibleToUser }
             if (load == null) {
-                performGlobalAction(GLOBAL_ACTION_BACK)
+                dolphinBack(pkg)
                 return if (find(pkg, "menu_quickload") == null) StateResult.SAVE_STATES_OFF else StateResult.FAILED
             }
             delay(500) // let the slide-in animation settle so the click lands
             val ok = click(load)
             delay(400)
-            if (find(pkg, "menu_exit") != null) performGlobalAction(GLOBAL_ACTION_BACK) // close the menu
+            if (find(pkg, "menu_exit") != null) dolphinBack(pkg) // close the menu
             return if (ok) StateResult.DONE else StateResult.FAILED
         }
         return StateResult.FAILED
@@ -537,9 +549,9 @@ class DolphinExitService : AccessibilityService() {
         if (!openMenu(pkg)) return "Dolphin's menu didn't open"
         waitFor(1500) { find(pkg, "menu_overlay_controls")?.isVisibleToUser == true }
         val button = find(pkg, "menu_overlay_controls")?.takeIf { it.isVisibleToUser }
-        if (button == null) { performGlobalAction(GLOBAL_ACTION_BACK); return "no Overlay controls button" }
+        if (button == null) { dolphinBack(pkg); return "no Overlay controls button" }
         delay(400)
-        if (!click(button)) { performGlobalAction(GLOBAL_ACTION_BACK); return "Overlay controls didn't open" }
+        if (!click(button)) { dolphinBack(pkg); return "Overlay controls didn't open" }
         // The pop-up's rows: a title, and a check box for the items that can be ticked.
         data class Row(val title: String, val checked: Boolean?, val node: AccessibilityNodeInfo)
         // Dolphin's pop-up is an AppCompat menu, so its rows' title id is Dolphin's own ("<pkg>:id/title"), not
@@ -576,12 +588,12 @@ class DolphinExitService : AccessibilityService() {
             r.checked != null && Regex("overlay|superposici|en pantalla|on-screen|show controls|mostrar controles", RegexOption.IGNORE_CASE).containsMatchIn(r.title)
         }
         val result = when {
-            target == null -> { performGlobalAction(GLOBAL_ACTION_BACK); "no show-overlay item found" }
-            target.checked == show -> { performGlobalAction(GLOBAL_ACTION_BACK); "already ${if (show) "on" else "off"}" }
+            target == null -> { dolphinBack(pkg); "no show-overlay item found" }
+            target.checked == show -> { dolphinBack(pkg); "already ${if (show) "on" else "off"}" }
             else -> { delay(300); if (click(target.node)) "switched ${if (show) "on" else "off"}" else "click failed" }
         }
         delay(400)
-        if (find(pkg, "menu_exit") != null) performGlobalAction(GLOBAL_ACTION_BACK) // close Dolphin's menu
+        if (find(pkg, "menu_exit") != null) dolphinBack(pkg) // close Dolphin's menu
         return "$result · items: $listed"
     }
 
@@ -602,7 +614,7 @@ class DolphinExitService : AccessibilityService() {
         fun findLabel(): AccessibilityNodeInfo? {
             val roots = runCatching { windows.mapNotNull { it.root } }.getOrDefault(emptyList()) +
                 listOfNotNull(runCatching { rootInActiveWindow }.getOrNull())
-            return roots.filter { it.packageName?.toString()?.let { p -> p in recentsApps || looksLikeRecents(p) } == true }
+            return roots.filter { it.packageName?.toString()?.let { p -> p in recentsApps } == true }
                 .firstNotNullOfOrNull { r -> runCatching { r.findAccessibilityNodeInfosByText(appLabel).firstOrNull() }.getOrNull() }
         }
         // Each try is checked: the card must really be gone from Recent apps (pressing "Close" isn't proof).
@@ -695,7 +707,7 @@ class DolphinExitService : AccessibilityService() {
         repeat(3) {
             var exit = find(pkg, "menu_exit")
             if (exit == null) {
-                performGlobalAction(GLOBAL_ACTION_BACK) // Dolphin opens its in-game menu on Back
+                dolphinBack(pkg) // Dolphin opens its in-game menu on Back
                 if (waitFor(1500) { find(pkg, "menu_exit") != null }) exit = find(pkg, "menu_exit")
             }
             if (exit != null && click(exit)) {

@@ -57,14 +57,17 @@ object DsuServer {
         while (true) {
             val p = DatagramPacket(buf, buf.size)
             try { s.receive(p) } catch (e: Exception) { lastError = e.message; break }
-            val req = Dsu.parse(buf, p.length) ?: continue
-            val from = p.socketAddress
-            requests++
-            when (req) {
-                is Dsu.Request.Version -> send(s, from, Dsu.versionResponse(serverId))
-                is Dsu.Request.ListPorts -> req.padIds.forEach { send(s, from, Dsu.portInfo(serverId, it)) }
-                is Dsu.Request.PadData -> if (req.padId == null || req.padId == 0) sender.post { onRegister(from) }
-            }
+            // A bad message from another app on the device must never take Delphis (and its helper) down.
+            runCatching {
+                val req = Dsu.parse(buf, p.length) ?: return@runCatching
+                val from = p.socketAddress
+                requests++
+                when (req) {
+                    is Dsu.Request.Version -> send(s, from, Dsu.versionResponse(serverId))
+                    is Dsu.Request.ListPorts -> req.padIds.forEach { send(s, from, Dsu.portInfo(serverId, it)) }
+                    is Dsu.Request.PadData -> if (req.padId == null || req.padId == 0) sender.post { onRegister(from) }
+                }
+            }.onFailure { lastError = it.message }
         }
         synchronized(this) { socket = null }
     }
@@ -72,6 +75,8 @@ object DsuServer {
     /** Dolphin asked for pad data (it does every second while it reads controllers). */
     private fun onRegister(from: SocketAddress) {
         val now = SystemClock.uptimeMillis()
+        // While Dolphin (the current listener) keeps asking, another app can't take the trackpad stream over.
+        if (client != null && client != from && now - lastRequestAt < 3000) return
         val fresh = client != from || now - lastRequestAt > 1500
         client = from; lastRequestAt = now
         // After a pause (a new game, Dolphin restarted…) Dolphin's touch total may be anything: set it exactly.

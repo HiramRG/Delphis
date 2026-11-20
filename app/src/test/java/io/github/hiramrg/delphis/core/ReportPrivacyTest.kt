@@ -20,4 +20,21 @@ class ReportPrivacyTest {
         assertTrue(out.contains("signed in to RetroAchievements as (hidden)"))
         assertTrue(out.contains("signed in=yes"))
     }
+
+    @Test fun pathsNamesAndPastAccounts() {
+        val report = """
+            game: /storage/emulated/0/My Games/Ana Lopez/x.iso, size 1
+            #30 "Ana's Xbox Controller" vendor=0x45e
+            Dolphin's touch settings
+            2026-11-01 Dolphin signed in to RetroAchievements as oldname
+            {"ApiToken":"abc"}
+        """.trimIndent()
+        val out = ReportPrivacy.sanitize(report)
+        assertFalse(out.contains("Ana"))
+        assertFalse(out.contains("My Games"))
+        assertFalse(out.contains("oldname"))
+        assertFalse(out.contains("abc"))
+        assertTrue(out.contains("Dolphin's touch settings"))
+        assertTrue(out.contains(", size 1"))
+    }
 }

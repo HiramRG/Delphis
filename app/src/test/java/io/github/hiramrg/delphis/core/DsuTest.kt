@@ -82,4 +82,15 @@ class DsuTest {
         enc.sync(0f, 0f).forEach(d::feed)
         assertEquals(0, d.x); assertEquals(0, d.y)
     }
+
+    @Test fun shortPortsRequestIsIgnored() {
+        // A 20-byte "list ports" message with a valid CRC used to throw (and crash Delphis).
+        val b = java.nio.ByteBuffer.allocate(20).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        b.put("DSUC".toByteArray()); b.putShort(1001); b.putShort(4); b.putInt(0); b.putInt(0); b.putInt(0x100001)
+        val bytes = b.array()
+        val crc = java.util.zip.CRC32().apply { update(bytes) }.value.toInt()
+        java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(8, crc)
+        org.junit.Assert.assertNull(Dsu.parse(bytes, 20))
+        org.junit.Assert.assertNull(Dsu.parse(ByteArray(10), 10))
+    }
 }

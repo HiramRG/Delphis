@@ -37,8 +37,11 @@ object Dsu {
         data class PadData(val padId: Int?) : Request() // null = all pads
     }
 
-    fun parse(bytes: ByteArray, length: Int): Request? {
-        if (length < 20) return null
+    /** Any app on the device can send to the server, so a short or odd message is ignored, never an error. */
+    fun parse(bytes: ByteArray, length: Int): Request? = runCatching { parseOrThrow(bytes, length) }.getOrNull()
+
+    private fun parseOrThrow(bytes: ByteArray, length: Int): Request? {
+        if (length < 20 || length > bytes.size) return null
         val b = ByteBuffer.wrap(bytes, 0, length).order(ByteOrder.LITTLE_ENDIAN)
         for (i in 0..3) if (bytes[i] != CLIENT[i]) return null
         b.position(4)
@@ -54,10 +57,12 @@ object Dsu {
         return when (b.int) {
             TYPE_VERSION -> Request.Version
             TYPE_PORTS -> {
-                val count = b.int.coerceIn(0, 4)
+                if (length < 24) return null
+                val count = b.int.coerceIn(0, 4).coerceAtMost(length - 24)
                 Request.ListPorts((0 until count).map { bytes[24 + it].toInt() and 0xFF })
             }
             TYPE_PAD_DATA -> {
+                if (length < 22) return null
                 val flags = bytes[20].toInt() and 0xFF
                 Request.PadData(if (flags and 0x01 != 0) bytes[21].toInt() and 0xFF else null)
             }

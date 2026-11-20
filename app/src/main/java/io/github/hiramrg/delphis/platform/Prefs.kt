@@ -277,7 +277,12 @@ class Prefs(context: Context) {
             SecretBox.seal(stored)?.let { sp.edit().putString("ra_key", it).apply() }
             return stored
         }
-        set(v) = sp.edit().putString("ra_key", v?.let { SecretBox.seal(it) ?: it }).apply()
+        set(v) {
+            // Never kept in plain text: if Android's keystore can't encrypt it, it isn't saved (you'd sign in again).
+            val sealed = v?.let { SecretBox.seal(it) }
+            if (v != null && sealed == null) CrashLog.event("RetroAchievements key not saved: the keystore couldn't encrypt it")
+            sp.edit().putString("ra_key", sealed).apply()
+        }
     var raPopups: Boolean
         get() = sp.getBoolean("ra_popups", true)
         set(v) = sp.edit().putBoolean("ra_popups", v).apply()

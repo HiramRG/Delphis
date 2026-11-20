@@ -192,6 +192,10 @@ class Updater(private val context: Context) {
         val theirs = certs(archive)
         // Some older Androids can't read an unopened APK's signer: leave that check to Android's installer.
         if (theirs.isEmpty()) { CrashLog.event("update check: couldn't read the download's signature; Android will check it"); return null }
+        // The key this copy is signed with now must be in the download's keys (as its own key, or as an earlier key
+        // it was moved on from). A file signed only with a retired key fails, even though this copy once used it.
+        val myCurrent = mine.signingInfo?.apkContentsSigners.orEmpty().map { it.toCharsString() }.toSet()
+        if (myCurrent.isNotEmpty() && theirs.intersect(myCurrent).isEmpty()) return "it isn't signed with Delphis' current key"
         if (theirs.intersect(certs(mine)).isEmpty()) return "it isn't signed with Delphis' key"
         return null
     }

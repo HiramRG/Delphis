@@ -18,24 +18,29 @@ Only the newest stable and beta builds get fixes, so please update before report
 | --- | --- |
 | **Dolphin's user folder** (you pick it once) | Delphis writes Dolphin's controller profiles, per-game settings and its own picture shaders there, reads save-state times for autosave, and signs Dolphin in to RetroAchievements when you ask. |
 | **Your games folders** (read only) | To list your games and read each game's ID. Delphis never changes or uploads game files. |
-| **Accessibility helper** (you turn it on) | Presses Dolphin's own "Exit Emulation", Quick Save and Quick Load buttons, so games close cleanly and autosave works. On phones and tablets it also shows the Delphis pill and catches the menu buttons while a game runs. It only reads Dolphin's own screens, and, when Delphis closes Dolphin to change its touch-button setting, the Recent apps screen. Of other apps it only notices which one is in front (to hide the pill); it never reads their screens, never logs what's on screen, and never sends anything anywhere. |
-| **Install apps** | To install Delphis' own updates from GitHub. Before installing, Delphis checks the download came from GitHub, is Delphis, is signed with Delphis' key and isn't an older build; Android checks the signature again. |
+| **Accessibility helper** (you turn it on) | Presses Dolphin's own "Exit Emulation", Quick Save and Quick Load buttons, so games close cleanly and autosave works. On phones and tablets it also shows the Delphis pill and catches the menu buttons while a game runs. It only reads Dolphin's own screens, and, when Delphis closes Dolphin to change its touch-button setting, the Recent apps screen of your home app. Of other apps it only notices which one is in front (to hide the pill); it never reads their screens, never presses anything in them (Back is only sent while Dolphin or Delphis is in front), never logs what's on screen, and never sends anything anywhere. |
+| **Install apps** | To install Delphis' own updates from GitHub. Before installing, Delphis checks the download came from GitHub, is Delphis, is signed with Delphis' current key and isn't an older build; Android checks the signature again. (A few older Androids can't read a signature before installing; there, Android's own check is the one that applies.) |
 | **Internet** | GitHub (update checks and downloads), RetroAchievements (your progress and badges, only if you sign in) and GameTDB (cover art). Nothing else. |
 | **Vibrate** | The "Try it" rumble test in Settings. |
 | **Close background apps** | On Android 13 and older, ends Dolphin's background process when you exit Delphis. |
 | **Network state** | To know whether you're online (achievements work offline from a saved copy). |
 
-The trackpad presets use a small server that only listens inside the device (127.0.0.1) and only sends
-trackpad movement to Dolphin. It can't be reached from the network.
+The trackpad presets use a small server that only listens inside the device (127.0.0.1), so it can't be reached
+from the network. It sends trackpad movement to one listener at a time (Dolphin), and ignores malformed messages
+from other apps on the device.
 
 ## What Delphis never does
 
 * No ads, no analytics, no tracking, no accounts of its own.
 * No data leaves your device except the requests listed above.
 * Diagnostics stay on your device. They only leave when you copy or share a report, or use *Report a problem*,
-  and then your account names, keys, tokens and folder locations are hidden.
-* Your RetroAchievements web API key is stored encrypted with a key that never leaves your device. Delphis never
-  stores your RetroAchievements password: it's only used once to sign Dolphin in.
+  and then account names (current and past), keys, tokens, folder and file paths, and names inside controller
+  names ("Ana's controller") are hidden.
+* Your RetroAchievements web API key is stored encrypted with a key that never leaves your device; if Android
+  can't encrypt it, it isn't saved at all. Delphis never stores your RetroAchievements password: it's only used
+  once to sign Dolphin in.
+* Backups of Delphis (Android's cloud backup or moving to a new phone) carry your settings and presets, but not
+  logs, achievement progress or autosave copies. The encrypted key can't be read on another device.
 
 ## Known limitations
 
@@ -52,11 +57,16 @@ Things worth knowing before you install, stated plainly:
   RetroAchievements sees the games you play while signed in, as it does for any emulator.
 * **No store review.** Delphis isn't on Google Play, so no store checks each release. What you can check instead
   is under "Checking a download" below.
-* **The signing key is being replaced.** An older, password-protected copy of Delphis' signing key is in this
-  repository's history. A new key that only exists in GitHub's secrets is coming; once you have a build signed
-  with it, Android refuses updates signed with the older keys.
+* **Signing keys.** Delphis' first key (`delphis`) was public at one point, so it was replaced by `delphis-2`;
+  copies updated since then refuse updates signed only with the first key, and Delphis' own updater refuses them
+  too. `delphis-2` is kept in this repository encrypted, with its password only in GitHub's secrets. Moving to a
+  new key that never touches the repository is planned.
+* **Other apps can ask Delphis to start a game.** That's how game frontends launch Wii and GameCube games through
+  Delphis, so it needs no special permission. Delphis only accepts game files, but a request does close the game
+  you're playing.
 * **Older releases included a debug build** (`Delphis-debug.apk`), meant for testing only. Releases from
-  November 2026 on publish only `Delphis.apk`; don't install the debug build.
+  November 2026 on publish only `Delphis.apk`, and test builds are now a separate app that can't install over
+  Delphis. Don't install the old debug build.
 
 ## Checking a download
 
@@ -70,12 +80,14 @@ Each release lists:
 * a **proof of origin** (build provenance), signed by GitHub, that ties the APK to the exact commit and build
   that made it: `gh attestation verify Delphis.apk -R HiramRG/Delphis`.
 
-Android also refuses to install an update signed with a different key, so an installed copy of Delphis can only
-ever be updated by a genuine build.
+Android also refuses to install an update signed with a different key, so an up-to-date copy of Delphis can only
+be updated by a build signed with Delphis' current key.
 
 ## How the code is kept safe
 
 * Every change runs the full build, unit tests and the layout check before anything is published.
 * GitHub's code scanner (CodeQL) checks the code on every change to `main` and weekly.
 * Dependabot warns about libraries with known security problems and proposes updates.
-* Every build step from outside the repository is pinned to an exact version.
+* Every third-party GitHub Action used in the build is pinned to an exact version. (The Android build tools and the
+  build machine come from GitHub's own runners.)
+* Only builds that get published are signed, and the build tools have stopped running before the key is used.

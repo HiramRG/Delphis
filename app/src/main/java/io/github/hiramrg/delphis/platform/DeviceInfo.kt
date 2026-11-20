@@ -41,8 +41,14 @@ object DeviceInfo {
     /** True when Delphis runs on one screen (phones, tablets, or Screen mode "One"). */
     fun oneScreen(context: Context): Boolean = screenRoles(context, Prefs(context).swapScreens).bottomDisplayId == null
 
+    /**
+     * Every input device whose name is safe to write into Dolphin's settings. A name with a line break, a control
+     * character or a backtick (Dolphin's quote) could add lines or controls to its files, so such a device is left out.
+     */
     private fun allDevices(): List<InputDevice> =
-        InputDevice.getDeviceIds().toList().mapNotNull { id -> InputDevice.getDevice(id) }
+        InputDevice.getDeviceIds().toList().mapNotNull { id -> InputDevice.getDevice(id) }.filter { safeName(it.name) }
+
+    fun safeName(name: String?): Boolean = !name.isNullOrEmpty() && name.none { it.isISOControl() || it == '`' }
 
     private fun isGamepad(d: InputDevice) =
         (d.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||

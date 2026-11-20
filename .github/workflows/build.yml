@@ -21,6 +21,9 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The token isn't left in .git/config, where build code could read it; pushes below pass it explicitly.
+          persist-credentials: false
       - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
@@ -35,7 +38,7 @@ jobs:
         timeout-minutes: 25
         run: |
           set -o pipefail
-          gradle :app:testDebugUnitTest 2>&1 | tee test.log
+          gradle --no-daemon :app:testDebugUnitTest 2>&1 | tee test.log
       - name: Layout check summary
         if: always()
         run: |
@@ -53,13 +56,15 @@ jobs:
           # The beta branch builds the Beta channel (versionName 1.0.N-beta; Settings → Updates shows it).
           CHANNEL=stable
           if [ "$GITHUB_REF" = refs/heads/beta ]; then CHANNEL=beta; fi
-          gradle :app:assembleDebug :app:assembleRelease -PversionCode=${{ github.run_number }} -Pchannel=$CHANNEL 2>&1 | tee build.log
+          gradle --no-daemon :app:assembleDebug :app:assembleRelease -PversionCode=${{ github.run_number }} -Pchannel=$CHANNEL 2>&1 | tee build.log
       # Signs both APKs. The keys are in signing/delphis-keys.p12.gpg, encrypted with the
       # SIGNING_PASSWORD secret (see signing/README.md). "delphis" is the original key and
       # "delphis-2" the current one; the rotation lineage lets installed copies update to the new key.
+      # Only builds that get published (main, beta) are signed: the key never reaches test-branch or pull-request
+      # builds. Gradle runs with --no-daemon above, so no build process is still alive while the key is in use.
       - name: Sign APKs
         env:
-          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+          SIGNING_PASSWORD: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta') && github.event_name != 'pull_request' && secrets.SIGNING_PASSWORD || '' }}
         run: |
           set -euo pipefail
           mkdir dist
@@ -149,7 +154,7 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         run: |
           git tag -f latest
-          git push -f origin refs/tags/latest
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" refs/tags/latest
       - name: Remove old files from the release
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
@@ -185,7 +190,7 @@ jobs:
         run: |
           # (refs/tags/…: a branch is also called "beta")
           git tag -f beta
-          git push -f origin refs/tags/beta
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" refs/tags/beta
       - name: Remove old files from the beta release
         if: github.ref == 'refs/heads/beta' && github.event_name != 'pull_request'
         env:
