@@ -110,7 +110,7 @@ jobs:
           echo "apk=$(sha256sum Delphis.apk 2>/dev/null | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
           # The key rotation lineage lists the original key first and the current one last.
           mapfile -t CERTS < <(sed -n '/--- lineage/,$p' ../signing.log 2>/dev/null | grep -i "certificate SHA-256 digest" | sed 's/.*digest: *//' | awk '!seen[$0]++')
-          if [ ${#CERTS[@]} -ge 2 ]; then CERT="${CERTS[-1]}\` (current key; earlier key \`${CERTS[0]})"
+          if [ ${#CERTS[@]} -ge 2 ]; then CERT="${CERTS[-1]}\` (current key) · earlier key: \`${CERTS[0]}"
           elif [ ${#CERTS[@]} -eq 1 ]; then CERT="${CERTS[0]}"
           else CERT=$(grep -m1 -i "certificate SHA-256 digest" ../signing.log 2>/dev/null | sed 's/.*digest: *//' || true); fi
           echo "cert=${CERT:-not signed}" >> "$GITHUB_OUTPUT"
