@@ -656,7 +656,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
      */
     fun prepareSave(gameId: String, entry: SaveEntry): Boolean = when (entry.kind) {
         SaveKind.LATEST -> true
-        SaveKind.EARLIER -> restoreAutosave(gameId, entry.backup ?: return false)
+        SaveKind.EARLIER -> entry.backup?.let { restoreAutosave(gameId, it) } ?: false
         SaveKind.SLOT -> runCatching {
             val staged = stage(gameId, entry)
             try { backupCurrentAutosave(gameId); writeQuickSlot(gameId, staged) } finally { staged.delete() }
