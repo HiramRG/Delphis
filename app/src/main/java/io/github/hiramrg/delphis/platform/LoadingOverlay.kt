@@ -70,6 +70,8 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
         titleView?.text = io.github.hiramrg.delphis.ui.plainText(title.orEmpty())
         titleView?.visibility = if (title.isNullOrBlank()) View.GONE else View.VISIBLE
         lineView?.text = io.github.hiramrg.delphis.ui.plainText(line)
+        // No line at all when there's nothing to say (the closing screen).
+        lineView?.visibility = if (line.isBlank()) View.GONE else View.VISIBLE
         dots.forEachIndexed { i, d -> (d.background as GradientDrawable).setColor(if (i == phase.step) pal.accent else pal.border) }
         setCover(coverName ?: title, gameId)
         // Never leave the screen covered if something goes wrong.

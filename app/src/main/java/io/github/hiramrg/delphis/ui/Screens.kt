@@ -2768,7 +2768,7 @@ private fun HoldToExit(modifier: Modifier) {
         }
         Column {
             HintText("Keep holding Ⓑ to exit", fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
-            Text("Closes Delphis and Dolphin", fontSize = 11.5.sp, color = c.textDim)
+            Text("Closes Delphis", fontSize = 11.5.sp, color = c.textDim)
         }
     }
 }
