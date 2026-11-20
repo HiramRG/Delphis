@@ -198,7 +198,7 @@ fun KeyIcon(key: String, color: Color = LocalWii.current.textDim, size: Dp = 18.
             val d = androidx.compose.ui.platform.LocalDensity.current
             val fontPx = with(d) { size.toPx() } * when { label in SHAPE_GLYPHS -> 0.62f; round -> 0.56f; else -> 0.5f }
             // A pill fits its word with 4 dp each side; a circle is as wide as it is tall.
-            val width = if (round) size else maxOf(size, with(d) { (glyphWidth(label, fontPx) / density).dp } + 8.dp)
+            val width = if (round) size else maxOf(size, with(d) { (glyphWidth(label, fontPx) / density).dp } + 11.dp)
             Canvas(Modifier.size(width, size)) {
                 val stroke = 1.5.dp.toPx()
                 drawRoundRect(

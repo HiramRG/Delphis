@@ -5,16 +5,15 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 53
+    const val RELEASE = 54
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("Picture is a tab of the menu.", "Look and Sharpness are now a simple list next to Controls, in the same box, on one screen and on the Thor."),
-        Item("Every toggle has a button.", "LB / RB switch the tabs, LT / RT switch Map / List and Look / Sharpness."),
-        Item("New Change controls screen.", "Layouts on the left, a preview of the highlighted one on the right."),
-        Item("Your autosave after an update.", "If the autosave can't be loaded when a game starts, Delphis now offers to load it.", fix = true),
-        Item("Button icons follow your controller.", "Pick up another controller and the icons switch to it.", fix = true),
+        Item("One button rule everywhere.", "A confirms and B goes back on every screen, pop-up and the in-game menu, by the letters on your controller (✕ and ○ on PlayStation)."),
+        Item("Icons follow Player 1.", "The buttons shown on screen are always Player 1's controller."),
+        Item("Pop-ups answer the right buttons.", "B closes only the pop-up that's open; buttons a screen doesn't use do nothing.", fix = true),
+        Item("Button letters centred.", "Letters and symbols sit exactly in the middle of their circles.", fix = true),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

@@ -62,7 +62,7 @@ private fun DrawScope.drawShapeGlyph(g: String, cx: Float, cy: Float, size: Floa
             drawLine(color, Offset(cx - a, cy - a), Offset(cx + a, cy + a), stroke.width, StrokeCap.Round)
             drawLine(color, Offset(cx - a, cy + a), Offset(cx + a, cy - a), stroke.width, StrokeCap.Round)
         }
-        "○" -> drawCircle(color, r * 0.88f, Offset(cx, cy), style = stroke)
+        "○" -> drawCircle(color, r * 0.74f, Offset(cx, cy), style = stroke)
         "□" -> {
             val a = r * 0.76f
             drawRect(color, Offset(cx - a, cy - a), androidx.compose.ui.geometry.Size(2 * a, 2 * a), style = stroke)
