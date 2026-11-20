@@ -184,7 +184,9 @@ class Updater(private val context: Context) {
         if (archive.longVersionCode < mine.longVersionCode) return "it's an older build"
         fun certs(info: android.content.pm.PackageInfo): Set<String> {
             val si = info.signingInfo ?: return emptySet()
-            val all = (si.apkContentsSigners.orEmpty() + if (si.hasMultipleSigners()) emptyArray() else si.signingCertificateHistory.orEmpty())
+            val all = mutableListOf<android.content.pm.Signature>()
+            si.apkContentsSigners?.let { all += it }
+            if (!si.hasMultipleSigners()) si.signingCertificateHistory?.let { all += it }
             return all.map { it.toCharsString() }.toSet()
         }
         val theirs = certs(archive)
