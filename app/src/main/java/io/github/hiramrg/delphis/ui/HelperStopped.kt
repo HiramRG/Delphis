@@ -34,7 +34,8 @@ private val Green = Color(0xFF5BD08A)
  */
 @Composable
 fun helperStopped(context: android.content.Context, @Suppress("UNUSED_PARAMETER") recheck: Any? = null): Boolean =
-    !DolphinExitService.runningState.value && DolphinExitService.isEnabled(context)
+    io.github.hiramrg.delphis.platform.TestHooks.helperStopped ||
+        (!DolphinExitService.runningState.value && DolphinExitService.isEnabled(context))
 
 @Composable
 private fun StatusLine(text: String, colour: Color, mark: String) {

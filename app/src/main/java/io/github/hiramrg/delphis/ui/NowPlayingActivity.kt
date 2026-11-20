@@ -22,6 +22,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.systemGestureExclusion
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -627,7 +629,50 @@ open class NowPlayingActivity : ComponentActivity() {
         // The D-pad moves a glow; the bottom button picks the card under it.
         var lookCursor by remember { mutableStateOf(gameLook) }
         var resCursor by remember { mutableStateOf(gameRes) }
-        fun openPicture(tab: Int) { pictureBefore = screenChoice to gameLook; resBefore = gameRes; lookCursor = gameLook; resCursor = gameRes; pictureTab = tab; showBrightness = false; showPicture = true }
+        // Saves tab: load one of the game's saves, or make a fresh autosave, without leaving the game.
+        var showSaves by remember { mutableStateOf(io.github.hiramrg.delphis.platform.TestHooks.savesTab) }
+        fun openPicture(tab: Int) { pictureBefore = screenChoice to gameLook; resBefore = gameRes; lookCursor = gameLook; resCursor = gameRes; pictureTab = tab; showBrightness = false; showSaves = false; showPicture = true }
+        var savesVersion by remember { mutableIntStateOf(0) }
+        var saveCursor by remember { mutableIntStateOf(0) }
+        var savesBusy by remember { mutableStateOf(false) }
+        var savesStatus by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+        val gameSaves by produceState(io.github.hiramrg.delphis.platform.TestHooks.saves, gid, savesVersion, showSaves) {
+            if (showSaves && gid != null && io.github.hiramrg.delphis.platform.TestHooks.saves.isEmpty()) {
+                value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.saves(gid) }
+            }
+        }
+        val helperDown = !DolphinExitService.runningState.value && !io.github.hiramrg.delphis.platform.TestHooks.helperUp
+        // One screen: Delphis' menu covers Dolphin, so it steps aside first (the helper presses Dolphin's own menu).
+        fun loadSave(e: io.github.hiramrg.delphis.platform.DolphinBridge.SaveEntry) {
+            val id = gid ?: return
+            if (savesBusy) return
+            savesBusy = true
+            savesStatus = "Loading the save from ${formatSaveTime(e.savedAt)}…" to false
+            if (panelMode) resumeGame()
+            this@NowPlayingActivity.lifecycleScope.launch {
+                if (panelMode) delay(700)
+                val ok = bridge.loadSaveInGame(id, e)
+                savesBusy = false; saveCursor = 0; savesVersion++
+                savesStatus = if (ok) "Loaded the save from ${formatSaveTime(e.savedAt)}. Your progress from before is the newest earlier autosave." to false
+                else "Couldn't load it. Try again, or use Dolphin's menu → Load State." to true
+                if (!ok && panelMode) DolphinExitService.openMenu()
+            }
+        }
+        fun saveNow() {
+            val id = gid ?: return
+            if (savesBusy) return
+            savesBusy = true
+            savesStatus = "Saving…" to false
+            if (panelMode) resumeGame()
+            this@NowPlayingActivity.lifecycleScope.launch {
+                if (panelMode) delay(700)
+                val ok = bridge.saveNow(id)
+                savesBusy = false; saveCursor = 0; savesVersion++
+                savesStatus = if (ok) "Saved. It's the latest autosave now." to false
+                else (if (prefs.saveStatesOff) "Couldn't save: Dolphin's Enable Savestates setting is off." else "Couldn't save. Try again in a moment.") to true
+                if (panelMode) { delay(300); DolphinExitService.openMenu() }
+            }
+        }
         val picTabs = pictureTabs(screenChoice != null, gameLook != null, gameRes != null)
         val picShown = if (pictureTab in picTabs) pictureTab else picTabs.first()
         val hasPicture = screenChoice != null || gameLook != null || gameRes != null
@@ -672,7 +717,7 @@ open class NowPlayingActivity : ComponentActivity() {
             Unit
         }
         // The helper isn't running: the notice's blue button opens Accessibility instead (back here it becomes "Load it").
-        val helperUp = DolphinExitService.runningState.value
+        val helperUp = DolphinExitService.runningState.value || io.github.hiramrg.delphis.platform.TestHooks.helperUp
         val resumeAction = { if (helperUp) loadAutosave() else DolphinExitService.openSettings(this@NowPlayingActivity) }
         // The Picture list's columns (2, or 3 on a short panel): the D-pad's up / down step.
         var pictureCols by remember { mutableIntStateOf(2) }
@@ -724,6 +769,7 @@ open class NowPlayingActivity : ComponentActivity() {
                 mode != Mode.VIEW -> mode = Mode.VIEW
                 showAchievements -> showAchievements = false
                 showPicture -> showPicture = false
+                showSaves -> showSaves = false
                 panelMode -> resumeGame()
                 prefs.skipExitWarning -> closingGame { backToMainMenu() }
                 else -> confirmExit = true
@@ -815,12 +861,12 @@ open class NowPlayingActivity : ComponentActivity() {
                         val resumeFocus = remember { androidx.compose.ui.focus.FocusRequester() }
                         LaunchedEffect(openSignal) { delay(150); runCatching { resumeFocus.requestFocus() } }
                         // D-pad down goes straight to the action buttons instead of stopping at the map's toggle.
-                        PanelBtn("▶ Resume", if (showPicture) null else "A", false, Modifier.focusRequester(resumeFocus).focusProperties { if (mode == Mode.VIEW && !(preset.isTrackpad && padView)) down = changeFocus }) { resumeGame() }
+                        PanelBtn("▶ Resume", if (showPicture || showSaves) null else "A", false, Modifier.focusRequester(resumeFocus).focusProperties { if (mode == Mode.VIEW && !(preset.isTrackpad && padView)) down = changeFocus }) { resumeGame() }
                     } else {
                         // Trackpad on screen: the action row is replaced by the pad's controls, so Quit stays up here.
                         if (preset.isTrackpad && padView && mode == Mode.VIEW) TopChip("Quit") { if (prefs.skipExitWarning) closingGame { backToMainMenu() } else confirmExit = true }
                         TopChip("☀", on = showBrightness) {
-                            showPicture = false
+                            showPicture = false; showSaves = false
                             showBrightness = !showBrightness
                         }
                     }
@@ -830,14 +876,16 @@ open class NowPlayingActivity : ComponentActivity() {
                     add(0)
                     if (achievements != null) add(1)
                     if (hasPicture) add(2)
+                    if (gid != null) add(3)
                 }
-                val tab = when { showPicture -> 2; showAchievements -> 1; else -> 0 }
+                val tab = when { showSaves && gid != null -> 3; showPicture -> 2; showAchievements -> 1; else -> 0 }
                 fun selectTab(t: Int) {
                     showBrightness = false
                     when (t) {
-                        1 -> { showPicture = false; showAchievements = true }
+                        1 -> { showPicture = false; showSaves = false; showAchievements = true }
                         2 -> { showAchievements = false; openPicture(if (screenChoice != null) 0 else 1) }
-                        else -> { showAchievements = false; showPicture = false }
+                        3 -> { showAchievements = false; showPicture = false; savesStatus = null; saveCursor = 0; savesVersion++; showSaves = true }
+                        else -> { showAchievements = false; showPicture = false; showSaves = false }
                     }
                 }
                 LaunchedEffect(tabStep) {
@@ -851,7 +899,7 @@ open class NowPlayingActivity : ComponentActivity() {
                 ) {
                     if (panelMode) KeyIcon("L1")
                     Segmented(
-                        tabs.map { it to when (it) { 1 -> "🏆 Achievements"; 2 -> "▭ Picture"; else -> "🎮 Controls" } },
+                        tabs.map { it to when (it) { 1 -> "🏆 Achievements"; 2 -> "▭ Picture"; 3 -> "↺ Saves"; else -> "🎮 Controls" } },
                         tab, { selectTab(it) }, height = 28.dp,
                     )
                     if (panelMode) KeyIcon("R1")
@@ -875,7 +923,18 @@ open class NowPlayingActivity : ComponentActivity() {
                 // ---------------- middle
                 when (mode) {
                     // Same Thor button map as the game page.
-                    Mode.VIEW -> if (showPicture && hasPicture) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 10.dp) {
+                    Mode.VIEW -> if (showSaves && gid != null) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 10.dp) {
+                        when {
+                            helperDown -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                                HelperStoppedInfo("which is what loads and makes saves during a game", "Or use Dolphin's own menu: Save State / Load State.")
+                            }
+                            gameSaves.isEmpty() -> NoSavesYet(Modifier.fillMaxWidth())
+                            else -> SavesList(
+                                gameSaves, saveCursor.coerceIn(0, gameSaves.lastIndex), { saveCursor = it }, Modifier.fillMaxSize(),
+                                rowHeight = if (panelMode) 30.dp else 34.dp,
+                            )
+                        }
+                    } else if (showPicture && hasPicture) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 10.dp) {
                         // Picture: the second tab of the same box (the box, the card and the buttons stay put).
                         val keys = panelMode && !PadGlyphs.touch
                         PictureChoices(
@@ -991,6 +1050,25 @@ open class NowPlayingActivity : ComponentActivity() {
                             io.github.hiramrg.delphis.core.Trackpad.Speed.entries.map { it to it.label }, padSpeed,
                             { padSpeed = it; prefs.setTrackpadSpeed(s.key, it) },
                         )
+                    }
+                } else if (mode == Mode.VIEW && showSaves && gid != null) {
+                    // Saves: Back · Save now · Load (or, with the helper stopped, Back · Open Accessibility).
+                    val keys = panelMode && !PadGlyphs.touch
+                    val (line, warn) = savesStatus ?: ("Your progress right now is autosaved first, so you can come back to it." to false)
+                    if (!helperDown) Text(
+                        line, fontSize = 11.sp, lineHeight = 14.sp, maxLines = 2,
+                        color = if (warn) MaterialTheme.colorScheme.tertiary else LocalWii.current.textDim,
+                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp, start = 4.dp, end = 4.dp),
+                    )
+                    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PanelBtn("Back", if (keys) "B" else null, false, Modifier.weight(1f)) { showSaves = false }
+                        if (helperDown) PanelBtn("Open Accessibility", if (keys) "A" else null, true, Modifier.weight(2f)) { DolphinExitService.openSettings(this@NowPlayingActivity) }
+                        else {
+                            PanelBtn("Save now", if (keys) "X" else null, false, Modifier.weight(1.2f), enabled = !savesBusy) { saveNow() }
+                            PanelBtn("Load", if (keys) "A" else null, true, Modifier.weight(1f), enabled = !savesBusy && gameSaves.isNotEmpty()) {
+                                gameSaves.getOrNull(saveCursor)?.let { loadSave(it) }
+                            }
+                        }
                     }
                 } else if (mode == Mode.VIEW && showPicture && hasPicture) {
                     // Picture: always the same buttons in the same places, dimmed until something changed.
@@ -1118,6 +1196,18 @@ open class NowPlayingActivity : ComponentActivity() {
                     pending != null -> mapOf(
                         KeyEvent.KEYCODE_BUTTON_A to { restartAction = null; pending() },
                         KeyEvent.KEYCODE_BUTTON_B to { restartAction = null },
+                    )
+                    showSaves && gid != null && mode == Mode.VIEW -> mapOf(
+                        // Saves tab: the D-pad moves through the list, A loads, X saves now, B back to Controls.
+                        KeyEvent.KEYCODE_DPAD_UP to { saveCursor = (saveCursor - 1).coerceAtLeast(0) },
+                        KeyEvent.KEYCODE_DPAD_DOWN to { saveCursor = (saveCursor + 1).coerceAtMost((gameSaves.size - 1).coerceAtLeast(0)) },
+                        KeyEvent.KEYCODE_BUTTON_A to {
+                            if (helperDown) DolphinExitService.openSettings(this@NowPlayingActivity)
+                            else gameSaves.getOrNull(saveCursor)?.let { loadSave(it) }
+                        },
+                        KeyEvent.KEYCODE_BUTTON_X to { if (!helperDown) saveNow() },
+                        KeyEvent.KEYCODE_BUTTON_B to { showSaves = false },
+                        KeyEvent.KEYCODE_BUTTON_START to { resumeGame() },
                     )
                     showPicture && mode == Mode.VIEW -> {
                         // Picture tab: L1 / R1 still switch the big tabs (handled below), L2 / R2 Screen / Look /

@@ -49,12 +49,15 @@ class PopupKeysTest {
         assertEquals("A on Yes / Cancel", "confirm", run(KeyEvent.KEYCODE_BUTTON_A, dlg))
     }
 
-    @Test fun earlierAutosaves() {
-        val backup = io.github.hiramrg.delphis.platform.DolphinBridge.AutosaveBackup(java.io.File("x.s09"), System.currentTimeMillis(), 1000L)
+    @Test fun saves() {
+        val entry = io.github.hiramrg.delphis.platform.DolphinBridge.SaveEntry(
+            io.github.hiramrg.delphis.platform.DolphinBridge.SaveKind.LATEST, System.currentTimeMillis(), 1000L,
+        )
         val dlg: @androidx.compose.runtime.Composable ((String) -> Unit) -> Unit = { done ->
-            EarlierAutosavesDialog(listOf(backup), onDismiss = { done("close") }) { done("restore") }
+            SavesDialog("Game", listOf(entry), onDismiss = { done("close") }) { done("play") }
         }
-        assertEquals("B on Earlier autosaves", "close", run(KeyEvent.KEYCODE_BUTTON_B, dlg))
+        assertEquals("B on Saves", "close", run(KeyEvent.KEYCODE_BUTTON_B, dlg))
+        assertEquals("A on Saves", "play", run(KeyEvent.KEYCODE_BUTTON_A, dlg))
     }
 
     @Test fun whatsNew() {

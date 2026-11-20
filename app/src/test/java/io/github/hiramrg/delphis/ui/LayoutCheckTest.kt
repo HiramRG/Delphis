@@ -138,6 +138,23 @@ class LayoutCheckTest {
             show(act, size, "Game page · Picture → Sharpness", after = { TestHooks.pictureTab = null; act.screen = Screen.Home }) {
                 TestHooks.pictureTab = 2; act.screen = Screen.Home; settle(100); act.openGame(games[0])
             }
+            // Saves: the game page with its Saves button, then the list; Home with "helper has stopped".
+            run {
+                val now = System.currentTimeMillis()
+                val B = io.github.hiramrg.delphis.platform.DolphinBridge
+                TestHooks.saves = listOf(
+                    B.SaveEntry(B.SaveKind.LATEST, now - 60_000, 40_000_000, 9),
+                    B.SaveEntry(B.SaveKind.EARLIER, now - 1_200_000, 40_000_000),
+                    B.SaveEntry(B.SaveKind.EARLIER, now - 8_000_000, 40_000_000),
+                    B.SaveEntry(B.SaveKind.SLOT, now - 90_000_000, 40_000_000, 1),
+                )
+                show(act, size, "Game page with saves", after = { act.screen = Screen.Home }) { act.screen = Screen.Home; settle(100); act.openGame(games[0]) }
+                show(act, size, "Game page · Saves", after = { TestHooks.savesDialog = false; act.screen = Screen.Home }) {
+                    TestHooks.savesDialog = true; act.screen = Screen.Home; settle(100); act.openGame(games[0])
+                }
+                TestHooks.saves = emptyList()
+                show(act, size, "Home · helper stopped", after = { TestHooks.helperStopped = false }) { TestHooks.helperStopped = true; act.screen = Screen.Home }
+            }
             for (s in SettingsSection.entries) {
                 if (size.oneScreen && s == SettingsSection.BOTTOM) continue
                 show(act, size, "Settings → ${s.label}") { act.screen = Screen.Settings; act.settingsSection = s }
@@ -251,9 +268,42 @@ class LayoutCheckTest {
             TestHooks.padVendor = null
             io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = io.github.hiramrg.delphis.platform.ResumeNotice.Failed(g.info.gameId!!, System.currentTimeMillis())
             inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game autosave not loaded (Thor)")
+            // Back from Accessibility: the helper runs again, so it offers "Load it".
+            TestHooks.helperUp = true
+            io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = io.github.hiramrg.delphis.platform.ResumeNotice.Failed(g.info.gameId!!, System.currentTimeMillis(), helperOff = true)
+            inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game autosave not loaded, helper back (Thor)")
+            TestHooks.helperUp = false
             io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = null
         }
         TestHooks.padVendor = null
+        // The Saves tab: autosaves and Dolphin's slots; then the same tab with the helper stopped.
+        run {
+            val (g, preset, _) = inGame.first()
+            val now = System.currentTimeMillis()
+            val B = io.github.hiramrg.delphis.platform.DolphinBridge
+            TestHooks.saves = listOf(
+                B.SaveEntry(B.SaveKind.LATEST, now - 60_000, 40_000_000, 9),
+                B.SaveEntry(B.SaveKind.EARLIER, now - 1_200_000, 40_000_000),
+                B.SaveEntry(B.SaveKind.EARLIER, now - 8_000_000, 40_000_000),
+                B.SaveEntry(B.SaveKind.EARLIER, now - 30_000_000, 40_000_000),
+                B.SaveEntry(B.SaveKind.SLOT, now - 90_000_000, 40_000_000, 1),
+                B.SaveEntry(B.SaveKind.SLOT, now - 300_000_000, 40_000_000, 3),
+            )
+            TestHooks.savesTab = true
+            TestHooks.helperUp = true
+            TestHooks.padVendor = 0x045e
+            inGameMenu(phone, InGameMenuActivity::class.java, session(g, preset), "In-game Saves · Xbox")
+            inGameMenu(tablet, InGameMenuActivity::class.java, session(g, preset), "In-game Saves · Xbox")
+            TestHooks.padVendor = null
+            inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Saves (Thor)")
+            TestHooks.helperUp = false
+            inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Saves, helper stopped (Thor)")
+            TestHooks.padVendor = 0x045e
+            inGameMenu(phone, InGameMenuActivity::class.java, session(g, preset), "In-game Saves, helper stopped · Xbox")
+            TestHooks.padVendor = null
+            TestHooks.savesTab = false
+            TestHooks.saves = emptyList()
+        }
 
         step("done")
         writeSummary()

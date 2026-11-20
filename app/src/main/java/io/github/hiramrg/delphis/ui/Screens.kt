@@ -1454,26 +1454,26 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         act.statsVersion++
     }
 
-    // Earlier autosaves (kept before each autosave overwrites Dolphin's Quick Save slot).
-    var backupsVersion by remember { mutableIntStateOf(0) }
-    var showBackups by remember { mutableStateOf(false) }
-    val backups by produceState(emptyList<io.github.hiramrg.delphis.platform.DolphinBridge.AutosaveBackup>(), game.key, act.statsVersion, backupsVersion) {
-        value = if (!act.prefs.autoSaveFor(game.info.gameId)) emptyList()
-        else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.autosaveBackups(game.info.gameId) }
+    // Saves: the latest autosave, the earlier ones Delphis keeps, and Dolphin's own save slots.
+    var savesVersion by remember { mutableIntStateOf(0) }
+    var showSaves by remember { mutableStateOf(io.github.hiramrg.delphis.platform.TestHooks.savesDialog) }
+    val saves by produceState(io.github.hiramrg.delphis.platform.TestHooks.saves, game.key, act.statsVersion, savesVersion) {
+        if (io.github.hiramrg.delphis.platform.TestHooks.saves.isEmpty()) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.saves(game.info.gameId) }
     }
-    if (showBackups && backups.isNotEmpty()) {
-        EarlierAutosavesDialog(backups, onDismiss = { showBackups = false }) { chosen ->
-            showBackups = false
-            val id = game.info.gameId ?: return@EarlierAutosavesDialog
+    if (showSaves && saves.isNotEmpty()) {
+        SavesDialog(game.info.title, saves, onDismiss = { showSaves = false }) { chosen ->
+            showSaves = false
+            val id = game.info.gameId ?: return@SavesDialog
             act.lifecycleScope.launch {
-                val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.restoreAutosave(id, chosen) }
-                if (ok) Notices.done(act, "Autosave restored", "Play continues from the save of ${formatSaveTime(chosen.savedAt)}.")
-                else Notices.problem(act, "Couldn't restore that autosave")
-                backupsVersion++
+                val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.prepareSave(id, chosen) }
+                savesVersion++
                 act.statsVersion++
+                if (ok) p.play(fromSave = true)
+                else Notices.problem(act, "Couldn't use that save", "Delphis couldn't copy it into Dolphin's folder. Nothing was changed.")
             }
         }
     }
+    val latestSave = saves.firstOrNull { it.kind == io.github.hiramrg.delphis.platform.DolphinBridge.SaveKind.LATEST }
 
     // Multiplayer: who plays this game (only offered when a controller besides the Thor is connected).
     val pads = io.github.hiramrg.delphis.platform.rememberPads(act.prefs)
@@ -1592,7 +1592,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             KeyEvent.KEYCODE_DPAD_UP -> { p.move(-1); true }
             KeyEvent.KEYCODE_BUTTON_X -> { if (e.repeatCount == 0 && p.editTarget != null) p.editing = true; true }
             KeyEvent.KEYCODE_BUTTON_Y -> { if (e.repeatCount == 0) showList = !showList; true }
-            KeyEvent.KEYCODE_BUTTON_R2 -> { if (e.repeatCount == 0 && backups.isNotEmpty()) showBackups = true; true }
+            KeyEvent.KEYCODE_BUTTON_R2 -> { if (e.repeatCount == 0 && saves.isNotEmpty()) showSaves = true; true }
             KeyEvent.KEYCODE_BUTTON_L2 -> { if (e.repeatCount == 0 && !showList) viewToggle++; true }
             KeyEvent.KEYCODE_BUTTON_SELECT -> {
                 if (e.repeatCount == 0) { if (multiplayer) showPlayers = true else if (hasPicture) openScreen() }
@@ -1629,11 +1629,13 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             // Two lines when it fits, otherwise one line that scrolls (never cut).
             FitText(game.info.title, TextStyle(fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 19.sp, color = c.text))
             Text(platformLabel(game.info.platform) + " · " + playSummary(act, game), fontSize = 11.sp, color = c.textDim, maxLines = 2)
-            if (rememberHasAutosave(act, game)) Text("▶ Resumes from autosave", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, maxLines = 1)
+            if (latestSave != null && rememberHasAutosave(act, game)) Text("▶ Continues from " + formatSaveTime(latestSave.savedAt), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, maxLines = 2, lineHeight = 13.sp)
             else if (canAutosave && !gameAutosave && io.github.hiramrg.delphis.core.AutosaveRules.offByDefault(gameId)) Text(
                 "🕒 Autosave is off so the game's clock matches the real time. Save in the game.",
                 fontSize = 10.5.sp, color = c.textDim, maxLines = 3, overflow = TextOverflow.Ellipsis, lineHeight = 13.sp,
             )
+            // Saves (R2): pick which save Play continues from.
+            if (saves.isNotEmpty()) GameChip("↺ Saves (${saves.size})", "R2") { showSaves = true }
             Spacer(Modifier.height(2.dp))
             GameButton("▶", if (shown == null) "Choose a style" else "Play", "A", primary = true, enabled = shown != null) { p.play() }
         }
@@ -1686,12 +1688,12 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                     PanelBtn("✎ Edit", "X", false, enabled = p.editTarget != null) { p.editing = true }
                     val canReset = shown != null && p.isEdited(shown)
                     val canDelete = shown != null && act.store.isMine(shown.id)
-                    if (canReset || canDelete || backups.isNotEmpty()) Box {
+                    if (canReset || canDelete || saves.isNotEmpty()) Box {
                         GameChip("⋯", null) { menu = true }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) { PadKeysBox(onBack = { menu = false }) { Column {
                             if (canReset) DropdownMenuItem(text = { Text("↺ Reset to default", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; confirmReset = shown })
                             if (canDelete) DropdownMenuItem(text = { Text("🗑 Delete this preset", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; confirmDelete = shown })
-                            if (backups.isNotEmpty()) DropdownMenuItem(text = { HintText("↺ Earlier autosaves (${backups.size}) · R2", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.text) }, onClick = { menu = false; showBackups = true })
+                            if (saves.isNotEmpty()) DropdownMenuItem(text = { HintText("↺ Saves (${saves.size}) · R2", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.text) }, onClick = { menu = false; showSaves = true })
                         } } }
                     }
                 }

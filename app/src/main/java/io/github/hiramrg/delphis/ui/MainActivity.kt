@@ -914,18 +914,18 @@ class MainActivity : ComponentActivity() {
      * starts the game on the top display. The bottom view is opened first so Dolphin, launched last,
      * keeps input focus.
      */
-    fun play(entry: GameEntry, preset: Preset) {
+    fun play(entry: GameEntry, preset: Preset, fromSave: Boolean = false) {
         // One screen: always asked (once per opening) since it's the only way out of a game.
         if (!io.github.hiramrg.delphis.platform.DolphinExitService.isEnabled(this) && !(if (oneScreen) helperDeclined else prefs.skipExitHelperPrompt)) {
             exitHelperForPlay = true
-            exitHelperPrompt = { play(entry, preset) }
+            exitHelperPrompt = { play(entry, preset, fromSave) }
             return
         }
         io.github.hiramrg.delphis.platform.MenuMusic.pause()
         prefs.markPlayed(entry.key)
         statsVersion++
         MenuCompanion.close()
-        start(this, bridge, prefs, entry, preset)
+        start(this, bridge, prefs, entry, preset, fromSave = fromSave)
     }
 
     companion object {
@@ -934,7 +934,7 @@ class MainActivity : ComponentActivity() {
          * starts the game on the top display. Used by the game list and by frontends ([LaunchActivity]);
          * [returnTo] is the frontend to go back to when the game is closed.
          */
-        fun start(ctx: android.content.Context, bridge: DolphinBridge, prefs: Prefs, entry: GameEntry, preset: Preset, returnTo: String? = null) {
+        fun start(ctx: android.content.Context, bridge: DolphinBridge, prefs: Prefs, entry: GameEntry, preset: Preset, returnTo: String? = null, fromSave: Boolean = false) {
             val app = ctx.applicationContext
             GameLauncher.run(ctx) {
                 val applied = applyPreset(app, bridge, prefs, entry.info.gameId, preset)
@@ -953,8 +953,9 @@ class MainActivity : ComponentActivity() {
                     val opts = ActivityOptions.makeBasic().setLaunchDisplayId(roles.topDisplayId).toBundle()
                     runCatching { app.startActivity(intent, opts) }
                 }
+                // Picked in Saves: continue from it even when the game's autosave is off.
                 val resumeId = entry.info.gameId?.takeIf {
-                    prefs.autoSaveFor(it) && withContext(Dispatchers.IO) { bridge.hasAutosave(it) }
+                    (fromSave || prefs.autoSaveFor(it)) && withContext(Dispatchers.IO) { bridge.hasAutosave(it) }
                 }
                 if (!bridge.launchFresh(entry.uri, roles.topDisplayId, resumeId, entry.info.title, entry.info.gameId)) {
                     Notices.info(app, "Dolphin isn't installed", "Install Dolphin from the Play Store, then come back.")

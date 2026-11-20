@@ -77,14 +77,15 @@ class GamePicker(private val act: MainActivity, val game: GameEntry) {
     /** Ⓐ: picks the preset under the ring; if it's already the one in use, plays. */
     fun confirm() { if (browsing) choose(focused) else play() }
 
-    fun play() {
+    /** [fromSave]: the game continues from the save now in Dolphin's Quick Save slot (picked in Saves), autosave on or not. */
+    fun play(fromSave: Boolean = false) {
         if (browsing) choose(focused)
         val chosen = selected ?: return
         // In multiplayer, playing the plain version of a remembered gyro preset keeps the gyro one remembered for solo play.
         val rememberedNow = remembered()
         val keepSolo = multiplayer && rememberedNow != null && Players.multiplayerPreset(act.store.root(rememberedNow)).id == act.store.root(chosen).id
         if (!keepSolo) act.prefs.setPresetFor(game.key, if (rememberChoice) chosen.id else null)
-        act.play(game, chosen)
+        act.play(game, chosen, fromSave)
     }
 
     /** The preset Edit opens: the one on the map. */

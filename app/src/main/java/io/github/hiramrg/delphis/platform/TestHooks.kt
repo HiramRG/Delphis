@@ -16,6 +16,14 @@ object TestHooks {
     /** The layout check opens the in-game menu on Change controls. */
     @Volatile @JvmField var inGameChange = false
 
+    /** The layout check opens the in-game menu on the Saves tab, with these saves and the helper [helperUp] or stopped. */
+    @Volatile @JvmField var savesTab = false
+    @Volatile @JvmField var saves: List<DolphinBridge.SaveEntry> = emptyList()
+    @Volatile @JvmField var helperUp = false
+    /** The layout check opens the game page's Saves list ([saves]) / shows Home's "helper has stopped" banner. */
+    @Volatile @JvmField var savesDialog = false
+    @Volatile @JvmField var helperStopped = false
+
     /** The layout check pretends this controller is connected (one screen): vendor id, e.g. 0x045e = Xbox. */
     @Volatile @JvmField var padVendor: Int? = null
 

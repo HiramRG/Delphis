@@ -1,5 +1,7 @@
 package io.github.hiramrg.delphis.platform
 
+import io.github.hiramrg.delphis.core.SaveSlots
+
 import android.app.ActivityOptions
 import android.content.ClipData
 import android.content.ComponentName
@@ -538,8 +540,8 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
     private suspend fun stateTime(gameId: String): Long? =
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { quickStateTime(gameId) }
 
-    /** Presses Dolphin's Quick Save and waits (up to 10 s) for the state file to be written. */
-    private suspend fun autoSave(pkg: String, gameId: String) {
+    /** Presses Dolphin's Quick Save and waits (up to 10 s) for the state file to be written. True when it was. */
+    private suspend fun autoSave(pkg: String, gameId: String): Boolean {
         // Keep a copy of what's in the slot now, in case the new save turns out broken.
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { backupCurrentAutosave(gameId) }
         val before = stateTime(gameId) ?: 0L
@@ -552,6 +554,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
                     kotlinx.coroutines.delay(500)
                 }
                 CrashLog.event(if (saved != null) "autosaved $gameId" else "autosave of $gameId not confirmed in 10 s")
+                return saved != null
             }
             DolphinExitService.StateResult.SAVE_STATES_OFF -> {
                 prefs.saveStatesOff = true
@@ -559,6 +562,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             }
             else -> Unit
         }
+        return false
     }
 
     /** After launching: loads the game's Quick Save state once it has booted. */
@@ -590,6 +594,124 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         val result = DolphinExitService.quickLoad(pkg, bootMs = 0)
         CrashLog.event("load autosave of $gameId by hand: ${result ?: "helper not running"}")
         return result == DolphinExitService.StateResult.DONE
+    }
+
+    // ------------------------------------------------------------------ the Saves list
+
+    enum class SaveKind { LATEST, EARLIER, SLOT }
+
+    /**
+     * One entry of the Saves list: the latest autosave (Dolphin's Quick Save slot), an earlier autosave kept by
+     * Delphis, or one of Dolphin's own save slots ([slot] 1–10).
+     */
+    data class SaveEntry(val kind: SaveKind, val savedAt: Long, val size: Long, val slot: Int = 0, val backup: AutosaveBackup? = null, val uri: Uri? = null)
+
+    /** The game's StateSaves files: name → (uri, last modified, size). */
+    private fun stateFiles(gameId: String): Map<String, Triple<Uri, Long, Long>> {
+        val tree = prefs.dolphinTreeUri ?: return emptyMap()
+        return runCatching {
+            val dir = resolve(tree, listOf("StateSaves"), create = false) ?: return emptyMap()
+            val dirId = DocumentsContract.getDocumentId(dir)
+            val out = mutableMapOf<String, Triple<Uri, Long, Long>>()
+            resolver.query(
+                DocumentsContract.buildChildDocumentsUriUsingTree(tree, dirId),
+                arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_LAST_MODIFIED, DocumentsContract.Document.COLUMN_SIZE),
+                null, null, null,
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val name = c.getString(1) ?: continue
+                    if (!name.startsWith("$gameId.")) continue
+                    if (c.getLong(3) <= 0) continue
+                    out[name] = Triple(DocumentsContract.buildDocumentUriUsingTree(tree, c.getString(0)), c.getLong(2), c.getLong(3))
+                }
+            }
+            out
+        }.getOrDefault(emptyMap())
+    }
+
+    /** Everything the Saves list shows for the game, newest autosave first, then Dolphin's slots. Call off the main thread. */
+    fun saves(gameId: String?): List<SaveEntry> {
+        if (gameId.isNullOrBlank()) return emptyList()
+        val files = stateFiles(gameId)
+        val out = mutableListOf<SaveEntry>()
+        files[DolphinConfigWriter.quickStatePath(gameId).last()]?.let { (uri, t, size) -> out += SaveEntry(SaveKind.LATEST, t, size, SaveSlots.QUICK, uri = uri) }
+        autosaveBackups(gameId).forEach { out += SaveEntry(SaveKind.EARLIER, it.savedAt, it.size, backup = it) }
+        SaveSlots.ownSlots(files.keys, gameId).forEach { (slot, name) ->
+            val (uri, t, size) = files.getValue(name)
+            out += SaveEntry(SaveKind.SLOT, t, size, slot, uri = uri)
+        }
+        return out
+    }
+
+    /** Writes [file] into the game's Quick Save slot. */
+    private fun writeQuickSlot(gameId: String, file: java.io.File) {
+        val tree = prefs.dolphinTreeUri ?: error("no Dolphin folder")
+        val uri = resolve(tree, DolphinConfigWriter.quickStatePath(gameId), create = true) ?: error("couldn't open the save slot")
+        resolver.openOutputStream(uri, "wt")?.use { out -> file.inputStream().use { it.copyTo(out, 256 * 1024) } } ?: error("couldn't write the save slot")
+    }
+
+    /**
+     * Game page, before Play: puts [entry] in the Quick Save slot so the game starts from it. The save that was
+     * there is kept as an earlier autosave. Call off the main thread.
+     */
+    fun prepareSave(gameId: String, entry: SaveEntry): Boolean = when (entry.kind) {
+        SaveKind.LATEST -> true
+        SaveKind.EARLIER -> restoreAutosave(gameId, entry.backup ?: return false)
+        SaveKind.SLOT -> runCatching {
+            val staged = stage(gameId, entry)
+            try { backupCurrentAutosave(gameId); writeQuickSlot(gameId, staged) } finally { staged.delete() }
+            CrashLog.event("Dolphin slot ${entry.slot} of $gameId put in the Quick Save slot")
+            true
+        }.getOrElse { CrashLog.event("couldn't use slot ${entry.slot} of $gameId: ${it.message}"); false }
+    }
+
+    /** A private copy of [entry] (an earlier autosave is moved, so keeping new backups can't delete it meanwhile). */
+    private fun stage(gameId: String, entry: SaveEntry): java.io.File {
+        val dir = backupDir(gameId).apply { mkdirs() }
+        val staged = java.io.File(dir, "loading.bin")
+        staged.delete()
+        if (entry.kind == SaveKind.EARLIER) {
+            val f = entry.backup?.file ?: error("no file")
+            if (!f.renameTo(staged)) error("couldn't prepare the copy")
+        } else {
+            val uri = entry.uri ?: error("no file")
+            resolver.openInputStream(uri)?.use { input -> staged.outputStream().use { input.copyTo(it, 256 * 1024) } } ?: error("couldn't read the save")
+        }
+        return staged
+    }
+
+    /**
+     * In game: loads [entry] right now. Your progress is autosaved first (so it becomes an earlier autosave you can
+     * go back to), the chosen save goes into the Quick Save slot and Quick Load is pressed. Needs the helper.
+     */
+    suspend fun loadSaveInGame(gameId: String, entry: SaveEntry): Boolean {
+        val pkg = installedPackage() ?: return false
+        if (!DolphinExitService.running) { CrashLog.event("load save of $gameId: helper not running"); return false }
+        val staged = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { stage(gameId, entry) }.getOrElse { CrashLog.event("load save of $gameId: ${it.message}"); null }
+        } ?: return false
+        try {
+            autoSave(pkg, gameId)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { backupCurrentAutosave(gameId); writeQuickSlot(gameId, staged) }
+        } catch (e: Exception) {
+            CrashLog.event("load save of $gameId: ${e.message}")
+            if (entry.kind == SaveKind.EARLIER) entry.backup?.file?.let { staged.renameTo(it) } // nothing is lost
+            return false
+        } finally {
+            if (staged.exists() && entry.kind != SaveKind.EARLIER) staged.delete()
+        }
+        staged.delete()
+        val result = DolphinExitService.quickLoad(pkg, bootMs = 0)
+        val what = when (entry.kind) { SaveKind.LATEST -> "latest autosave"; SaveKind.EARLIER -> "earlier autosave"; SaveKind.SLOT -> "Dolphin slot ${entry.slot}" }
+        CrashLog.event("load $what of $gameId in game: ${result ?: "helper not running"}")
+        return result == DolphinExitService.StateResult.DONE
+    }
+
+    /** In game: "Save now", a fresh autosave without leaving the game. Needs the helper. */
+    suspend fun saveNow(gameId: String): Boolean {
+        val pkg = installedPackage() ?: return false
+        if (!DolphinExitService.running) return false
+        return autoSave(pkg, gameId)
     }
 
     // ------------------------------------------------------------------ earlier autosaves
