@@ -168,6 +168,9 @@ class LayoutCheckTest {
                 show(act, size, "Pop-up: check the controller", popupOnly = true, after = { act.noPadPrompt = false; act.padConnected = null; act.padNeedsCheck = false }) {
                     act.screen = Screen.Home; act.padConnected = "Xbox Wireless Controller"; act.padVendor = 0x045e; act.padNeedsCheck = true; act.noPadPrompt = true
                 }
+                show(act, size, "Pop-up: press A on a new controller", popupOnly = true, after = { act.labelCheck = null }) {
+                    act.screen = Screen.Home; act.labelCheck = "test" to "8BitDo Ultimate 2C Wireless Controller"
+                }
                 show(act, size, "Pop-up: close games", popupOnly = true, after = { act.exitHelperPrompt = null }) {
                     act.screen = Screen.Home; act.exitHelperForPlay = true; act.exitHelperPrompt = {}
                 }

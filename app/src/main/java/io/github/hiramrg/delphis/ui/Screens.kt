@@ -1460,7 +1460,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     var showPlayers by remember { mutableStateOf(false) }
     if (showPlayers && multiplayer) {
         PlayersDialog(
-            game.info.title, pads, playerSetup, onChange = { playerSetup = it; act.prefs.setPlayerSetup(gameId!!, it) }, onDismiss = { showPlayers = false },
+            game.info.title, pads, playerSetup, onChange = { playerSetup = it; act.prefs.setPlayerSetup(gameId!!, it); PadGlyphs.update(act.oneScreen) }, onDismiss = { showPlayers = false },
             onChecked = { pad, byLabel -> act.prefs.setPadByLabel(pad.key, byLabel) },
             translate = { e -> io.github.hiramrg.delphis.platform.PadKeys.translate(e, act.prefs, act.oneScreen) },
         )
@@ -1526,7 +1526,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             return@rememberUpdatedState true
         }
         if (showScreen && hasPicture) {
-            // Picture panel open: L2 / R2 (or L1 / R1) = Screen / Look / Sharpness; Screen: Ⓨ = 4:3 / 16:9, the D-pad
+            // Picture panel open: L2 / R2 (or L1 / R1) = Screen / Look / Sharpness; Screen: Ⓧ = 4:3 / 16:9, the D-pad
             // = option; Look / Sharpness: the D-pad moves on the list (two columns). Ⓐ Done, Ⓑ Cancel; nothing else reaches the page.
             val shownTab = if (pictureTab in picTabs) pictureTab else picTabs.first()
             val onLook = shownTab == 1
@@ -1546,7 +1546,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                 // L2 / R2 switch Screen / Look / Sharpness, as in the in-game menu (L1 / R1 too).
                 KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_L2 -> if (e.repeatCount == 0) picTabs.getOrNull(picTabs.indexOf(shownTab) - 1)?.let { pictureTab = it }
                 KeyEvent.KEYCODE_BUTTON_R1, KeyEvent.KEYCODE_BUTTON_R2 -> if (e.repeatCount == 0) picTabs.getOrNull(picTabs.indexOf(shownTab) + 1)?.let { pictureTab = it }
-                KeyEvent.KEYCODE_BUTTON_Y -> if (!onLook && !onRes && sc != null && e.repeatCount == 0) setScreen(sc.copy(shape = if (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD else io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE))
+                KeyEvent.KEYCODE_BUTTON_X -> if (!onLook && !onRes && sc != null && e.repeatCount == 0) setScreen(sc.copy(shape = if (sc.shape == io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE) io.github.hiramrg.delphis.core.GameScreen.Shape.STANDARD else io.github.hiramrg.delphis.core.GameScreen.Shape.WIDE))
                 KeyEvent.KEYCODE_DPAD_LEFT -> if (onLook && lc != null) lookCursor = lookStep(lc, -1) else if (!onRes && sc != null) setScreen(screenStep(sc, -1))
                 KeyEvent.KEYCODE_DPAD_RIGHT -> if (onLook && lc != null) lookCursor = lookStep(lc, 1) else if (!onRes && sc != null) setScreen(screenStep(sc, 1))
                 KeyEvent.KEYCODE_DPAD_UP -> if (onLook && lc != null) lookCursor = lookStep(lc, -2) else if (!onRes && sc != null) setScreen(screenStep(sc, -2))
@@ -1583,6 +1583,11 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         }
     }
     DisposableEffect(Unit) { act.keyListener = { onKey(it) }; onDispose { act.keyListener = null } }
+    // The icons follow this game's Player 1 (its Players order) while its page is open.
+    DisposableEffect(game.key) {
+        PadGlyphs.gameKey = game.info.gameId; PadGlyphs.update(act.oneScreen)
+        onDispose { PadGlyphs.gameKey = null; PadGlyphs.update(act.oneScreen) }
+    }
 
     var menu by remember { mutableStateOf(false) }
     val shown = p.focused ?: p.selected
@@ -1658,11 +1663,11 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                     val canDelete = shown != null && act.store.isMine(shown.id)
                     if (canReset || canDelete || backups.isNotEmpty()) Box {
                         GameChip("⋯", null) { menu = true }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) { PadKeysBox(onBack = { menu = false }) { Column {
                             if (canReset) DropdownMenuItem(text = { Text("↺ Reset to default", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; confirmReset = shown })
                             if (canDelete) DropdownMenuItem(text = { Text("🗑 Delete this preset", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; confirmDelete = shown })
                             if (backups.isNotEmpty()) DropdownMenuItem(text = { HintText("↺ Earlier autosaves (${backups.size}) · R2", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.text) }, onClick = { menu = false; showBackups = true })
-                        }
+                        } } }
                     }
                 }
                 Spacer(Modifier.height(4.dp))

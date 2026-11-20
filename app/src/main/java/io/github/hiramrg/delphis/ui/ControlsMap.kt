@@ -162,17 +162,17 @@ private fun Modifier.androidxVerticalScroll(): Modifier = this.then(Modifier.ver
 /** The same badge as on the diagram: coloured face buttons, blue chips, stick rings, the D-pad cross. */
 @Composable
 fun ControlBadge(k: ThorControl) {
+    val d = androidx.compose.ui.platform.LocalDensity.current
     when {
-        k == FACE_EAST || k == FACE_SOUTH || k == FACE_NORTH || k == FACE_WEST ->
-            Box(Modifier.size(20.dp).clip(RoundedCornerShape(50)).background(controlColor(k)), contentAlignment = Alignment.Center) {
-                Text(k.padLabel, fontSize = 10.5.sp, fontWeight = FontWeight.Black, color = White)
-            }
-        k == LEFT_STICK || k == RIGHT_STICK ->
-            Box(
-                Modifier.size(20.dp).clip(RoundedCornerShape(50)).background(Color(0xFF3A4250))
-                    .border(2.dp, if (k == RIGHT_STICK) controlColor(k) else ChipBlue, RoundedCornerShape(50)),
-                contentAlignment = Alignment.Center,
-            ) { Text(if (k == LEFT_STICK) "L" else "R", fontSize = 10.sp, fontWeight = FontWeight.Black, color = White) }
+        k == FACE_EAST || k == FACE_SOUTH || k == FACE_NORTH || k == FACE_WEST -> Canvas(Modifier.size(20.dp)) {
+            drawCircle(controlColor(k))
+            drawCenteredGlyph(k.padLabel, size.width / 2f, size.height / 2f, 10.5.sp.toPx(), White)
+        }
+        k == LEFT_STICK || k == RIGHT_STICK -> Canvas(Modifier.size(20.dp)) {
+            drawCircle(Color(0xFF3A4250))
+            drawCircle(if (k == RIGHT_STICK) controlColor(k) else ChipBlue, size.minDimension / 2f - 1.dp.toPx(), style = Stroke(2.dp.toPx()))
+            drawCenteredGlyph(if (k == LEFT_STICK) "L" else "R", size.width / 2f, size.height / 2f, 10.sp.toPx(), White)
+        }
         k == DPAD -> Canvas(Modifier.size(18.dp)) {
             val a = size.minDimension / 2f; val b = a * 0.34f
             drawRoundRect(ChipBlue, Offset(a - b, 0f), Size(2 * b, 2 * a), CornerRadius(2f))
@@ -181,8 +181,11 @@ fun ControlBadge(k: ThorControl) {
         else -> {
             val name = mapBadgeName(k)
             val col = if (k == GYRO || k == R3) controlColor(k) else ChipBlue
-            Box(Modifier.height(18.dp).clip(RoundedCornerShape(50)).background(col).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
-                Text(name, fontSize = 9.5.sp, fontWeight = FontWeight.Black, color = White, maxLines = 1)
+            val fontPx = with(d) { 9.5.sp.toPx() }
+            val w = with(d) { (glyphWidth(name, fontPx) / density).dp } + 12.dp
+            Canvas(Modifier.height(18.dp).width(maxOf(w, 18.dp))) {
+                drawRoundRect(col, cornerRadius = CornerRadius(size.height / 2f))
+                drawCenteredGlyph(name, size.width / 2f, size.height / 2f, fontPx, White)
             }
         }
     }
@@ -297,14 +300,12 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
             isChip(k) -> {
                 val col = if (k == GYRO || k == R3) controlColor(k) else ChipBlue
                 drawRoundRect(col, p(left0, yMid - r), Size(bw * s, badgeH * s), CornerRadius(r * s))
-                val l = measure(badgeName(k), bs, White)
-                drawText(l, topLeft = p(cx - w(l) / 2f, yMid - h(l) / 2f))
+                drawCenteredGlyph(badgeName(k), cx * s, yMid * s, bs * s, White)
             }
             k == LEFT_STICK || k == RIGHT_STICK -> {
                 drawCircle(unused, r * s, p(cx, yMid))
                 drawCircle(if (k == RIGHT_STICK) controlColor(k) else ChipBlue, (r - 1f) * s, p(cx, yMid), style = Stroke(2f * s))
-                val l = measure(if (k == LEFT_STICK) "L" else "R", bs * 0.95f, White)
-                drawText(l, topLeft = p(cx - w(l) / 2f, yMid - h(l) / 2f))
+                drawCenteredGlyph(if (k == LEFT_STICK) "L" else "R", cx * s, yMid * s, bs * 0.95f * s, White)
             }
             k == DPAD -> {
                 val a = r * 0.9f; val b = r * 0.32f
@@ -313,8 +314,7 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
             }
             else -> { // face button
                 drawCircle(controlColor(k), r * s, p(cx, yMid))
-                val l = measure(k.padLabel, bs * 0.95f, White)
-                drawText(l, topLeft = p(cx - w(l) / 2f, yMid - h(l) / 2f))
+                drawCenteredGlyph(k.padLabel, cx * s, yMid * s, bs * 0.95f * s, White)
             }
         }
         return bw
@@ -354,8 +354,8 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
     // ---- the Thor
         listOf(L2 to 14f, L1 to 62f, R1 to 192f, R2 to 240f).forEach { (key, x) ->
             drawRoundRect(if (used(key)) ChipBlue else unused, p(X(x), oy - tabs), Size(46f * k * s, (tabs + 4f * k) * s), CornerRadius(7f * k * s))
-            val l = measure(key.padLabel, maxOf(6.5f, 9f * k), White)
-            if (h(l) < tabs + 3f) drawText(l, topLeft = p(X(x + 23f) - w(l) / 2f, oy - tabs + (tabs - h(l)) / 2f))
+            val fs = maxOf(6.5f, 9f * k)
+            if (fs < tabs + 3f) drawCenteredGlyph(key.padLabel, X(x + 23f) * s, (oy - tabs / 2f) * s, fs * s, White)
         }
         if (PadGlyphs.thorBody) {
             drawRoundRect(deviceFill, p(ox, oy), Size(tw * s, th * s), CornerRadius(34f * k * s))
@@ -384,8 +384,8 @@ private fun DrawScope.drawMap(actions: Map<ThorControl, String>, tm: TextMeasure
         drawRoundRect(dpc, p(X(26f), Y(102f)), Size(36f * k * s, 12f * k * s), CornerRadius(3f * k * s))
         listOf(FACE_NORTH to Offset(0f, -14f), FACE_EAST to Offset(14f, 0f), FACE_SOUTH to Offset(0f, 14f), FACE_WEST to Offset(-14f, 0f)).forEach { (key, o) ->
             drawCircle(if (used(key)) controlColor(key) else unused, 7.5f * k * s, p(X(256f + o.x), Y(50f + o.y)))
-            val l = measure(key.padLabel, maxOf(6f, 8.5f * k), White)
-            if (h(l) < 15f * k + 2f) drawText(l, topLeft = p(X(256f + o.x) - w(l) / 2f, Y(50f + o.y) - h(l) / 2f))
+            val fs = maxOf(6f, 8.5f * k)
+            if (fs < 15f * k + 2f) drawCenteredGlyph(key.padLabel, X(256f + o.x) * s, Y(50f + o.y) * s, fs * s, White)
         }
         drawCircle(unused, 19f * k * s, p(X(256f), Y(108f)))
         drawCircle(if (used(RIGHT_STICK) || used(R3)) controlColor(RIGHT_STICK) else unused, 19f * k * s, p(X(256f), Y(108f)), style = Stroke(3f * k * s))
@@ -450,15 +450,12 @@ private fun DrawScope.drawPad(tm: TextMeasurer, brand: PadBrand?, left: Float, t
     val thin = Stroke(2f * k * s)
     val ps = brand == PadBrand.PLAYSTATION
     val offset = brand == PadBrand.XBOX || brand == PadBrand.SWITCH
-    fun label(t: String, x: Float, y: Float, size: Float, color: Color) {
-        val l = tm.measure(t, TextStyle(fontSize = (size * k * s).toSp(), fontWeight = FontWeight.Black, color = color))
-        drawText(l, topLeft = Offset(X(x) - l.size.width / 2f, Y(y) - l.size.height / 2f))
-    }
+    fun label(t: String, x: Float, y: Float, size: Float, color: Color) = drawCenteredGlyph(t, X(x), Y(y), size * k * s, color)
     fun chip(t: String, x: Float, y: Float, on: Boolean) {
-        val l = tm.measure(t, TextStyle(fontSize = (9.5f * k * s).toSp(), fontWeight = FontWeight.Black, color = Color.White))
-        val w = maxOf(l.size.width + 12f * k * s, 20f * k * s); val h = 18f * k * s
+        val fs = 9.5f * k * s
+        val w = maxOf(glyphWidth(t, fs) + 12f * k * s, 20f * k * s); val h = 18f * k * s
         drawRoundRect(if (on) ChipBlue else unused, Offset(X(x) - w / 2f, Y(y) - h / 2f), Size(w, h), CornerRadius(h / 2f))
-        drawText(l, topLeft = Offset(X(x) - l.size.width / 2f, Y(y) - l.size.height / 2f))
+        drawCenteredGlyph(t, X(x), Y(y), fs, Color.White)
     }
 
     // Shoulders: chips above the body.

@@ -201,6 +201,7 @@ open class NowPlayingActivity : ComponentActivity() {
         io.github.hiramrg.delphis.platform.Achievements.init(this)
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
+        if (PadGlyphs.prefs == null) PadGlyphs.prefs = prefs
         bridge = DolphinBridge(this, prefs)
         store = PresetStore(this)
         registerReceiver(screenReceiver, android.content.IntentFilter().apply {
@@ -271,7 +272,6 @@ open class NowPlayingActivity : ComponentActivity() {
 
     override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
         if (!panelMode) return super.dispatchKeyEvent(raw)
-        if (raw.action == KeyEvent.ACTION_DOWN) PadGlyphs.used(raw)
         // One screen: controllers that don't report standard keys (e.g. a Switch Pro Controller) are translated.
         val event = io.github.hiramrg.delphis.platform.PadKeys.translate(raw, prefs, true)
         // The action runs when the button is let go, so the whole press stays here: acting on the press
@@ -291,8 +291,18 @@ open class NowPlayingActivity : ComponentActivity() {
             return true
         }
         if (super.dispatchKeyEvent(event)) return true
-        if (event !== raw) io.github.hiramrg.delphis.platform.PadKeys.fallback(event)?.let { return super.dispatchKeyEvent(it) }
-        return false
+        val fb = io.github.hiramrg.delphis.platform.PadKeys.fallback(event)?.let { super.dispatchKeyEvent(it) } ?: false
+        // A controller button nothing here uses does nothing (never Android's own meaning, e.g. B as Back twice).
+        return fb || io.github.hiramrg.delphis.platform.PadKeys.isPadButton(raw)
+    }
+
+    /** Presses the button with the controller's focus ring (D-pad + A). False when nothing has focus. */
+    private fun pressFocused(): Boolean {
+        val t = android.os.SystemClock.uptimeMillis()
+        val down = KeyEvent(t, t, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, 0)
+        if (!super.dispatchKeyEvent(down)) return false
+        super.dispatchKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER, 0))
+        return true
     }
 
     private val triggerKeys = io.github.hiramrg.delphis.platform.TriggerKeys()
@@ -440,6 +450,7 @@ open class NowPlayingActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (isFinishing) PadGlyphs.unpin()
         if (emptyMenu) {
             runCatching { getSystemService(android.hardware.input.InputManager::class.java).unregisterInputDeviceListener(padListener) }
             runCatching { unregisterReceiver(screenReceiver) }
@@ -554,6 +565,8 @@ open class NowPlayingActivity : ComponentActivity() {
         // Who plays (multiplayer): with several players, gyro / tilt / trackpad were left out at launch.
         val gid = s.info.gameId
         val startPlayers = remember(startedAt) { if (gid != null) runCatching { io.github.hiramrg.delphis.platform.Pads.players(prefs, gid) }.getOrDefault(emptyList()) else emptyList() }
+        // The icons stay those of the controller that was Player 1 when the game started (the one Dolphin uses).
+        LaunchedEffect(startPlayers) { PadGlyphs.pin(startPlayers.firstOrNull()?.key) }
         val preset = remember(s.presetId, startPlayers) {
             resolve(s.presetId).let { if (io.github.hiramrg.delphis.platform.Pads.multiplayer(startPlayers)) io.github.hiramrg.delphis.core.Players.multiplayerPreset(it) else it }
         }
@@ -789,7 +802,7 @@ open class NowPlayingActivity : ComponentActivity() {
                         val resumeFocus = remember { androidx.compose.ui.focus.FocusRequester() }
                         LaunchedEffect(openSignal) { delay(150); runCatching { resumeFocus.requestFocus() } }
                         // D-pad down goes straight to the action buttons instead of stopping at the map's toggle.
-                        PanelBtn("▶ Resume", if (showPicture) null else "B", false, Modifier.focusRequester(resumeFocus).focusProperties { if (mode == Mode.VIEW && !(preset.isTrackpad && padView)) down = changeFocus }) { resumeGame() }
+                        PanelBtn("▶ Resume", if (showPicture) null else "A", false, Modifier.focusRequester(resumeFocus).focusProperties { if (mode == Mode.VIEW && !(preset.isTrackpad && padView)) down = changeFocus }) { resumeGame() }
                     } else {
                         // Trackpad on screen: the action row is replaced by the pad's controls, so Quit stays up here.
                         if (preset.isTrackpad && padView && mode == Mode.VIEW) TopChip("Quit") { if (prefs.skipExitWarning) closingGame { backToMainMenu() } else confirmExit = true }
@@ -972,12 +985,12 @@ open class NowPlayingActivity : ComponentActivity() {
                     if (panelMode && !PadGlyphs.touch) {
                         // One row, so the list gets the room (on a phone the panel is short).
                         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PanelBtn("Cancel", "A", false, Modifier.weight(1f)) { cancelPicture() }
+                            PanelBtn("Cancel", "B", false, Modifier.weight(1f)) { cancelPicture() }
                             PanelBtn("Later", "Y", false, Modifier.weight(1f), enabled = pictureChanged) { showPicture = false }
                             PanelBtn("Apply & restart", "⊕", true, Modifier.weight(1.6f), enabled = pictureChanged) { apply() }
                         }
                         Box(Modifier.fillMaxWidth().padding(top = 5.dp), contentAlignment = Alignment.Center) {
-                            HintText(pictureHint(picTabs, picShown, "B"), fontSize = 11.sp, color = LocalWii.current.textDim, lineHeight = 16.sp)
+                            HintText(pictureHint(picTabs, picShown, "A"), fontSize = 11.sp, color = LocalWii.current.textDim, lineHeight = 16.sp)
                         }
                     } else Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         PanelBtn("Cancel", null, false, Modifier.weight(1f)) { cancelPicture() }
@@ -990,11 +1003,11 @@ open class NowPlayingActivity : ComponentActivity() {
                     val use = { restartAction = { mode = Mode.VIEW; changeCandidate = null; applyAndRestart(s, cand, remember = true) } }
                     if (panelMode && !PadGlyphs.touch) {
                         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PanelBtn("Use this layout", "B", true, Modifier.weight(1.25f), enabled = canUse) { use() }
-                            PanelBtn("Cancel", "A", false, Modifier.weight(1f)) { mode = Mode.VIEW; changeCandidate = null }
+                            PanelBtn("Use this layout", "A", true, Modifier.weight(1.25f), enabled = canUse) { use() }
+                            PanelBtn("Cancel", "B", false, Modifier.weight(1f)) { mode = Mode.VIEW; changeCandidate = null }
                         }
                         Box(Modifier.fillMaxWidth().padding(top = 5.dp), contentAlignment = Alignment.Center) {
-                            HintText("✚ Choose   Ⓑ Use   Ⓐ Back to the menu", fontSize = 11.sp, color = LocalWii.current.textDim, lineHeight = 16.sp)
+                            HintText("✚ Choose   Ⓐ Use   Ⓑ Back to the menu", fontSize = 11.sp, color = LocalWii.current.textDim, lineHeight = 16.sp)
                         }
                     } else Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         PanelBtn("Cancel", null, false, Modifier.weight(1f)) { mode = Mode.VIEW; changeCandidate = null }
@@ -1003,7 +1016,7 @@ open class NowPlayingActivity : ComponentActivity() {
                 } else if (mode == Mode.VIEW) {
                     // The same actions on the Thor and on one screen: change or edit the controls, restart, quit.
                     // One screen: each shows its own controller button, so they sit in two rows to keep every label whole.
-                    val change: @Composable (Modifier) -> Unit = { m -> PanelBtn("Change", if (panelMode && !PadGlyphs.touch) "Y" else null, true, m.focusRequester(changeFocus)) { showBrightness = false; changeCandidate = preset; mode = Mode.CHANGE } }
+                    val change: @Composable (Modifier) -> Unit = { m -> PanelBtn("Change", if (panelMode && !PadGlyphs.touch) "X" else null, true, m.focusRequester(changeFocus)) { showBrightness = false; changeCandidate = preset; mode = Mode.CHANGE } }
                     val edit: @Composable (Modifier) -> Unit = { m -> PanelBtn("✎ Edit", null, false, m) { showBrightness = false; mode = Mode.EDIT } }
                     val restart: @Composable (Modifier) -> Unit = { m ->
                         PanelBtn("Restart", if (panelMode && !PadGlyphs.touch) "⊖" else null, false, m) {
@@ -1012,7 +1025,7 @@ open class NowPlayingActivity : ComponentActivity() {
                         }
                     }
                     val quit: @Composable (Modifier) -> Unit = { m ->
-                        PanelBtn("Quit game", if (panelMode && !PadGlyphs.touch) "X" else null, false, m, warn = true) {
+                        PanelBtn("Quit game", if (panelMode && !PadGlyphs.touch) "Y" else null, false, m, warn = true) {
                             showBrightness = false
                             if (prefs.skipExitWarning) closingGame { backToMainMenu() } else { exitDontAsk = false; confirmExit = true }
                         }
@@ -1029,7 +1042,7 @@ open class NowPlayingActivity : ComponentActivity() {
                             Modifier.fillMaxWidth().padding(top = 5.dp),
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
                         ) {
-                            KeyIcon("A", size = 16.dp)
+                            KeyIcon("B", size = 16.dp)
                             Text("or", fontSize = 11.sp, color = LocalWii.current.textDim)
                             KeyIcon("⊕", size = 16.dp)
                             Text("back to the game", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LocalWii.current.textDim)
@@ -1068,17 +1081,30 @@ open class NowPlayingActivity : ComponentActivity() {
                 val pending = restartAction
                 panelKeys = when {
                     resumeFailed != null -> mapOf(
-                        KeyEvent.KEYCODE_BUTTON_B to { loadAutosave() },
-                        KeyEvent.KEYCODE_BUTTON_A to { io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = null },
+                        KeyEvent.KEYCODE_BUTTON_A to { loadAutosave() },
+                        KeyEvent.KEYCODE_BUTTON_B to { io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = null },
+                    )
+                    // Every pop-up answers A (its blue button) and B (the other one), like its icons say.
+                    padJoined != null -> mapOf(
+                        KeyEvent.KEYCODE_BUTTON_A to { padJoined = null; closingGame { applyAndRestart(s, preset, remember = false) } },
+                        KeyEvent.KEYCODE_BUTTON_B to { padJoined = null },
+                    )
+                    GameWatch.unexpectedStop.value && busy == null && helperPrompt == null -> mapOf(
+                        KeyEvent.KEYCODE_BUTTON_A to { GameWatch.unexpectedStop.value = false; applyAndRestart(s, preset, remember = false) },
+                        KeyEvent.KEYCODE_BUTTON_B to { GameWatch.unexpectedStop.value = false; backToMainMenu() },
+                    )
+                    helperPrompt != null -> mapOf(
+                        KeyEvent.KEYCODE_BUTTON_A to { helperPrompt = null; DolphinExitService.openSettings(this@NowPlayingActivity) },
+                        KeyEvent.KEYCODE_BUTTON_B to { helperPrompt = null },
                     )
                     confirmExit -> mapOf(
-                        KeyEvent.KEYCODE_BUTTON_B to { confirmExit = false; if (exitDontAsk) prefs.skipExitWarning = true; closingGame { backToMainMenu() } },
-                        KeyEvent.KEYCODE_BUTTON_A to { confirmExit = false },
-                        KeyEvent.KEYCODE_BUTTON_Y to { exitDontAsk = !exitDontAsk },
+                        KeyEvent.KEYCODE_BUTTON_A to { confirmExit = false; if (exitDontAsk) prefs.skipExitWarning = true; closingGame { backToMainMenu() } },
+                        KeyEvent.KEYCODE_BUTTON_B to { confirmExit = false },
+                        KeyEvent.KEYCODE_BUTTON_X to { exitDontAsk = !exitDontAsk },
                     )
                     pending != null -> mapOf(
-                        KeyEvent.KEYCODE_BUTTON_B to { restartAction = null; pending() },
-                        KeyEvent.KEYCODE_BUTTON_A to { restartAction = null },
+                        KeyEvent.KEYCODE_BUTTON_A to { restartAction = null; pending() },
+                        KeyEvent.KEYCODE_BUTTON_B to { restartAction = null },
                     )
                     showPicture && mode == Mode.VIEW -> {
                         // Picture tab: L1 / R1 still switch the big tabs (handled below), L2 / R2 Screen / Look /
@@ -1104,9 +1130,9 @@ open class NowPlayingActivity : ComponentActivity() {
                             KeyEvent.KEYCODE_DPAD_RIGHT to { move(1) },
                             KeyEvent.KEYCODE_DPAD_UP to { move(-pictureCols) },
                             KeyEvent.KEYCODE_DPAD_DOWN to { move(pictureCols) },
-                            KeyEvent.KEYCODE_BUTTON_B to { pick() },
+                            KeyEvent.KEYCODE_BUTTON_A to { pick() },
                             KeyEvent.KEYCODE_BUTTON_START to { if (pictureChanged) { applyAndRestart(s, preset, remember = false); showPicture = false } else resumeGame() },
-                            KeyEvent.KEYCODE_BUTTON_A to { cancelPicture() },
+                            KeyEvent.KEYCODE_BUTTON_B to { cancelPicture() },
                             KeyEvent.KEYCODE_BUTTON_Y to { if (pictureChanged) showPicture = false },
                             KeyEvent.KEYCODE_BUTTON_X to {
                                 if (picShown == 0) screenChoice?.let { c ->
@@ -1128,18 +1154,20 @@ open class NowPlayingActivity : ComponentActivity() {
                         mapOf(
                             KeyEvent.KEYCODE_DPAD_UP to { step(-1) },
                             KeyEvent.KEYCODE_DPAD_DOWN to { step(1) },
-                            KeyEvent.KEYCODE_BUTTON_B to { if (cand.id != preset.id || !s.applied) restartAction = { mode = Mode.VIEW; changeCandidate = null; applyAndRestart(s, cand, remember = true) } },
-                            KeyEvent.KEYCODE_BUTTON_A to { mode = Mode.VIEW; changeCandidate = null },
+                            KeyEvent.KEYCODE_BUTTON_A to { if (cand.id != preset.id || !s.applied) restartAction = { mode = Mode.VIEW; changeCandidate = null; applyAndRestart(s, cand, remember = true) } },
+                            KeyEvent.KEYCODE_BUTTON_B to { mode = Mode.VIEW; changeCandidate = null },
                         )
                     }
                     mode != Mode.VIEW || showBrightness -> emptyMap()
                     else -> mapOf(
-                        KeyEvent.KEYCODE_BUTTON_A to { resumeGame() },
+                        // A presses the highlighted button (Resume when the menu opens); B and Start go back to the game.
+                        KeyEvent.KEYCODE_BUTTON_A to { if (!pressFocused()) resumeGame() },
+                        KeyEvent.KEYCODE_BUTTON_B to { resumeGame() },
                         KeyEvent.KEYCODE_BUTTON_START to { resumeGame() },
-                        KeyEvent.KEYCODE_BUTTON_Y to { showBrightness = false; changeCandidate = preset; mode = Mode.CHANGE },
+                        KeyEvent.KEYCODE_BUTTON_X to { showBrightness = false; changeCandidate = preset; mode = Mode.CHANGE },
                         KeyEvent.KEYCODE_BUTTON_L2 to { if (!showAchievements) controlsToggle++ },
                         KeyEvent.KEYCODE_BUTTON_R2 to { if (!showAchievements) controlsToggle++ },
-                        KeyEvent.KEYCODE_BUTTON_X to quit,
+                        KeyEvent.KEYCODE_BUTTON_Y to quit,
                         KeyEvent.KEYCODE_BUTTON_SELECT to restart,
                     )
                 }
@@ -1300,7 +1328,7 @@ open class NowPlayingActivity : ComponentActivity() {
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 DontAskRow("Don't show this again", dontAsk, onDontAsk)
-                if (panelMode) KeyIcon("Y")
+                if (panelMode) KeyIcon("X")
             }
         }
     }
@@ -1315,8 +1343,8 @@ open class NowPlayingActivity : ComponentActivity() {
             PopupPanel(
                 listOfNotNull("In game", GameWatch.session?.info?.title).joinToString(" · "), title, Modifier.widthIn(max = 420.dp),
                 buttons = {
-                    PanelBtn(dismiss, if (panelMode) "A" else null, false, onClick = onDismiss)
-                    PanelBtn(confirm, if (panelMode) "B" else null, true, onClick = onConfirm)
+                    PanelBtn(dismiss, if (panelMode) "B" else null, false, onClick = onDismiss)
+                    PanelBtn(confirm, if (panelMode) "A" else null, true, onClick = onConfirm)
                 },
             ) {
                 Text(body, fontSize = 12.5.sp, lineHeight = 16.sp, color = LocalWii.current.textDim)

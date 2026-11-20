@@ -194,7 +194,7 @@ private fun DrawScope.drawDevice(g: ThorGeometry, preset: Preset, m: TextMeasure
         val center = g.faceCenter(c)
         drawCircle(fillFor(c), g.faceR, center)
         drawCircle(lineFor(c), g.faceR, center, style = stroke)
-        drawCenteredText(m, c.padLabel, center, (g.faceR * 0.95f).toSp(), faceLetterColors.getValue(c), bold = true)
+        drawCenteredGlyph(c.padLabel, center.x, center.y, g.faceR * 0.95f, faceLetterColors.getValue(c))
     }
 
     if (MOTION in used) {

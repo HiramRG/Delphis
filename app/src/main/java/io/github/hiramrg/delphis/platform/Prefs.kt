@@ -253,6 +253,9 @@ class Prefs(context: Context) {
     /** One-time check per controller (by descriptor): true = reports buttons by letter, false = by position, null = not checked. */
     fun padByLabel(key: String): Boolean? = if (sp.contains("pad_by_label_$key")) sp.getBoolean("pad_by_label_$key", false) else null
     fun setPadByLabel(key: String, byLabel: Boolean) = sp.edit().putBoolean("pad_by_label_$key", byLabel).apply()
+    /** A controller of an unknown brand: its letters are on a Nintendo layout (A right), from the "press A" check; null = not asked. */
+    fun padNintendoLayout(key: String): Boolean? = if (sp.contains("pad_nin_layout_$key")) sp.getBoolean("pad_nin_layout_$key", false) else null
+    fun setPadNintendoLayout(key: String, nintendo: Boolean) = sp.edit().putBoolean("pad_nin_layout_$key", nintendo).apply()
 
     /** Multiplayer: who plays a game, in which order (see core/Players). */
     fun playerSetup(gameKey: String) = io.github.hiramrg.delphis.core.PlayerSetup.decode(sp.getString("players_$gameKey", null))

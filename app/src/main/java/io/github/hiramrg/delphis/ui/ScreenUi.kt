@@ -187,7 +187,7 @@ fun BoxScope.PicturePanel(
     ) {
         PictureChoices(
             tabs, shown, onTab, choice, gameId, useHack, onPick, look, lookCursor, onLook, res, resCursor, onRes, advice,
-            keys = keys && !PadGlyphs.touch, status = pictureExplain(shown, choice, advice), shapeKey = if (keys && !PadGlyphs.touch) "Y" else null,
+            keys = keys && !PadGlyphs.touch, status = pictureExplain(shown, choice, advice), shapeKey = if (keys && !PadGlyphs.touch) "X" else null,
             modifier = Modifier.fillMaxWidth().height(if (short) 190.dp else 230.dp),
         )
     }

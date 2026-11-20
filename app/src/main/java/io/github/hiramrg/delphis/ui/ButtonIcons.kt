@@ -44,12 +44,13 @@ private val GLYPHS = mapOf("Ⓐ" to "A", "Ⓑ" to "B", "Ⓧ" to "X", "Ⓨ" to "Y
 private val WORD_KEYS = setOf("L1", "R1", "L2", "R2", "L3", "R3", "Start")
 
 /**
- * Which controller the hints are drawn for. Delphis works by position (the Thor's: A right, B bottom, X top,
- * Y left), so on an Xbox or PlayStation controller the hint shows the button in that place as the controller
- * prints it (Delphis' A is Xbox B / PlayStation ○). One screen with no controller: touch, no button icons.
+ * Which controller the hints are drawn for: Player 1's (the first in the Players window, the one Dolphin uses as
+ * player 1). Every controller works by its own letters (A confirms, B goes back), so a hint "Ⓐ Play" is drawn as
+ * Player 1's A: green A on Xbox, ✕ on PlayStation, A on a Switch controller or the Thor. During a game the in-game
+ * menu keeps the Player 1 the game started with. One screen with no controller: touch, no button icons.
  */
 object PadGlyphs {
-    /** null = no controller (touch controls). The Thor (two screens) always uses its own letters. */
+    /** null = no controller (touch controls). The Thor (two screens) always uses its own letters unless an external controller is Player 1. */
     var labels by mutableStateOf<io.github.hiramrg.delphis.core.ButtonLabels?>(io.github.hiramrg.delphis.core.ButtonLabels.NINTENDO)
         internal set
     val touch: Boolean get() = labels == null
@@ -62,52 +63,82 @@ object PadGlyphs {
     var brand by mutableStateOf<PadBrand?>(null)
         internal set
 
-    /** The controller whose buttons were pressed last (its id), so the icons follow the one in your hands. */
-    private var lastUsedId = -1
+    /** Set by the activities: needed to read the Players order and what the "press A" check learned. */
+    var prefs: io.github.hiramrg.delphis.platform.Prefs? = null
+    /** The game whose Players order applies (the game page's game); null = the order controllers connected in. */
+    var gameKey: String? = null
+    /** During a game: the controller that was Player 1 when it started (its key), kept until the game ends. */
+    private var pinned: String? = null
     private var oneScreenNow = false
 
-    /** Reads the connected controllers again (one screen); call when controllers come and go. */
+    /** Player 1 now: (key, vendor, built in) of the first connected controller in the Players order. */
+    private fun playerOne(): Triple<String, Int, Boolean>? {
+        val pr = prefs ?: return io.github.hiramrg.delphis.platform.DeviceInfo.gamepads().firstOrNull()?.let { Triple(it.descriptor ?: "", it.vendorId, false) }
+        val pads = runCatching { io.github.hiramrg.delphis.platform.Pads.detect(pr) }.getOrDefault(emptyList())
+        if (pads.isEmpty()) return null
+        val devices = io.github.hiramrg.delphis.platform.DeviceInfo.gamepads()
+        fun vendor(key: String) = devices.firstOrNull { (it.descriptor ?: "id${it.id}") == key }?.vendorId ?: 0
+        pinned?.let { k -> pads.firstOrNull { it.key == k }?.let { return Triple(it.key, vendor(it.key), it.builtIn) } }
+        val setup = gameKey?.let { pr.playerSetup(it) } ?: io.github.hiramrg.delphis.core.PlayerSetup(emptyList(), emptySet())
+        val p1 = io.github.hiramrg.delphis.core.Players.arranged(pads, setup).firstOrNull { it.key !in setup.out } ?: pads.first()
+        return Triple(p1.key, vendor(p1.key), p1.builtIn)
+    }
+
+    /** Reads Player 1 again; call when controllers come and go, the Players order changes or a game starts / ends. */
     fun update(oneScreen: Boolean) {
         oneScreenNow = oneScreen
         thorBody = !oneScreen
         val fake = io.github.hiramrg.delphis.platform.TestHooks.padVendor
-        // The last one used while it's still connected, otherwise the first one connected.
-        val pads = io.github.hiramrg.delphis.platform.DeviceInfo.gamepads()
-        val pad = pads.firstOrNull { it.id == lastUsedId } ?: pads.firstOrNull()
-        brand = if (!oneScreen) null else fake?.let { PadBrand.forVendor(it) } ?: pad?.let { PadBrand.forVendor(it.vendorId) }
-        labels = if (!oneScreen) io.github.hiramrg.delphis.core.ButtonLabels.NINTENDO
-        else fake?.let { io.github.hiramrg.delphis.core.ButtonLabels.forVendor(it) }
-            ?: pad?.let { io.github.hiramrg.delphis.core.ButtonLabels.forVendor(it.vendorId) }
+        val p1 = if (fake != null) Triple("test", fake, false) else playerOne()
+        val (key, vendor, builtIn) = p1 ?: Triple("", 0, true)
+        val nintendo = vendor == 0x057E || (vendor != 0x045E && vendor != 0x054C && prefs?.padNintendoLayout(key) == true)
+        when {
+            // The Thor itself (or a handheld's own controls), or two screens with nothing else as Player 1.
+            p1 == null && !oneScreen || builtIn && !oneScreen -> { brand = null; labels = io.github.hiramrg.delphis.core.ButtonLabels.NINTENDO }
+            p1 == null -> { brand = null; labels = null }
+            else -> {
+                brand = if (!oneScreen && builtIn) null else PadBrand.forVendor(vendor)
+                labels = when {
+                    builtIn -> io.github.hiramrg.delphis.core.ButtonLabels.NINTENDO
+                    nintendo -> io.github.hiramrg.delphis.core.ButtonLabels.NINTENDO
+                    vendor == 0x054C -> io.github.hiramrg.delphis.core.ButtonLabels.PLAYSTATION
+                    else -> io.github.hiramrg.delphis.core.ButtonLabels.XBOX
+                }
+            }
+        }
     }
 
-    /**
-     * A button was pressed (one screen): if it came from another controller than the last one, the icons switch
-     * to that controller (e.g. the Xbox one is still paired but you picked up the Switch one).
-     */
-    fun used(e: android.view.KeyEvent) {
-        if (!oneScreenNow || io.github.hiramrg.delphis.platform.TestHooks.padVendor != null) return
-        val d = e.device ?: return
-        if (d.isVirtual || !d.isExternal || d.id == lastUsedId) return
-        if (d.sources and android.view.InputDevice.SOURCE_GAMEPAD != android.view.InputDevice.SOURCE_GAMEPAD) return
-        lastUsedId = d.id
-        update(true)
-    }
+    /** A game started with [padKey] as Player 1: the in-game menu keeps its icons until [unpin]. */
+    fun pin(padKey: String?) { pinned = padKey; update(oneScreenNow) }
+    fun unpin() { if (pinned != null) { pinned = null; update(oneScreenNow) } }
 
     /** [padText] with a controller, [touchText] without one. */
     fun or(padText: String, touchText: String): String = if (touch) touchText else padText
 
-    /** Delphis' button [key] (the Thor's letters: "A", "L1"…) as the connected controller prints it. */
+    /**
+     * Delphis' button [key] ("A", "L1", "⊖"…: letters, as every controller is read by its own letters) as Player 1's
+     * controller prints it: PlayStation ✕ ○ □ △, Xbox LB / View / Menu, Switch L / ZL / − / +.
+     */
     fun letter(key: String): String = when (labels) {
         io.github.hiramrg.delphis.core.ButtonLabels.XBOX -> when (key) {
-            "A" -> "B"; "B" -> "A"; "X" -> "Y"; "Y" -> "X"
             "L1" -> "LB"; "R1" -> "RB"; "L2" -> "LT"; "R2" -> "RT"; "L3" -> "LS"; "R3" -> "RS"; "⊖" -> "View"; "⊕" -> "Menu"
             else -> key
         }
-        io.github.hiramrg.delphis.core.ButtonLabels.PLAYSTATION -> when (key) { "A" -> "○"; "B" -> "✕"; "X" -> "△"; "Y" -> "□"; "⊖" -> "Create"; "⊕" -> "Options"; else -> key }
-        else -> key
+        io.github.hiramrg.delphis.core.ButtonLabels.PLAYSTATION -> when (key) { "A" -> "✕"; "B" -> "○"; "X" -> "□"; "Y" -> "△"; "⊖" -> "Create"; "⊕" -> "Options"; else -> key }
+        else -> if (brand == PadBrand.SWITCH) when (key) { "L1" -> "L"; "R1" -> "R"; "L2" -> "ZL"; "R2" -> "ZR"; else -> key } else key
     }
 
-    /** The connected controller's colour for a face button on the controls badges (null = the Thor's own colours). */
+    /**
+     * A place on the controller (the Thor's letter for that place: A = right, B = bottom, X = top, Y = left) as
+     * Player 1's controller prints the button there. Used by the controls map and its list, which show places.
+     */
+    fun atPlace(thorLetter: String): String = when (labels) {
+        io.github.hiramrg.delphis.core.ButtonLabels.XBOX -> when (thorLetter) { "A" -> "B"; "B" -> "A"; "X" -> "Y"; "Y" -> "X"; else -> letter(thorLetter) }
+        io.github.hiramrg.delphis.core.ButtonLabels.PLAYSTATION -> when (thorLetter) { "A" -> "○"; "B" -> "✕"; "X" -> "△"; "Y" -> "□"; else -> letter(thorLetter) }
+        else -> letter(thorLetter)
+    }
+
+    /** Player 1's colour for a face button on the controls badges (null = the Thor's own colours). */
     fun badgeColor(c: io.github.hiramrg.delphis.core.ThorControl): Color? = when (labels) {
         io.github.hiramrg.delphis.core.ButtonLabels.XBOX -> when (c) {
             io.github.hiramrg.delphis.core.ThorControl.FACE_EAST -> Glow.Red
@@ -126,17 +157,17 @@ object PadGlyphs {
         else -> null
     }
 
-    /** Delphis' button [key] as the connected controller prints it, with that button's colour (null = no colour). */
+    /** Delphis' button [key] as Player 1's controller prints it, with that button's colour (null = no colour). */
     @Composable
     fun face(key: String): Pair<String, Color?> {
         val dark = LocalWii.current.dark
         val colour = when (labels) {
             io.github.hiramrg.delphis.core.ButtonLabels.XBOX -> when (key) {
-                "A" -> Color(0xFFE0503A); "B" -> Color(0xFF3FA864); "X" -> if (dark) Color(0xFFE0C23A) else Color(0xFFB8960E); "Y" -> Color(0xFF3A7DE0)
+                "A" -> Color(0xFF3FA864); "B" -> Color(0xFFE0503A); "X" -> Color(0xFF3A7DE0); "Y" -> if (dark) Color(0xFFE0C23A) else Color(0xFFB8960E)
                 else -> null
             }
             io.github.hiramrg.delphis.core.ButtonLabels.PLAYSTATION -> when (key) {
-                "A" -> Color(0xFFE0503A); "B" -> Color(0xFF5B8DEF); "X" -> Color(0xFF3FB8A0); "Y" -> Color(0xFFD877C0)
+                "A" -> Color(0xFF5B8DEF); "B" -> Color(0xFFE0503A); "X" -> Color(0xFFD877C0); "Y" -> Color(0xFF3FB8A0)
                 else -> null
             }
             else -> null
@@ -146,7 +177,7 @@ object PadGlyphs {
 }
 
 /** This control's name as the connected controller prints it (the Thor's letters on the Thor). */
-val io.github.hiramrg.delphis.core.ThorControl.padLabel: String get() = PadGlyphs.letter(shortLabel)
+val io.github.hiramrg.delphis.core.ThorControl.padLabel: String get() = PadGlyphs.atPlace(shortLabel)
 
 /**
  * A button icon: [key] is "A", "L1", "⊖", "DPAD" (D-pad) or "DPAD_LR" (D-pad, left / right), in Delphis' (the
@@ -164,16 +195,18 @@ fun KeyIcon(key: String, color: Color = LocalWii.current.textDim, size: Dp = 18.
             val c = LocalWii.current
             val tint = if (own != null && (color == c.textDim || color == c.text)) own else color
             val round = label.length == 1
-            Box(
-                Modifier.height(size).then(if (round) Modifier.width(size) else Modifier.widthIn(min = size))
-                    .border(1.5.dp, color, RoundedCornerShape(50)).padding(horizontal = if (round) 0.dp else 4.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    label, color = tint, maxLines = 1, fontWeight = FontWeight.Black,
-                    fontSize = (size.value * when (label) { "⊖" -> 0.62f; "○", "✕", "△", "□" -> 0.6f; else -> 0.53f }).sp,
-                    style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
+            val d = androidx.compose.ui.platform.LocalDensity.current
+            val fontPx = with(d) { size.toPx() } * when { label in SHAPE_GLYPHS -> 0.62f; round -> 0.56f; else -> 0.5f }
+            // A pill fits its word with 4 dp each side; a circle is as wide as it is tall.
+            val width = if (round) size else maxOf(size, with(d) { (glyphWidth(label, fontPx) / density).dp } + 8.dp)
+            Canvas(Modifier.size(width, size)) {
+                val stroke = 1.5.dp.toPx()
+                drawRoundRect(
+                    color, topLeft = Offset(stroke / 2f, stroke / 2f),
+                    size = androidx.compose.ui.geometry.Size(this.size.width - stroke, this.size.height - stroke),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(this.size.height / 2f), style = Stroke(stroke),
                 )
+                drawCenteredGlyph(label, this.size.width / 2f, this.size.height / 2f, fontPx, tint)
             }
         }
     }

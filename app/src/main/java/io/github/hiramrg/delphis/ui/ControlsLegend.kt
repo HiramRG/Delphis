@@ -171,10 +171,11 @@ fun ControlBadge(control: ThorControl, size: Dp) {
     val BadgeBlue = controlColor(control)
     when {
         // Solid coloured circles like the mockup's face buttons.
-        face != null -> Box(
-            Modifier.size(size).clip(CircleShape).background(face).border(1.5.dp, face.copy(alpha = 0.6f), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) { Text(control.padLabel, color = Color(0xFF0B0F18), fontWeight = FontWeight.Bold, fontSize = (size.value * 0.5f).sp) }
+        face != null -> Canvas(Modifier.size(size)) {
+            drawCircle(face)
+            drawCircle(face.copy(alpha = 0.6f), this.size.minDimension / 2f - 0.75.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
+            drawCenteredGlyph(control.padLabel, this.size.width / 2f, this.size.height / 2f, (size.value * 0.5f).sp.toPx(), Color(0xFF0B0F18))
+        }
 
         control == LEFT_STICK || control == RIGHT_STICK || control == L3 || control == R3 -> Box(Modifier.size(size), contentAlignment = Alignment.Center) {
             val click = control == L3 || control == R3

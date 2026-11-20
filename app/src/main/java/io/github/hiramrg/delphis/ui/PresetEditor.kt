@@ -95,10 +95,16 @@ fun PresetEditor(
     val draft = PresetEdits.build(base, maps, customId)
     // Ⓑ / ◀ Back leaves the editor (back to the game page); with unsaved changes it asks once.
     var leaving by remember { mutableStateOf(false) }
+    // A pop-up of the editor's own (Save as…, Reset?, Leave without saving?) is closed by Ⓑ first.
+    var asking by remember { mutableStateOf(false) }
+    var resetting by remember { mutableStateOf(false) }
     val requestBack = { if (maps != base.mappings) leaving = true else onCancel() }
-    androidx.activity.compose.BackHandler { requestBack() }
+    androidx.activity.compose.BackHandler(enabled = !asking && !resetting && !leaving) { requestBack() }
+    androidx.activity.compose.BackHandler(enabled = asking || resetting || leaving) { asking = false; resetting = false; leaving = false }
     var lastSignal by remember { androidx.compose.runtime.mutableIntStateOf(backSignal) }
-    androidx.compose.runtime.LaunchedEffect(backSignal) { if (backSignal != lastSignal) { lastSignal = backSignal; requestBack() } }
+    androidx.compose.runtime.LaunchedEffect(backSignal) {
+        if (backSignal != lastSignal) { lastSignal = backSignal; if (asking || resetting || leaving) { asking = false; resetting = false; leaving = false } else requestBack() }
+    }
 
     BoxWithConstraints(modifier) {
         // The top screen is ~700 dp wide; the in-game bottom screen ~450 dp.
@@ -113,8 +119,6 @@ fun PresetEditor(
             undo = { maps = base.mappings },
             changed = changed,
         )
-        var asking by remember { mutableStateOf(false) }
-        var resetting by remember { mutableStateOf(false) }
         val save = { if (updateName != null) asking = true else onSave(draft, null) }
         val reset: (() -> Unit)? = onReset?.let { { resetting = true } }
         if (wide) TopEditor(state, saveLabel, controlForKey, reset, onCancel, save)
@@ -359,8 +363,9 @@ private fun SwapOverlay(s: EditorState, onClose: () -> Unit) {
 fun MapBadge(control: ThorControl, height: Dp) {
     val blue = Color(0xFF5C8DF6)
     when (control) {
-        FACE_EAST, FACE_SOUTH, FACE_NORTH, FACE_WEST -> Box(Modifier.size(height).clip(CircleShape).background(controlColor(control)), contentAlignment = Alignment.Center) {
-            Text(control.padLabel, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = (height.value * 0.5f).sp)
+        FACE_EAST, FACE_SOUTH, FACE_NORTH, FACE_WEST -> Canvas(Modifier.size(height)) {
+            drawCircle(controlColor(control))
+            drawCenteredGlyph(control.padLabel, size.width / 2f, size.height / 2f, (height.value * 0.5f).sp.toPx(), Color.White)
         }
         LEFT_STICK, RIGHT_STICK -> Box(Modifier.size(height), contentAlignment = Alignment.Center) {
             val ring = if (control == RIGHT_STICK) controlColor(control) else blue
@@ -369,7 +374,7 @@ fun MapBadge(control: ThorControl, height: Dp) {
                 drawCircle(Color(0xFF3A4250), r)
                 drawCircle(ring, r - 1.5.dp.toPx(), style = Stroke(2.dp.toPx()))
             }
-            Text(if (control == LEFT_STICK) "L" else "R", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = (height.value * 0.45f).sp)
+            Canvas(Modifier.fillMaxSize()) { drawCenteredGlyph(if (control == LEFT_STICK) "L" else "R", size.width / 2f, size.height / 2f, (height.value * 0.45f).sp.toPx(), Color.White) }
         }
         DPAD -> Canvas(Modifier.size(height)) {
             val w = size.width; val t = w * 0.34f
@@ -379,8 +384,12 @@ fun MapBadge(control: ThorControl, height: Dp) {
         else -> {
             val label = when (control) { START -> "Start"; SELECT -> "Select"; GYRO -> "Gyro"; MOTION -> "Tilt"; else -> control.padLabel }
             val col = if (control == GYRO || control == R3) controlColor(control) else blue
-            Box(Modifier.height(height).widthIn(min = height * 1.35f).clip(RoundedCornerShape(50)).background(col).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
-                Text(label, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = (height.value * 0.48f).sp, maxLines = 1)
+            val d = androidx.compose.ui.platform.LocalDensity.current
+            val fontPx = with(d) { (height.value * 0.48f).sp.toPx() }
+            val w = maxOf(height * 1.35f, with(d) { (glyphWidth(label, fontPx) / density).dp } + 12.dp)
+            Canvas(Modifier.height(height).width(w)) {
+                drawRoundRect(col, cornerRadius = CornerRadius(size.height / 2f))
+                drawCenteredGlyph(label, size.width / 2f, size.height / 2f, fontPx, Color.White)
             }
         }
     }

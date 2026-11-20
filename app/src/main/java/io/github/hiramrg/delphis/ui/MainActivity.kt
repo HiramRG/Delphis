@@ -92,8 +92,29 @@ class MainActivity : ComponentActivity() {
     /** The connected controller's maker (Nintendo / Sony / others), for the button guide. */
     var padVendor by mutableIntStateOf(0)
     private var controllerAsked = false
+    /** One screen: a controller of a brand Delphis doesn't know, asked once to press its A (descriptor, name). */
+    var labelCheck by mutableStateOf<Pair<String, String>?>(null)
+
+    /** Finds a connected controller whose letters' layout isn't known yet (not Xbox / PlayStation / Nintendo, not checked). */
+    fun findLabelCheck() {
+        if (!oneScreen || labelCheck != null) return
+        val d = DeviceInfo.gamepads().firstOrNull { d ->
+            d.isExternal && d.vendorId !in listOf(0x045E, 0x054C, 0x057E) && d.name != prefs.calibratedDeviceName &&
+                prefs.padNintendoLayout(d.descriptor ?: "") == null && prefs.padByLabel(d.descriptor ?: "") != true
+        } ?: return
+        labelCheck = (d.descriptor ?: "") to d.name
+    }
+
+    /** The answer to the "press A" check: true = its A is on the right (Nintendo layout). */
+    fun answerLabelCheck(nintendo: Boolean) {
+        labelCheck?.let { (key, _) -> prefs.setPadNintendoLayout(key, nintendo) }
+        labelCheck = null
+        PadGlyphs.update(oneScreen)
+    }
+
     private val padListener = object : android.hardware.input.InputManager.InputDeviceListener {
         override fun onInputDeviceAdded(deviceId: Int) {
+            findLabelCheck()
             PadGlyphs.update(oneScreen)
             // "Add a controller" waiting for it: on to step 3 (its player, then the button check).
             if (addPadStep in 1..2) DeviceInfo.gamepads().firstOrNull { it.isExternal }?.let { pad ->
@@ -437,6 +458,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         goFullScreen()
         prefs = Prefs(this)
+        PadGlyphs.prefs = prefs
         bridge = DolphinBridge(this, prefs)
         // The report shows the first start after each update, and whether the close-games helper was back by then.
         runCatching {
@@ -558,6 +580,7 @@ class MainActivity : ComponentActivity() {
                         ::padCheck, ::padLater, ::padTouch, ::padBluetooth,
                     )
                     if (reportOpen) ReportProblemPanel(this@MainActivity)
+                    labelCheck?.let { (_, name) -> LabelCheckPanel(name) { answerLabelCheck(false) } }
                     if (addPadStep > 0) AddControllerPanel(this@MainActivity)
                     if (runningPrompt && !noPadPrompt) io.github.hiramrg.delphis.platform.GameWatch.session?.let { s ->
                         RunningGamePrompt(s.info.title, ::runningBack, ::runningQuit) { runningPrompt = false }
@@ -571,13 +594,28 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
-        if (raw.action == KeyEvent.ACTION_DOWN) PadGlyphs.used(raw)
+        // "Press A on your new controller": read before any translation (that's what's being learned).
+        labelCheck?.let { (key, _) ->
+            if (!io.github.hiramrg.delphis.platform.PadKeys.isPadButton(raw) && raw.keyCode != KeyEvent.KEYCODE_BACK) return@let
+            if (raw.action == KeyEvent.ACTION_DOWN && raw.repeatCount == 0) {
+                if (raw.device?.descriptor == key) when (raw.keyCode) {
+                    // Its A sent "bottom" (Android's A): Xbox-style letters. Sent "right" (B): A is on the right.
+                    KeyEvent.KEYCODE_BUTTON_A -> answerLabelCheck(false)
+                    KeyEvent.KEYCODE_BUTTON_B -> answerLabelCheck(true)
+                }
+                else if (raw.keyCode == KeyEvent.KEYCODE_BUTTON_B || raw.keyCode == KeyEvent.KEYCODE_BACK) answerLabelCheck(false)
+            }
+            return true
+        }
         // One screen: controllers that don't report standard keys (e.g. a Switch Pro Controller) are translated.
         // (Not on the Controller check, which records exactly what the controller sends.)
         val event = if (screen == Screen.ControllerCheck) raw else io.github.hiramrg.delphis.platform.PadKeys.translate(raw, prefs, oneScreen)
         if (handleKey(event)) return true
-        if (event !== raw) io.github.hiramrg.delphis.platform.PadKeys.fallback(event)?.let { return handleKey(it) }
-        return false
+        if (screen == Screen.ControllerCheck) return false
+        // Unused A / B press the highlighted item / go back; any other controller button nothing uses does nothing
+        // (never Android's own meaning for it, which differed between controllers).
+        val fb = io.github.hiramrg.delphis.platform.PadKeys.fallback(event)?.let { handleKey(it) } ?: false
+        return fb || io.github.hiramrg.delphis.platform.PadKeys.isPadButton(raw)
     }
 
     private fun handleKey(event: KeyEvent): Boolean {
@@ -818,6 +856,9 @@ class MainActivity : ComponentActivity() {
         goFullScreen()
         setupVersion++ // re-read things that can change in system settings (e.g. the close-games helper)
         refreshCheck()
+        findLabelCheck()
+        // No game running: the icons follow Player 1 again (a game pins the one it started with).
+        if (io.github.hiramrg.delphis.platform.GameWatch.session == null) PadGlyphs.unpin()
         PadGlyphs.update(oneScreen)
         // Back from a game (or anywhere): reload achievement progress so new unlocks show.
         io.github.hiramrg.delphis.platform.Achievements.refresh()

@@ -6,6 +6,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.window.DialogProperties
 import io.github.hiramrg.delphis.platform.DeviceInfo
 import io.github.hiramrg.delphis.platform.Prefs
@@ -54,13 +55,56 @@ fun ScaledUi(f: Float, content: @Composable () -> Unit) {
 
 /** A dialog drawn at the Interface size (a dialog window starts again from Android's own size). */
 @Composable
-fun ScaledDialog(onDismissRequest: () -> Unit, properties: DialogProperties = DialogProperties(), content: @Composable () -> Unit) {
+fun ScaledDialog(
+    onDismissRequest: () -> Unit, properties: DialogProperties = DialogProperties(),
+    /** Read controller buttons by their letters, like the rest of Delphis (off only where the dialog does it itself). */
+    translateKeys: Boolean = true,
+    content: @Composable () -> Unit,
+) {
     val f = LocalUiScale.current
     Dialog(onDismissRequest, properties) {
-        if (f == 1f) content()
+        val body: @Composable () -> Unit = { if (translateKeys) PadKeysBox(onBack = onDismissRequest, content = content) else content() }
+        if (f == 1f) body()
         else {
             val d = LocalDensity.current
-            CompositionLocalProvider(LocalUiScale provides f, LocalDensity provides Density(d.density * f, d.fontScale), content = content)
+            CompositionLocalProvider(LocalUiScale provides f, LocalDensity provides Density(d.density * f, d.fontScale), content = body)
         }
     }
+}
+
+/**
+ * A pop-up window (dialog, menu) gets the controller's buttons straight from Android, without the letter
+ * translation the screens use, so on a Switch controller its A / B were swapped. This reads each button
+ * as the screens do, presses the highlighted item for an unused A, closes with an unused B ([onBack]),
+ * and never lets a controller button reach Android's own meaning.
+ */
+@Composable
+fun PadKeysBox(onBack: () -> Unit, content: @Composable () -> Unit) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val prefs = androidx.compose.runtime.remember { Prefs(ctx) }
+    val oneScreen = androidx.compose.runtime.remember { DeviceInfo.oneScreen(ctx) }
+    val inside = androidx.compose.runtime.remember { booleanArrayOf(false) }
+    val back = androidx.compose.runtime.rememberUpdatedState(onBack)
+    androidx.compose.foundation.layout.Box(
+        androidx.compose.ui.Modifier.onPreviewKeyEvent { e ->
+            if (inside[0]) return@onPreviewKeyEvent false
+            val raw = e.nativeKeyEvent
+            if (!io.github.hiramrg.delphis.platform.PadKeys.isPadButton(raw)) return@onPreviewKeyEvent false
+            val t = io.github.hiramrg.delphis.platform.PadKeys.translate(raw, prefs, oneScreen)
+            inside[0] = true
+            try {
+                if (!view.dispatchKeyEvent(t)) {
+                    val fb = io.github.hiramrg.delphis.platform.PadKeys.fallback(t)
+                    when {
+                        fb == null -> Unit
+                        fb.keyCode == android.view.KeyEvent.KEYCODE_BACK -> { if (!view.dispatchKeyEvent(fb) && fb.action == android.view.KeyEvent.ACTION_UP) back.value() }
+                        else -> view.dispatchKeyEvent(fb)
+                    }
+                }
+            } finally { inside[0] = false }
+            true
+        },
+        propagateMinConstraints = true,
+    ) { content() }
 }

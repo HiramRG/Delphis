@@ -111,7 +111,7 @@ fun PlayersDialog(
     val pending = arranged.firstOrNull { !it.builtIn && it.byLabel == null && it.key !in checked }
     fun record(p: Pad, byLabel: Boolean) { checked = checked + (p.key to byLabel); onChecked(p, byLabel) }
 
-    ScaledDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    ScaledDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false), translateKeys = false) {
         val shape = RoundedCornerShape(20.dp)
         Column(
             Modifier.width(470.dp).shadow(18.dp, shape).clip(shape).background(if (c.dark) Color(0xFF22272D) else c.card).border(2.dp, c.accent, shape)

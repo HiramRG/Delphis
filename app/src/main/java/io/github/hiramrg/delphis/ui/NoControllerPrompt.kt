@@ -35,16 +35,13 @@ fun NoControllerPrompt(
                 Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
-                            (if (nintendo) "Delphis reads its buttons by their letters. "
-                            else "Delphis uses buttons by position, so the button on the right selects whatever its letter. ") +
-                                "Let's check it once: press each button when asked (about a minute).",
+                            "Delphis reads its buttons by their letters. Let's check it once: press each button when asked (about a minute).",
                             fontSize = 12.5.sp, color = c.textDim, lineHeight = 17.sp,
                         )
                         Text(
                             when {
-                                nintendo -> "Ⓐ selects, Ⓑ goes back."
-                                sony -> "Press ○ (right) to select and ✕ (bottom) to go back. Games use the same positions."
-                                else -> "Press Ⓑ (right) to select and Ⓐ (bottom) to go back. Games use the same positions."
+                                sony -> "✕ selects, ○ goes back."
+                                else -> "A selects, B goes back."
                             },
                             fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text, lineHeight = 17.sp,
                         )
@@ -119,9 +116,9 @@ private fun ButtonGuide(nintendo: Boolean, sony: Boolean) {
     val c = LocalWii.current
     // top, right, bottom, left: the controller's own label, its colour, the role in Delphis
     val buttons = when {
-        nintendo -> listOf(Triple("X", c.text, "X"), Triple("A", c.accentText, "A · Select"), Triple("B", c.text, "B · Back"), Triple("Y", c.text, "Y"))
-        sony -> listOf(Triple("△", Color(0xFF3FB8A0), "= X"), Triple("○", Color(0xFFE0503A), "= A · Select"), Triple("✕", Color(0xFF5B8DEF), "= B · Back"), Triple("□", Color(0xFFD877C0), "= Y"))
-        else -> listOf(Triple("Y", Color(0xFFE0C23A), "= X"), Triple("B", Color(0xFFE0503A), "= A · Select"), Triple("A", Color(0xFF3FA864), "= B · Back"), Triple("X", Color(0xFF3A7DE0), "= Y"))
+        nintendo -> listOf(Triple("X", c.text, "X"), Triple("A", c.accentText, "Select"), Triple("B", c.text, "Back"), Triple("Y", c.text, "Y"))
+        sony -> listOf(Triple("△", Color(0xFF3FB8A0), "△"), Triple("○", Color(0xFFE0503A), "Back"), Triple("✕", Color(0xFF5B8DEF), "Select"), Triple("□", Color(0xFFD877C0), "□"))
+        else -> listOf(Triple("Y", Color(0xFFE0C23A), "Y"), Triple("B", Color(0xFFE0503A), "Back"), Triple("A", Color(0xFF3FA864), "Select"), Triple("X", Color(0xFF3A7DE0), "X"))
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         CapsLabel("In Delphis")
@@ -129,8 +126,9 @@ private fun ButtonGuide(nintendo: Boolean, sony: Boolean) {
             val spots = listOf(Alignment.TopCenter, Alignment.CenterEnd, Alignment.BottomCenter, Alignment.CenterStart)
             buttons.forEachIndexed { i, (label, colour, role) ->
                 Column(Modifier.align(spots[i]).width(80.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.size(38.dp).clip(RoundedCornerShape(50)).border(2.5.dp, colour, RoundedCornerShape(50)), contentAlignment = Alignment.Center) {
-                        Text(label, fontSize = 16.sp, fontWeight = FontWeight.Black, color = colour)
+                    androidx.compose.foundation.Canvas(Modifier.size(38.dp)) {
+                        drawCircle(colour, size.minDimension / 2f - 1.25.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(2.5.dp.toPx()))
+                        drawCenteredGlyph(label, size.width / 2f, size.height / 2f, 16.sp.toPx(), colour)
                     }
                     Text(role, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, color = if ("Select" in role) c.accentText else c.text, maxLines = 1)
                 }
@@ -153,6 +151,27 @@ fun RunningGamePrompt(title: String, onBack: () -> Unit, onQuit: () -> Unit, onD
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PanelBtn("Quit game", "X", false, Modifier.weight(1f), onClick = onQuit)
                 PanelBtn("Back to game", "A", true, Modifier.weight(1.3f), onClick = onBack)
+            }
+        }
+    }
+}
+
+/**
+ * One screen: a controller of a brand Delphis doesn't know. One press of its A tells Delphis where its A is
+ * (bottom like Xbox, or right like Nintendo), so A always confirms and B always goes back on it.
+ */
+@Composable
+fun LabelCheckPanel(name: String, onSkip: () -> Unit) {
+    val c = LocalWii.current
+    OverlayPanel(onOutside = onSkip) {
+        PopupPanel("New controller", name, Modifier.widthIn(max = 460.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Press the button labelled A on it, so Delphis knows which button confirms.",
+                    fontSize = 13.sp, color = c.text, lineHeight = 18.sp,
+                )
+                Text("Asked once for this controller.", fontSize = 11.5.sp, color = c.textDim)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { PanelBtn("Skip", null, false, onClick = onSkip) }
             }
         }
     }
