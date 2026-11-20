@@ -5,20 +5,27 @@ on:
   pull_request:
   workflow_dispatch:
 
+# contents: publishing releases and the build report; id-token + attestations: the signed record of which
+# code and which build made each APK ("gh attestation verify Delphis.apk -R HiramRG/Delphis").
 permissions:
   contents: write
+  id-token: write
+  attestations: write
+
+# Every third-party step is pinned to an exact commit (the version is in the comment), so a changed or
+# compromised tag can't slip into Delphis' builds. Dependabot (.github/dependabot.yml) proposes updates.
 
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: 17
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           gradle-version: "8.11.1"
       # Unit tests, including the layout check (LayoutCheckTest): every screen drawn at the Thor's two sizes,
@@ -35,7 +42,7 @@ jobs:
           if [ -f app/build/layout-check/summary.md ]; then cat app/build/layout-check/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
       - name: Layout check screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: layout-check
           path: app/build/layout-check/
@@ -85,15 +92,36 @@ jobs:
             echo "--- lineage"
             "$BT/apksigner" lineage --in dist/Delphis.apk --print-certs -v
           } 2>&1 | tee signing.log
-      - uses: actions/upload-artifact@v4
+      # What people can check a download against: the APK's SHA-256 and the signing certificate's fingerprint
+      # (also saved as Delphis-SHA256SUMS.txt in the release).
+      - name: Checksums
+        id: sums
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum Delphis*.apk > Delphis-SHA256SUMS.txt
+          echo "apk=$(sha256sum Delphis.apk 2>/dev/null | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          # The key rotation lineage lists the original key first and the current one last.
+          mapfile -t CERTS < <(sed -n '/--- lineage/,$p' ../signing.log 2>/dev/null | grep -i "certificate SHA-256 digest" | sed 's/.*digest: *//' | awk '!seen[$0]++')
+          if [ ${#CERTS[@]} -ge 2 ]; then CERT="${CERTS[-1]}\` (current key; earlier key \`${CERTS[0]})"
+          elif [ ${#CERTS[@]} -eq 1 ]; then CERT="${CERTS[0]}"
+          else CERT=$(grep -m1 -i "certificate SHA-256 digest" ../signing.log 2>/dev/null | sed 's/.*digest: *//' || true); fi
+          echo "cert=${CERT:-not signed}" >> "$GITHUB_OUTPUT"
+          cat Delphis-SHA256SUMS.txt
+      - name: Proof of origin (build provenance)
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta') && github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/Delphis*.apk
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: delphis-apk
-          path: dist/*.apk
+          path: dist/Delphis*
       # Publish the newest build as a GitHub Release so the APK can be downloaded from any
       # browser or the GitHub app (Releases section on the repo's main page).
       - name: Publish "latest" release
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: latest
           target_commitish: ${{ github.sha }}
@@ -103,9 +131,14 @@ jobs:
 
             versionCode: ${{ github.run_number }}
             commit: ${{ github.sha }}
+
+            **Check your download** (see [SECURITY.md](https://github.com/HiramRG/Delphis/blob/main/SECURITY.md)):
+            * Delphis.apk SHA-256: `${{ steps.sums.outputs.apk }}`
+            * Signing certificate SHA-256: `${{ steps.sums.outputs.cert }}`
+            * Proof it was built here from this commit: `gh attestation verify Delphis.apk -R HiramRG/Delphis`
           prerelease: false
           make_latest: true
-          files: dist/*.apk
+          files: dist/Delphis*
       - name: Move the "latest" tag to this commit
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         run: |
@@ -123,7 +156,7 @@ jobs:
       # installs when Settings → Updates → Update channel is Beta. Stable ("latest") only changes from main.
       - name: Publish "beta" release
         if: github.ref == 'refs/heads/beta' && github.event_name != 'pull_request'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: beta
           target_commitish: ${{ github.sha }}
@@ -133,9 +166,14 @@ jobs:
 
             versionCode: ${{ github.run_number }}
             commit: ${{ github.sha }}
+
+            **Check your download** (see [SECURITY.md](https://github.com/HiramRG/Delphis/blob/main/SECURITY.md)):
+            * Delphis.apk SHA-256: `${{ steps.sums.outputs.apk }}`
+            * Signing certificate SHA-256: `${{ steps.sums.outputs.cert }}`
+            * Proof it was built here from this commit: `gh attestation verify Delphis.apk -R HiramRG/Delphis`
           prerelease: true
           make_latest: false
-          files: dist/*.apk
+          files: dist/Delphis*
       - name: Move the "beta" tag to this commit
         if: github.ref == 'refs/heads/beta' && github.event_name != 'pull_request'
         run: |

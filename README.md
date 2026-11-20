@@ -121,3 +121,7 @@ tools/      menu-music generator and the HTML sources of the README illustration
 ---
 
 Delphis is an independent project. It isn't affiliated with or endorsed by the Dolphin Emulator project, Nintendo or AYN. Wii and GameCube are trademarks of Nintendo.
+
+## Security and privacy
+
+What Delphis can access and why, how to check a download is genuine, and how to report a problem privately: see [SECURITY.md](SECURITY.md).
