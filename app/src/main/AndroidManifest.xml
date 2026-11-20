@@ -3,6 +3,8 @@
 
     <!-- Box art downloads from GameTDB. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Settings → Rumble → "Try it": buzzing a motor through Android needs this. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Wi-Fi icon in Home's bar (connected or not, signal bars). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Lets Delphis fully close Dolphin so a restarted game picks up new controls. -->

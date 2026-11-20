@@ -9,7 +9,8 @@ object RumbleTest {
     /** Returns a short line about what happened (shown under the button and logged). */
     fun buzz(context: Context, mode: io.github.hiramrg.delphis.core.Rumble.Mode): String {
         val effect = VibrationEffect.createOneShot(350, VibrationEffect.DEFAULT_AMPLITUDE)
-        val result = when (mode) {
+        // Never let the test take Delphis down (a crash also stops Android's helper until it's turned on again).
+        val result = runCatching { when (mode) {
             io.github.hiramrg.delphis.core.Rumble.Mode.OFF -> "Rumble is off."
             io.github.hiramrg.delphis.core.Rumble.Mode.DEVICE -> {
                 val v = if (Build.VERSION.SDK_INT >= 31) context.getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator
@@ -29,6 +30,9 @@ object RumbleTest {
                     else -> "${pad.name} has no motor Android can use, so it can't rumble."
                 }
             }
+        } }.getOrElse { e ->
+            CrashLog.event("rumble test failed: $e")
+            "Android didn't let Delphis test the motor."
         }
         CrashLog.event("rumble test ($mode): $result")
         return result
