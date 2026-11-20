@@ -421,11 +421,12 @@ private fun BadgeTimeRow(act: MainActivity) {
             onValueChange = { seconds = kotlin.math.round(it) }, onValueChangeFinished = { prefs.raBadgeSeconds = seconds.toInt() },
             modifier = Modifier.fillMaxWidth(),
         )
-        Row(
+        // The example on its own line (as wide as the real badge), then the note and the button under it.
+        Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0xFF2A2F36)).padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Column(Modifier.weight(1f, fill = false).widthIn(max = 340.dp)) {
+            Column(Modifier.widthIn(max = 340.dp).fillMaxWidth()) {
                 val shape = RoundedCornerShape(14.dp)
                 Row(
                     Modifier.fillMaxWidth().clip(shape).background(Color(0xF014181D)).border(2.dp, AchGold, shape).padding(8.dp),
@@ -446,8 +447,8 @@ private fun BadgeTimeRow(act: MainActivity) {
                     Box(Modifier.fillMaxHeight().fillMaxWidth(left.value).background(AchGold))
                 }
             }
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("An example, not a real unlock.", fontSize = 11.5.sp, color = Color(0xFFC5CDD6), lineHeight = 14.sp)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("An example, not a real unlock. The gold bar runs down while it's on screen.", fontSize = 11.5.sp, color = Color(0xFFC5CDD6), lineHeight = 14.sp, maxLines = 2, modifier = Modifier.weight(1f))
                 PanelBtn("Show example", null, true) {
                     playId++
                     showExampleBadge(act, seconds.toInt())
@@ -458,7 +459,7 @@ private fun BadgeTimeRow(act: MainActivity) {
 }
 
 private const val EXAMPLE_TITLE = "Example badge"
-private const val EXAMPLE_LINE = "This is how long badges stay on screen"
+private const val EXAMPLE_LINE = "How long badges stay on screen"
 
 /** Also puts the example over the game's screen (the top screen on the Thor), the way a real unlock shows. */
 private fun showExampleBadge(act: MainActivity, seconds: Int) {
