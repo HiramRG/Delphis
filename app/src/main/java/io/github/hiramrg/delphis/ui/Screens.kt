@@ -14,6 +14,8 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -1129,8 +1131,24 @@ private fun SortIcon(tint: Color) {
 fun Modifier.focusRing(shape: androidx.compose.ui.graphics.Shape, width: androidx.compose.ui.unit.Dp = 3.dp, fill: Boolean = false): Modifier = composed {
     var focused by remember { mutableStateOf(false) }
     val c = LocalWii.current
-    // The cursor breathes (deep ↔ bright blue) so it's easy to spot, like the Wii Menu's.
-    this.then(if (focused) Modifier.then(if (fill) Modifier.background(c.accentSoft, shape) else Modifier).border(width, breathingAccent(), shape) else Modifier)
+    // The cursor: a breathing ring (blue ↔ white; blue ↔ navy in light mode) with a strip of background between it
+    // and the item, so it stands out on any colour, a blue button included.
+    val ring = if (focused) breathingAccent() else Color.Transparent
+    val gap = c.bg
+    this.then(if (focused && fill) Modifier.background(c.accentSoft, shape) else Modifier)
+        .drawWithContent {
+            drawContent()
+            if (!focused) return@drawWithContent
+            val w = width.toPx(); val g = 2.5.dp.toPx()
+            fun stroke(inset: Float, sw: Float, col: Color) {
+                val sz = androidx.compose.ui.geometry.Size(size.width - 2 * inset, size.height - 2 * inset)
+                if (sz.width <= 0f || sz.height <= 0f) return
+                val outline = shape.createOutline(sz, layoutDirection, this)
+                translate(inset, inset) { drawOutline(outline, col, style = androidx.compose.ui.graphics.drawscope.Stroke(sw)) }
+            }
+            stroke(w / 2f, w, ring)
+            stroke(w + g / 2f, g, gap)
+        }
         .onFocusChanged { focused = it.hasFocus }
 }
 

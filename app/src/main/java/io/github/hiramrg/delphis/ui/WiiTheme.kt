@@ -123,7 +123,8 @@ fun breathingAccent(): Color {
         androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(800, easing = androidx.compose.animation.core.FastOutSlowInEasing), androidx.compose.animation.core.RepeatMode.Reverse),
         label = "breathF",
     )
-    return androidx.compose.ui.graphics.lerp(c.accentBorder, Color(0xFF7FDBFF), f)
+    // Blue ↔ white on dark, blue ↔ deep navy on light: the bright end stands out even on a blue button.
+    return androidx.compose.ui.graphics.lerp(c.accentBorder, if (c.dark) Color.White else Color(0xFF0B2B45), f)
 }
 
 val LocalWii = staticCompositionLocalOf { LightWii }
