@@ -16,26 +16,26 @@ import android.view.WindowManager
 
 /**
  * The unlock badge over the game on the top screen: a small card in the top-right corner that slides
- * in, stays [SHOW_MS] and slides away. Never takes touches or focus. Several unlocks queue up.
+ * in, stays for the time chosen in Settings (7 s unless changed) and slides away. Never takes touches or focus. Several unlocks queue up.
  */
 class AchievementToast(private val service: android.accessibilityservice.AccessibilityService) {
-    companion object { const val SHOW_MS = 5_000L }
+    companion object { const val DEFAULT_MS = 7_000L }
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
-    private val queue = ArrayDeque<Pair<Achievements.Popup, Bitmap?>>()
+    private val queue = ArrayDeque<Triple<Achievements.Popup, Bitmap?, Long>>()
     /** One screen: top centre (where the Delphis pill is), sliding down instead of in from the right. */
     private var centre = false
     private var showing: View? = null
     private var wm: WindowManager? = null
 
-    fun show(popup: Achievements.Popup, badge: Bitmap?, displayId: Int?, centre: Boolean = false) {
+    fun show(popup: Achievements.Popup, badge: Bitmap?, displayId: Int?, centre: Boolean = false, showMs: Long = DEFAULT_MS) {
         this.centre = centre
-        queue.addLast(popup to badge)
+        queue.addLast(Triple(popup, badge, showMs))
         if (showing == null) next(displayId)
     }
 
     private fun next(displayId: Int?) {
-        val (popup, badge) = queue.removeFirstOrNull() ?: return
+        val (popup, badge, showMs) = queue.removeFirstOrNull() ?: return
         val v = runCatching { attach(popup, badge, displayId) }.getOrElse { CrashLog.event("achievement pop-up failed: ${it.message}"); null } ?: return
         showing = v
         val d = v.resources.displayMetrics.density
@@ -50,7 +50,7 @@ class AchievementToast(private val service: android.accessibilityservice.Accessi
                 showing = null
                 next(displayId)
             }.start()
-        }, SHOW_MS)
+        }, showMs)
     }
 
     private fun attach(popup: Achievements.Popup, badge: Bitmap?, displayId: Int?): View {

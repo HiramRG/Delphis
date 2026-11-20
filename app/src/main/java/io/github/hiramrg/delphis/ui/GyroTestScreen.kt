@@ -181,9 +181,9 @@ fun GyroTestScreen(act: MainActivity) {
                     Column(Modifier.padding(vertical = 8.dp)) {
                         Text("Speed · ${speedLevel.toInt()}", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
                         Text("5 ≈ a real Wii Remote. Slow moves aim finely, fast moves go far.", fontSize = 12.sp, color = c.textDim)
-                        Slider(
-                            value = speedLevel, onValueChange = { speedLevel = it }, onValueChangeFinished = { prefs.gyroSensitivity = speedLevel.toInt() }, valueRange = 1f..10f, steps = 8,
-                            colors = SliderDefaults.colors(thumbColor = c.text, activeTrackColor = c.accent, inactiveTrackColor = c.cardBorder, activeTickColor = c.onAccent, inactiveTickColor = c.textDim),
+                        PadSlider(
+                            value = speedLevel, onValueChange = { speedLevel = it }, onValueChangeFinished = { prefs.gyroSensitivity = speedLevel.toInt() },
+                            valueRange = 1f..10f, step = 1f, steps = 8,
                         )
                     }
                     RowDivider()

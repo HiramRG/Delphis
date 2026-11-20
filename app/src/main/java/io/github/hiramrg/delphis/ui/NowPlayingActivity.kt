@@ -656,11 +656,24 @@ open class NowPlayingActivity : ComponentActivity() {
             DolphinExitService.openMenu()
         }
         val loadAutosave = {
+            val f = io.github.hiramrg.delphis.platform.ResumeNotice.failed.value
             io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = null
             if (panelMode) resumeGame()
-            gid?.let { id -> this@NowPlayingActivity.lifecycleScope.launch { delay(700); bridge.loadAutosaveNow(id) } }
+            gid?.let { id ->
+                this@NowPlayingActivity.lifecycleScope.launch {
+                    delay(700)
+                    // Didn't work either: the notice comes back saying so (never a button that does nothing).
+                    if (!bridge.loadAutosaveNow(id) && f != null) {
+                        io.github.hiramrg.delphis.platform.ResumeNotice.failed.value =
+                            io.github.hiramrg.delphis.platform.ResumeNotice.Failed(f.gameId, f.savedAt, helperOff = !DolphinExitService.running, retried = true)
+                    }
+                }
+            }
             Unit
         }
+        // The helper isn't running: the notice's blue button opens Accessibility instead (back here it becomes "Load it").
+        val helperUp = DolphinExitService.runningState.value
+        val resumeAction = { if (helperUp) loadAutosave() else DolphinExitService.openSettings(this@NowPlayingActivity) }
         // The Picture list's columns (2, or 3 on a short panel): the D-pad's up / down step.
         var pictureCols by remember { mutableIntStateOf(2) }
         // The Map / List toggle: L2 / R2 on one screen bump this.
@@ -687,12 +700,12 @@ open class NowPlayingActivity : ComponentActivity() {
                 var shownOnTop = false
                 if (where != "bottom") {
                     val badge = io.github.hiramrg.delphis.platform.Achievements.badge(ctx, popup.unlock.badgeUrl())
-                    shownOnTop = DolphinExitService.showAchievement(popup, badge, topDisplay)
+                    shownOnTop = DolphinExitService.showAchievement(popup, badge, topDisplay, prefs.raBadgeSeconds * 1000L)
                 }
                 // Bottom screen when chosen, or when the top-screen helper isn't on.
                 if (where != "top" || !shownOnTop) {
                     bottomPopup = popup
-                    delay(5_000)
+                    delay(prefs.raBadgeSeconds * 1000L)
                     bottomPopup = null
                     delay(400)
                 }
@@ -1081,7 +1094,7 @@ open class NowPlayingActivity : ComponentActivity() {
                 val pending = restartAction
                 panelKeys = when {
                     resumeFailed != null -> mapOf(
-                        KeyEvent.KEYCODE_BUTTON_A to { loadAutosave() },
+                        KeyEvent.KEYCODE_BUTTON_A to { resumeAction() },
                         KeyEvent.KEYCODE_BUTTON_B to { io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = null },
                     )
                     // Every pop-up answers A (its blue button) and B (the other one), like its icons say.
@@ -1189,12 +1202,25 @@ open class NowPlayingActivity : ComponentActivity() {
                 )
             }
             resumeFailed?.let { f ->
-                OverlayDialog(
-                    title = "Your autosave wasn't loaded",
-                    body = "The game started from its own save instead. Your autosave from ${io.github.hiramrg.delphis.platform.ResumeNotice.whenText(this@NowPlayingActivity, f.savedAt)} is still here: load it to continue where you left off.",
-                    confirm = "Load it", dismiss = "Not now",
+                val whenText = io.github.hiramrg.delphis.platform.ResumeNotice.whenText(this@NowPlayingActivity, f.savedAt)
+                val dolphinTip = "Or load it yourself: Dolphin's menu → Quick Load."
+                if (!helperUp) OverlayDialog(
+                    title = "Your autosave wasn't loaded", body = "",
+                    confirm = "Open Accessibility", dismiss = "Not now",
                     onDismiss = { io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = null },
-                    onConfirm = { loadAutosave() },
+                    onConfirm = { resumeAction() },
+                    top = { HelperStoppedInfo("which is what loads your autosave (from $whenText)", dolphinTip) },
+                ) else OverlayDialog(
+                    title = if (f.retried) "Your autosave still wasn't loaded" else "Your autosave wasn't loaded",
+                    body = when {
+                        f.retried -> "Delphis couldn't press Quick Load. Try again, or load it from Dolphin's menu → Quick Load. Your autosave from $whenText is still here."
+                        f.helperOff -> "Your autosave from $whenText is still here: load it to continue where you left off."
+                        else -> "The game started from its own save instead. Your autosave from $whenText is still here: load it to continue where you left off."
+                    },
+                    confirm = if (f.retried) "Try again" else "Load it", dismiss = "Not now",
+                    onDismiss = { io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = null },
+                    onConfirm = { resumeAction() },
+                    top = { if (f.helperOff) HelperBackLine() },
                 )
             }
             // One screen: a controller connected mid-game. Dolphin only picks controllers up when a game starts.
@@ -1287,10 +1313,7 @@ open class NowPlayingActivity : ComponentActivity() {
                 Modifier.align(Alignment.TopEnd).padding(top = 74.dp, end = 10.dp).width(280.dp).clickable(enabled = false) {},
                 corner = { Text("$value", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Glow.Yellow) },
             ) {
-                Slider(
-                    value = value.toFloat(), onValueChange = { onChange(it.toInt()) }, valueRange = 0f..100f,
-                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = c.accent, inactiveTrackColor = c.cardBorder),
-                )
+                PadSlider(value = value.toFloat(), onValueChange = { onChange(it.toInt()) }, valueRange = 0f..100f, step = 5f, thumbColor = Color.White)
                 SettingRow("Auto-dim", "Just for this game session", onClick = { onAutoDim(!autoDim) }) { ThemedToggle(autoDim) }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     PanelBtn("Turn screen off", null, false, onClick = onScreenOff)
@@ -1338,6 +1361,7 @@ open class NowPlayingActivity : ComponentActivity() {
     private fun OverlayDialog(
         title: String, body: String, confirm: String, dismiss: String,
         onDismiss: () -> Unit, onConfirm: () -> Unit, onOutside: () -> Unit = onDismiss, extra: @Composable () -> Unit = {},
+        top: @Composable () -> Unit = {},
     ) {
         OverlayPanel(onOutside) {
             PopupPanel(
@@ -1347,7 +1371,8 @@ open class NowPlayingActivity : ComponentActivity() {
                     PanelBtn(confirm, if (panelMode) "A" else null, true, onClick = onConfirm)
                 },
             ) {
-                Text(body, fontSize = 12.5.sp, lineHeight = 16.sp, color = LocalWii.current.textDim)
+                top()
+                if (body.isNotBlank()) Text(body, fontSize = 12.5.sp, lineHeight = 16.sp, color = LocalWii.current.textDim)
                 extra()
             }
         }

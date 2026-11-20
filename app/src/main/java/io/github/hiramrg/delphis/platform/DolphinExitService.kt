@@ -26,8 +26,17 @@ class DolphinExitService : AccessibilityService() {
 
     companion object {
         @Volatile private var instance: DolphinExitService? = null
+            set(v) { field = v; runningState.value = v != null }
         /** Whether the helper is running right now (Android restarts it after an update). */
         val running: Boolean get() = instance != null
+        /** [running] for screens that should update when the helper starts or stops. */
+        val runningState = androidx.compose.runtime.mutableStateOf(false)
+
+        /**
+         * Turned on in Accessibility but not running: Android stopped it (after Delphis crashed it stays
+         * stopped until it's switched off and on again).
+         */
+        fun stopped(context: Context): Boolean = !running && isEnabled(context)
 
         /** True while Android has the service running (the user turned it on). */
         val isRunning: Boolean get() = instance != null
@@ -98,13 +107,13 @@ class DolphinExitService : AccessibilityService() {
         }
 
         /** The unlock badge over the game on the top screen. False without the service. */
-        fun showAchievement(popup: Achievements.Popup, badge: android.graphics.Bitmap?, displayId: Int?): Boolean {
+        fun showAchievement(popup: Achievements.Popup, badge: android.graphics.Bitmap?, displayId: Int?, showMs: Long = AchievementToast.DEFAULT_MS): Boolean {
             val s = instance ?: return false
             s.handler.post {
                 // One screen: the badge shows at the top centre, in the Delphis pill's place.
                 val centre = s.pill.showing
-                if (centre) s.pill.hold(AchievementToast.SHOW_MS + 700)
-                s.achievementToast.show(popup, badge, displayId, centre)
+                if (centre) s.pill.hold(showMs + 700)
+                s.achievementToast.show(popup, badge, displayId, centre, showMs)
             }
             return true
         }

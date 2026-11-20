@@ -7,7 +7,11 @@ import androidx.compose.runtime.mutableStateOf
  * Android was still restarting the close-games helper). The in-game menu then offers to load it.
  */
 object ResumeNotice {
-    class Failed(val gameId: String, val savedAt: Long)
+    /**
+     * [helperOff]: the helper wasn't running (it presses Quick Load), so the notice first says how to turn it back on.
+     * [retried]: "Load it" was pressed and that didn't work either.
+     */
+    class Failed(val gameId: String, val savedAt: Long, val helperOff: Boolean = false, val retried: Boolean = false)
 
     val failed = mutableStateOf<Failed?>(null)
 

@@ -580,7 +580,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         )
         // Not loaded (and not because save states are off): the in-game menu offers to load it.
         if (savedAt != null && result != DolphinExitService.StateResult.DONE && result != DolphinExitService.StateResult.SAVE_STATES_OFF) {
-            ResumeNotice.failed.value = ResumeNotice.Failed(gameId, savedAt)
+            ResumeNotice.failed.value = ResumeNotice.Failed(gameId, savedAt, helperOff = result == null)
         }
     }
 

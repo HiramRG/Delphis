@@ -169,7 +169,7 @@ fun AchievementsDialog(p: GameProgress, onDismiss: () -> Unit) {
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 }
 
-/** The unlock badge on the bottom screen (slides down from the top for 5 s). */
+/** The unlock badge on the bottom screen (slides down from the top for the time set in Settings). */
 @Composable
 fun UnlockToast(popup: Achievements.Popup?, modifier: Modifier) {
     AnimatedVisibility(popup != null, modifier, enter = slideInVertically { -it } + fadeIn(), exit = slideOutVertically { -it } + fadeOut()) {
@@ -261,6 +261,7 @@ fun AchievementsSettings(act: MainActivity, switchRow: @Composable (String, Stri
             WiiChip(label, where == id, { where = id; prefs.raWhere = id })
         }
     }
+    if (popups) BadgeTimeRow(act)
     var hideDolphin by remember { mutableStateOf(prefs.raHideDolphin) }
     if (popups) switchRow(
         "Hide Dolphin's pop-ups",
@@ -388,4 +389,81 @@ private fun OfflineLine(savedAt: Long) {
         OfflineTag()
         Text("Saved $whenText · new unlocks show when you're back online", fontSize = 11.sp, color = Color(0xFFA3ADB8), modifier = Modifier.weight(1f))
     }
+}
+
+// ------------------------------------------------------------------ Settings → Achievements → "Badge shows for"
+
+/** The badge time slider (D-pad left / right, 1 s a step) and an example badge that plays for that long. */
+@Composable
+private fun BadgeTimeRow(act: MainActivity) {
+    val prefs = act.prefs
+    val c = LocalWii.current
+    var seconds by remember { mutableFloatStateOf(prefs.raBadgeSeconds.toFloat()) }
+    // The example: 1 → 0 while it's on screen (the gold bar), restarted by each press.
+    var playId by remember { mutableIntStateOf(0) }
+    val left = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(playId) {
+        if (playId == 0) return@LaunchedEffect
+        left.snapTo(1f)
+        left.animateTo(0f, androidx.compose.animation.core.tween(seconds.toInt() * 1000, easing = androidx.compose.animation.core.LinearEasing))
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Badge shows for", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
+                Text("How long the badge stays over the game.", fontSize = 12.sp, color = c.textDim, lineHeight = 15.sp)
+            }
+            Text("${seconds.toInt()} s", fontSize = 18.sp, fontWeight = FontWeight.Black, color = c.accentText, modifier = Modifier.padding(start = 10.dp))
+        }
+        PadSlider(
+            value = seconds, valueRange = Prefs.RA_BADGE_MIN.toFloat()..Prefs.RA_BADGE_MAX.toFloat(), step = 1f,
+            steps = Prefs.RA_BADGE_MAX - Prefs.RA_BADGE_MIN - 1,
+            onValueChange = { seconds = kotlin.math.round(it) }, onValueChangeFinished = { prefs.raBadgeSeconds = seconds.toInt() },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0xFF2A2F36)).padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(Modifier.weight(1f, fill = false).widthIn(max = 340.dp)) {
+                val shape = RoundedCornerShape(14.dp)
+                Row(
+                    Modifier.fillMaxWidth().clip(shape).background(Color(0xF014181D)).border(2.dp, AchGold, shape).padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(46.dp).clip(RoundedCornerShape(9.dp)).background(AchGoldSoft), contentAlignment = Alignment.Center) {
+                        Text("🏆", fontSize = 20.sp, color = AchGold)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("ACHIEVEMENT UNLOCKED", fontSize = 9.5.sp, fontWeight = FontWeight.ExtraBold, color = AchGold, letterSpacing = 0.8.sp, maxLines = 1)
+                        Text(EXAMPLE_TITLE, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(EXAMPLE_LINE, fontSize = 11.sp, color = Color(0xFFA3ADB8), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text("10 pts", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = AchGold, modifier = Modifier.padding(start = 8.dp))
+                }
+                Box(Modifier.padding(top = 7.dp).fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF454C55))) {
+                    Box(Modifier.fillMaxHeight().fillMaxWidth(left.value).background(AchGold))
+                }
+            }
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("An example, not a real unlock.", fontSize = 11.5.sp, color = Color(0xFFC5CDD6), lineHeight = 14.sp)
+                PanelBtn("Show example", null, true) {
+                    playId++
+                    showExampleBadge(act, seconds.toInt())
+                }
+            }
+        }
+    }
+}
+
+private const val EXAMPLE_TITLE = "Example badge"
+private const val EXAMPLE_LINE = "This is how long badges stay on screen"
+
+/** Also puts the example over the game's screen (the top screen on the Thor), the way a real unlock shows. */
+private fun showExampleBadge(act: MainActivity, seconds: Int) {
+    val unlock = io.github.hiramrg.delphis.core.RetroAchievements.Unlock(0, 0, "", EXAMPLE_TITLE, EXAMPLE_LINE, 10, "", "")
+    val roles = io.github.hiramrg.delphis.platform.DeviceInfo.screenRoles(act, act.prefs.swapScreens)
+    val display = if (roles.bottomDisplayId != null) roles.topDisplayId else @Suppress("DEPRECATION") act.windowManager.defaultDisplay.displayId
+    io.github.hiramrg.delphis.platform.DolphinExitService.showAchievement(Achievements.Popup(unlock, null, null), null, display, seconds * 1000L)
 }

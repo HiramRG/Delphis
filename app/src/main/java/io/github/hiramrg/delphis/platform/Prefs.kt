@@ -275,6 +275,10 @@ class Prefs(context: Context) {
     var raPopups: Boolean
         get() = sp.getBoolean("ra_popups", true)
         set(v) = sp.edit().putBoolean("ra_popups", v).apply()
+    /** How long the unlock badge stays on screen, in seconds (Settings → Achievements). */
+    var raBadgeSeconds: Int
+        get() = sp.getInt("ra_badge_seconds", RA_BADGE_DEFAULT).coerceIn(RA_BADGE_MIN, RA_BADGE_MAX)
+        set(v) = sp.edit().putInt("ra_badge_seconds", v.coerceIn(RA_BADGE_MIN, RA_BADGE_MAX)).apply()
     /** Turn off Dolphin's own on-screen messages (its achievement pop-up) so only Delphis' badge shows. */
     var raHideDolphin: Boolean
         get() = sp.getBoolean("ra_hide_dolphin", true)
@@ -421,5 +425,10 @@ class Prefs(context: Context) {
 
         /** Bump when game detection changes so old (unfiltered) scans are discarded. */
         const val LIBRARY_CACHE_VERSION = 2
+
+        /** Achievement badge time, seconds: default and the slider's range. */
+        const val RA_BADGE_DEFAULT = 7
+        const val RA_BADGE_MIN = 3
+        const val RA_BADGE_MAX = 15
     }
 }

@@ -350,6 +350,12 @@ fun HomeScreen(act: MainActivity) {
             }
             // ⊖ opens Settings from anywhere on Home.
             KeyEvent.KEYCODE_BUTTON_SELECT -> { if (e.firstPress()) act.screen = Screen.Settings; true }
+            // L2: "Delphis' helper has stopped" banner → Accessibility settings.
+            KeyEvent.KEYCODE_BUTTON_L2 -> {
+                val stopped = io.github.hiramrg.delphis.platform.DolphinExitService.stopped(act)
+                if (stopped && e.firstPress()) io.github.hiramrg.delphis.platform.DolphinExitService.openSettings(act)
+                stopped
+            }
             else -> false
         }
     }
@@ -362,6 +368,7 @@ fun HomeScreen(act: MainActivity) {
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
         UpdateBanner(act)
+        HelperBanner(act)
         Row(Modifier.weight(1f).fillMaxWidth()) {
             HomeRail(act, favorites, rowsMode, hero != null)
             if (rowsMode) HomeRows(act, hero, recent, favorites, lastPlayed, playTime, { showFavPicker = true })
@@ -2176,18 +2183,14 @@ private fun SettingsNavItem(s: SettingsSection, lit: Boolean, dot: Boolean = fal
     }
 }
 
-/** Themed slider (accent thumb and track). */
+/** Themed slider (accent thumb and track); works with the D-pad (see [PadSlider]). */
 @Composable
 private fun WiiSlider(
     value: Float, onValueChange: (Float) -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, onValueChangeFinished: (() -> Unit)? = null,
+    step: Float = if (steps > 0) (valueRange.endInclusive - valueRange.start) / (steps + 1) else (valueRange.endInclusive - valueRange.start) / 20f,
 ) {
-    val c = LocalWii.current
-    Slider(
-        value = value, onValueChange = onValueChange, modifier = modifier, enabled = enabled, valueRange = valueRange, steps = steps,
-        onValueChangeFinished = onValueChangeFinished,
-        colors = SliderDefaults.colors(thumbColor = c.text, activeTrackColor = c.accent, inactiveTrackColor = c.cardBorder, activeTickColor = c.onAccent, inactiveTickColor = c.textDim),
-    )
+    PadSlider(value, onValueChange, modifier, enabled, valueRange, step, steps, onValueChangeFinished)
 }
 
 /** Filled dot with ✓ for the picked card (replaces Android's radio button). */
@@ -2519,7 +2522,7 @@ private fun PillSettings(act: MainActivity) {
                     Text("${opacity.toInt()}%", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.text, modifier = Modifier.padding(start = 10.dp))
                 }
                 WiiSlider(
-                    opacity, { opacity = kotlin.math.round(it / 10f) * 10f; prefs.pillOpacity = opacity.toInt() }, Modifier.fillMaxWidth().focusRing(RoundedCornerShape(50), width = 2.5.dp),
+                    opacity, { opacity = kotlin.math.round(it / 10f) * 10f; prefs.pillOpacity = opacity.toInt() }, Modifier.fillMaxWidth(),
                     valueRange = 20f..100f, steps = 7, onValueChangeFinished = { prefs.pillOpacity = opacity.toInt() },
                 )
             }
