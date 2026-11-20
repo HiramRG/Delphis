@@ -1,5 +1,7 @@
 package io.github.hiramrg.delphis.ui
 
+import io.github.hiramrg.delphis.platform.DolphinBridge.SaveEntry
+import io.github.hiramrg.delphis.platform.DolphinBridge.SaveKind
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
@@ -141,12 +143,11 @@ class LayoutCheckTest {
             // Saves: the game page with its Saves button, then the list; Home with "helper has stopped".
             run {
                 val now = System.currentTimeMillis()
-                val B = io.github.hiramrg.delphis.platform.DolphinBridge
                 TestHooks.saves = listOf(
-                    B.SaveEntry(B.SaveKind.LATEST, now - 60_000, 40_000_000, 9),
-                    B.SaveEntry(B.SaveKind.EARLIER, now - 1_200_000, 40_000_000),
-                    B.SaveEntry(B.SaveKind.EARLIER, now - 8_000_000, 40_000_000),
-                    B.SaveEntry(B.SaveKind.SLOT, now - 90_000_000, 40_000_000, 1),
+                    SaveEntry(SaveKind.LATEST, now - 60_000, 40_000_000, 9),
+                    SaveEntry(SaveKind.EARLIER, now - 1_200_000, 40_000_000),
+                    SaveEntry(SaveKind.EARLIER, now - 8_000_000, 40_000_000),
+                    SaveEntry(SaveKind.SLOT, now - 90_000_000, 40_000_000, 1),
                 )
                 show(act, size, "Game page with saves", after = { act.screen = Screen.Home }) { act.screen = Screen.Home; settle(100); act.openGame(games[0]) }
                 show(act, size, "Game page · Saves", after = { TestHooks.savesDialog = false; act.screen = Screen.Home }) {
@@ -280,14 +281,13 @@ class LayoutCheckTest {
         run {
             val (g, preset, _) = inGame.first()
             val now = System.currentTimeMillis()
-            val B = io.github.hiramrg.delphis.platform.DolphinBridge
             TestHooks.saves = listOf(
-                B.SaveEntry(B.SaveKind.LATEST, now - 60_000, 40_000_000, 9),
-                B.SaveEntry(B.SaveKind.EARLIER, now - 1_200_000, 40_000_000),
-                B.SaveEntry(B.SaveKind.EARLIER, now - 8_000_000, 40_000_000),
-                B.SaveEntry(B.SaveKind.EARLIER, now - 30_000_000, 40_000_000),
-                B.SaveEntry(B.SaveKind.SLOT, now - 90_000_000, 40_000_000, 1),
-                B.SaveEntry(B.SaveKind.SLOT, now - 300_000_000, 40_000_000, 3),
+                SaveEntry(SaveKind.LATEST, now - 60_000, 40_000_000, 9),
+                SaveEntry(SaveKind.EARLIER, now - 1_200_000, 40_000_000),
+                SaveEntry(SaveKind.EARLIER, now - 8_000_000, 40_000_000),
+                SaveEntry(SaveKind.EARLIER, now - 30_000_000, 40_000_000),
+                SaveEntry(SaveKind.SLOT, now - 90_000_000, 40_000_000, 1),
+                SaveEntry(SaveKind.SLOT, now - 300_000_000, 40_000_000, 3),
             )
             TestHooks.savesTab = true
             TestHooks.helperUp = true
