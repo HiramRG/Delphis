@@ -6,12 +6,12 @@ plugins {
 
 android {
     namespace = "io.github.hiramrg.delphis"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "io.github.hiramrg.delphis"
         minSdk = 29          // Android 10: multi-display launching + per-display focus
-        targetSdk = 34       // The AYN Thor ships Android 13
+        targetSdk = 36       // Android 16. The Thor (Android 13) is unaffected: a target's rules apply only on that version and up
         // CI passes -PversionCode=<run number>, so every published build is newer than the last;
         // the in-app updater compares this number with the one in the GitHub release notes.
         val code = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
