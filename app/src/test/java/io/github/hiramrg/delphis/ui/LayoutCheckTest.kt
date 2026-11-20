@@ -154,7 +154,7 @@ class LayoutCheckTest {
                     TestHooks.savesDialog = true; act.screen = Screen.Home; settle(100); act.openGame(games[0])
                 }
                 TestHooks.saves = emptyList()
-                show(act, size, "Home · helper stopped", after = { TestHooks.helperStopped = false }) { TestHooks.helperStopped = true; act.screen = Screen.Home }
+                show(act, size, "Home · helper stopped", after = { TestHooks.helperStopped = false; act.setupVersion++ }) { TestHooks.helperStopped = true; act.setupVersion++; act.screen = Screen.Home }
             }
             for (s in SettingsSection.entries) {
                 if (size.oneScreen && s == SettingsSection.BOTTOM) continue

@@ -37,12 +37,29 @@ fun helperStopped(context: android.content.Context, @Suppress("UNUSED_PARAMETER"
     io.github.hiramrg.delphis.platform.TestHooks.helperStopped ||
         (!DolphinExitService.runningState.value && DolphinExitService.isEnabled(context))
 
+/** A letter or number exactly in the middle of a circle (outlined, or filled with [fill]). */
+@Composable
+private fun CircleMark(mark: String, colour: Color, size: androidx.compose.ui.unit.Dp = 18.dp, fill: Color? = null) {
+    androidx.compose.foundation.Canvas(Modifier.size(size)) {
+        val r = this.size.minDimension / 2f
+        if (fill != null) drawCircle(fill, r)
+        else drawCircle(colour, r - 1.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+        if (mark == "✓") {
+            // A drawn tick (not a font character, so it looks the same on every device).
+            val p = androidx.compose.ui.graphics.Path().apply {
+                moveTo(center.x - r * 0.42f, center.y + r * 0.02f)
+                lineTo(center.x - r * 0.1f, center.y + r * 0.34f)
+                lineTo(center.x + r * 0.45f, center.y - r * 0.3f)
+            }
+            drawPath(p, colour, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+        } else drawCenteredGlyph(mark, center.x, center.y, r * 1.05f, colour)
+    }
+}
+
 @Composable
 private fun StatusLine(text: String, colour: Color, mark: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-        Box(Modifier.size(18.dp).border(2.dp, colour, RoundedCornerShape(50)), contentAlignment = Alignment.Center) {
-            Text(mark, fontSize = 10.sp, fontWeight = FontWeight.Black, color = colour)
-        }
+        CircleMark(mark, colour)
         Text(text, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = colour)
     }
 }
@@ -66,9 +83,7 @@ fun HelperStoppedInfo(what: String, tip: String? = null) {
         )
         listOf("Open Accessibility → Delphis", "Turn it off, then on again", "Come back here").forEachIndexed { i, step ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.size(18.dp).clip(RoundedCornerShape(50)).background(c.cardBorder), contentAlignment = Alignment.Center) {
-                    Text("${i + 1}", fontSize = 10.5.sp, fontWeight = FontWeight.Black, color = c.text)
-                }
+                CircleMark("${i + 1}", c.text, fill = c.cardBorder)
                 Text(step, fontSize = 12.5.sp, lineHeight = 16.sp, color = c.textDim)
             }
         }
@@ -86,9 +101,7 @@ fun HelperBanner(act: MainActivity) {
             .border(2.dp, Amber, shape).padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box(Modifier.size(20.dp).border(2.dp, Amber, RoundedCornerShape(50)), contentAlignment = Alignment.Center) {
-            Text("!", fontSize = 11.sp, fontWeight = FontWeight.Black, color = Amber)
-        }
+        CircleMark("!", Amber, 20.dp)
         Column(Modifier.weight(1f)) {
             Text("Delphis' helper has stopped", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1)
             Text(
