@@ -1,0 +1,6 @@
+* What went wrong:
+An exception occurred applying plugin request [id: 'com.android.application']
+> Failed to apply plugin 'com.android.internal.version-check'.
+   > Minimum supported Gradle version is 9.6.0. Current version is 8.11.1.
+--
+BUILD FAILED in 41s
