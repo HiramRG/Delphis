@@ -11,8 +11,6 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -213,9 +212,9 @@ class KeepState(val entry: SaveEntry) {
 
 /**
  * "Keep this save" / "Rename kept save": the picture and time, the name (X types it with the keyboard), the
- * suggestions (D-pad), and for a kept save, Delete. Keys are handled by the caller.
+ * suggestions (D-pad left / right), and for a kept save, Delete in the corner. Short enough for a phone's in-game
+ * panel. Keys are handled by the caller.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun KeepSavePanel(
     k: KeepState, keys: Boolean, field: FocusRequester, modifier: Modifier = Modifier,
@@ -225,42 +224,45 @@ fun KeepSavePanel(
     val keyboard = LocalSoftwareKeyboardController.current
     PopupPanel(
         if (k.renaming) "Rename kept save" else "Keep this save", formatSaveTime(k.entry.savedAt), modifier.widthIn(max = 440.dp),
+        corner = if (k.renaming) ({
+            PanelBtn(if (k.deleteArmed) "Press again to delete" else "Delete", if (keys) "L2" else null, false, warn = true, enabled = !k.busy, onClick = onDelete)
+        }) else null,
         buttons = {
             PanelBtn("Cancel", if (keys) "B" else null, false, onClick = onCancel)
             PanelBtn("Type", if (keys) "X" else null, false, onClick = onType)
             PanelBtn(if (k.renaming) "Save" else "Keep", if (keys) "A" else null, true, enabled = !k.busy, onClick = onKeep)
         },
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SavePicture(k.entry.picture, Modifier.size(104.dp, 58.dp))
-            Text(
-                if (k.renaming) "Kept saves are never replaced by new autosaves." else "Kept saves stay at the top of the list and are never replaced by new autosaves.",
-                fontSize = 12.sp, color = c.textDim, lineHeight = 15.sp, modifier = Modifier.weight(1f),
-            )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SavePicture(k.entry.picture, Modifier.size(80.dp, 45.dp))
+            val shape = RoundedCornerShape(12.dp)
+            Box(
+                Modifier.weight(1f).height(42.dp).clip(shape).background(c.accentSoft).border(2.dp, c.accent, shape).padding(horizontal = 12.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (k.name.isEmpty()) Text("Name it, or pick one below", fontSize = 13.sp, color = c.textDim, maxLines = 1)
+                BasicTextField(
+                    k.name, { k.name = it.take(KeptSaves.NAME_MAX); k.chip = KeptSaves.SUGGESTIONS.indexOf(k.name) },
+                    Modifier.fillMaxWidth().focusRequester(field),
+                    singleLine = true,
+                    textStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, color = c.text),
+                    cursorBrush = SolidColor(c.accent),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { keyboard?.hide(); onTypingDone() }),
+                )
+            }
         }
-        val shape = RoundedCornerShape(12.dp)
-        Box(
-            Modifier.fillMaxWidth().height(42.dp).clip(shape).background(c.accentSoft).border(2.dp, c.accent, shape).padding(horizontal = 12.dp),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            if (k.name.isEmpty()) Text("Name it, or pick one below", fontSize = 14.sp, color = c.textDim, maxLines = 1)
-            BasicTextField(
-                k.name, { k.name = it.take(KeptSaves.NAME_MAX); k.chip = KeptSaves.SUGGESTIONS.indexOf(k.name) },
-                Modifier.fillMaxWidth().focusRequester(field),
-                singleLine = true,
-                textStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, color = c.text),
-                cursorBrush = SolidColor(c.accent),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { keyboard?.hide(); onTypingDone() }),
-            )
+        // The suggestions on one line; the highlighted one is scrolled into view.
+        val chips = rememberLazyListState()
+        LaunchedEffect(k.chip) { if (k.chip >= 0) runCatching { chips.animateScrollToItem(k.chip) } }
+        LazyRow(state = chips, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(KeptSaves.SUGGESTIONS.size) { i -> val t = KeptSaves.SUGGESTIONS[i]; WiiChip(t, k.chip == i, { k.chip = i; k.name = t }) }
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            KeptSaves.SUGGESTIONS.forEachIndexed { i, t -> WiiChip(t, k.chip == i, { k.chip = i; k.name = t }) }
-        }
-        k.status?.let { Text(it, fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.Bold, color = c.orange) }
-        if (k.renaming) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PanelBtn(if (k.deleteArmed) "Press again to delete" else "Delete this kept save", if (keys) "L2" else null, false, warn = true, enabled = !k.busy, onClick = onDelete)
-        }
+        Text(
+            k.status ?: "Kept saves stay at the top and new autosaves never replace them.",
+            fontSize = 12.sp, lineHeight = 15.sp, maxLines = 2,
+            fontWeight = if (k.status != null) FontWeight.Bold else null, color = if (k.status != null) c.orange else c.textDim,
+        )
     }
 }
 
