@@ -7,6 +7,8 @@
     <exclude domain="file" path="ra-progress/" />
     <exclude domain="file" path="ra-badges/" />
     <exclude domain="file" path="autosave-backups/" />
+    <exclude domain="file" path="kept-saves/" />
+    <exclude domain="file" path="save-pictures/" />
     <exclude domain="file" path="covers/" />
     <exclude domain="file" path="covers-hq/" />
 </full-backup-content>

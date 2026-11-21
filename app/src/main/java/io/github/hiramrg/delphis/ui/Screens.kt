@@ -1467,7 +1467,14 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         if (io.github.hiramrg.delphis.platform.TestHooks.saves.isEmpty()) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.saves(game.info.gameId) }
     }
     if (showSaves && saves.isNotEmpty()) {
-        SavesDialog(game.info.title, saves, onDismiss = { showSaves = false }) { chosen ->
+        val actions = remember(game.key) {
+            val id = game.info.gameId
+            SaveActions(
+                keep = { e, name -> if (id == null) io.github.hiramrg.delphis.platform.DolphinBridge.KeepResult.FAILED else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.keepSave(id, e, name) } },
+                delete = { e -> id != null && kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.deleteKept(id, e.keptId) } },
+            )
+        }
+        SavesDialog(game.info.title, saves, onDismiss = { showSaves = false }, actions = actions, onChanged = { savesVersion++ }) { chosen ->
             showSaves = false
             val id = game.info.gameId ?: return@SavesDialog
             act.lifecycleScope.launch {
@@ -2307,6 +2314,7 @@ private fun ControlsSettings(act: MainActivity) {
     }
     SwitchRow("Invert motion steering", "For the Mario Kart \"tilt the Thor\" layout, if turning left steers right.", invert) { invert = it; prefs.invertMotion = it }
     RumbleCard(act)
+    QuickSaveCard(act)
     Text("Gamepad name override (leave empty to use the checked/detected one)", fontSize = 13.sp)
     OutlinedTextField(
         value = deviceName, onValueChange = { deviceName = it; prefs.deviceName = it.ifBlank { null } },

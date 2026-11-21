@@ -423,6 +423,15 @@ class Prefs(context: Context) {
     var pillOpacity: Int
         get() = sp.getInt("pill_opacity", 60).coerceIn(20, 100)
         set(v) = sp.edit().putInt("pill_opacity", v.coerceIn(20, 100)).apply()
+    /** Quick save / load buttons while playing: Select + L1 saves, Select + R1 loads (Settings → Controls). */
+    var quickSaveButtons: Boolean
+        get() = sp.getBoolean("quick_save_buttons", true)
+        set(v) = sp.edit().putBoolean("quick_save_buttons", v).apply()
+    /** Loading needs Select + R1 held for 1 s (true, the default) or just pressed. */
+    var quickLoadHold: Boolean
+        get() = sp.getBoolean("quick_load_hold", true)
+        set(v) = sp.edit().putBoolean("quick_load_hold", v).apply()
+    val quickLoadHoldMs: Long get() = if (quickLoadHold) 1000L else 0L
     /** When the pill shows how to open the menu (5 s): 0 = every game start (default), 1 = once per game, 2 = never. */
     var pillFull: Int
         get() = sp.getInt("pill_full", 0).coerceIn(0, 2)

@@ -144,14 +144,19 @@ class LayoutCheckTest {
             run {
                 val now = System.currentTimeMillis()
                 TestHooks.saves = listOf(
-                    SaveEntry(SaveKind.LATEST, now - 60_000, 40_000_000, 9),
-                    SaveEntry(SaveKind.EARLIER, now - 1_200_000, 40_000_000),
+                    SaveEntry(SaveKind.KEPT, now - 7_000_000, 40_000_000, name = "Before the castle", picture = testPicture(1), keptId = 1),
+                    SaveEntry(SaveKind.KEPT, now - 95_000_000, 40_000_000, name = "Hidden exit found in the second world, near the tower", picture = testPicture(2), keptId = 2),
+                    SaveEntry(SaveKind.LATEST, now - 60_000, 40_000_000, 9, picture = testPicture(3)),
+                    SaveEntry(SaveKind.EARLIER, now - 1_200_000, 40_000_000, picture = testPicture(4)),
                     SaveEntry(SaveKind.EARLIER, now - 8_000_000, 40_000_000),
                     SaveEntry(SaveKind.SLOT, now - 90_000_000, 40_000_000, 1),
                 )
                 show(act, size, "Game page with saves", after = { act.screen = Screen.Home }) { act.screen = Screen.Home; settle(100); act.openGame(games[0]) }
                 show(act, size, "Game page · Saves", after = { TestHooks.savesDialog = false; act.screen = Screen.Home }) {
                     TestHooks.savesDialog = true; act.screen = Screen.Home; settle(100); act.openGame(games[0])
+                }
+                show(act, size, "Game page · Saves · Rename kept save", after = { TestHooks.savesDialog = false; TestHooks.keepPopup = false; act.screen = Screen.Home }) {
+                    TestHooks.savesDialog = true; TestHooks.keepPopup = true; act.screen = Screen.Home; settle(100); act.openGame(games[0])
                 }
                 TestHooks.saves = emptyList()
                 show(act, size, "Home · helper stopped", after = { TestHooks.helperStopped = false; act.setupVersion++ }) { TestHooks.helperStopped = true; act.setupVersion++; act.screen = Screen.Home }
@@ -282,9 +287,11 @@ class LayoutCheckTest {
             val (g, preset, _) = inGame.first()
             val now = System.currentTimeMillis()
             TestHooks.saves = listOf(
-                SaveEntry(SaveKind.LATEST, now - 60_000, 40_000_000, 9),
-                SaveEntry(SaveKind.EARLIER, now - 1_200_000, 40_000_000),
-                SaveEntry(SaveKind.EARLIER, now - 8_000_000, 40_000_000),
+                SaveEntry(SaveKind.KEPT, now - 7_000_000, 40_000_000, name = "Before the castle", picture = testPicture(1), keptId = 1),
+                SaveEntry(SaveKind.KEPT, now - 95_000_000, 40_000_000, name = "Hidden exit found in the second world, near the tower", picture = testPicture(2), keptId = 2),
+                SaveEntry(SaveKind.LATEST, now - 60_000, 40_000_000, 9, picture = testPicture(3)),
+                SaveEntry(SaveKind.EARLIER, now - 1_200_000, 40_000_000, picture = testPicture(4)),
+                SaveEntry(SaveKind.EARLIER, now - 8_000_000, 40_000_000, picture = testPicture(5)),
                 SaveEntry(SaveKind.EARLIER, now - 30_000_000, 40_000_000),
                 SaveEntry(SaveKind.SLOT, now - 90_000_000, 40_000_000, 1),
                 SaveEntry(SaveKind.SLOT, now - 300_000_000, 40_000_000, 3),
@@ -294,7 +301,11 @@ class LayoutCheckTest {
             TestHooks.padVendor = 0x045e
             inGameMenu(phone, InGameMenuActivity::class.java, session(g, preset), "In-game Saves · Xbox")
             inGameMenu(tablet, InGameMenuActivity::class.java, session(g, preset), "In-game Saves · Xbox")
+            TestHooks.keepPopup = true
+            inGameMenu(phone, InGameMenuActivity::class.java, session(g, preset), "In-game Saves · Rename kept save · Xbox")
             TestHooks.padVendor = null
+            inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Saves · Rename kept save (Thor)")
+            TestHooks.keepPopup = false
             inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Saves (Thor)")
             TestHooks.helperUp = false
             inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Saves, helper stopped (Thor)")
@@ -308,6 +319,23 @@ class LayoutCheckTest {
         step("done")
         writeSummary()
         if (problems.isNotEmpty()) fail("${problems.size} layout problem(s):\n" + problems.joinToString("\n") { "${it.size} · ${it.screen}: ${it.what}" })
+    }
+
+    /** A made-up save picture (sky, ground, a few blocks), as a file like Delphis keeps them. */
+    private fun testPicture(seed: Int): java.io.File {
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val f = java.io.File(app.cacheDir, "test-picture-$seed.jpg")
+        if (f.exists()) return f
+        val skies = intArrayOf(0xFF6FB7FF.toInt(), 0xFFFFB36F.toInt(), 0xFF7A6FFF.toInt(), 0xFF4FD1C5.toInt(), 0xFFF6D365.toInt())
+        val b = android.graphics.Bitmap.createBitmap(384, 216, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(b)
+        canvas.drawColor(skies[seed % skies.size])
+        val paint = android.graphics.Paint().apply { color = 0xFF4CAF50.toInt() }
+        canvas.drawRect(0f, 150f, 384f, 216f, paint)
+        paint.color = 0xFFC0392B.toInt()
+        for (i in 0 until 4) canvas.drawRect(40f + i * 80f + seed * 7, 70f + (i % 2) * 30f, 70f + i * 80f + seed * 7, 96f + (i % 2) * 30f, paint)
+        f.outputStream().use { b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it) }
+        return f
     }
 
     // ------------------------------------------------------------------ activities

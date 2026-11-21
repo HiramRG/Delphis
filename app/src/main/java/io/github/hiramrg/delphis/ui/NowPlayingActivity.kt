@@ -258,6 +258,8 @@ open class NowPlayingActivity : ComponentActivity() {
     private var panelKeys: Map<Int, () -> Unit> = emptyMap()
     /** Shortcuts pressed but not yet let go (they run on release). */
     private val heldShortcuts = HashMap<Int, () -> Unit>()
+    /** Held for [DELETE_HOLD_MS] instead of pressed: these run instead of the [panelKeys] action (X on a kept save deletes it). */
+    private var panelHolds: Map<Int, () -> Unit> = emptyMap()
 
     /** One screen: the panel's width. [wide] (the controls map showing) = 60% of the screen, so the drawing can be big. */
     private fun panelWidth(wide: Boolean): Int {
@@ -280,11 +282,15 @@ open class NowPlayingActivity : ComponentActivity() {
         // sent its release (and sometimes the press) to the game once the menu closed.
         if (event.action == KeyEvent.ACTION_UP) heldShortcuts.remove(event.keyCode)?.let { action ->
             CrashLog.event("menu shortcut ${KeyEvent.keyCodeToString(event.keyCode)}")
-            action()
+            val hold = panelHolds[event.keyCode]?.takeIf { event.eventTime - event.downTime >= DELETE_HOLD_MS }
+            (hold ?: action)()
             return true
         }
         panelKeys[event.keyCode]?.let { action ->
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) heldShortcuts[event.keyCode] = action
+            // Held long enough: the hold action instead (once), and the release does nothing.
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount > 0 && event.eventTime - event.downTime >= DELETE_HOLD_MS)
+                panelHolds[event.keyCode]?.let { hold -> if (heldShortcuts.remove(event.keyCode) != null) hold() }
             return true
         }
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 &&
@@ -443,6 +449,8 @@ open class NowPlayingActivity : ComponentActivity() {
     /** Lets the rest of the app know which game is running, to spot it stopping unexpectedly. */
     private fun watch(s: GameSession?, announce: Boolean = true) {
         if (panelMode && s != null && announce) DolphinExitService.gameStarted(this, s.key)
+        // Select + L1 / R1 save and load while the game runs (on the Thor too).
+        DolphinExitService.quickButtons(s != null && prefs.quickSaveButtons, prefs.quickLoadHoldMs)
         GameWatch.session = s
         GameWatch.unexpectedStop.value = false
         GameWatch.suspended.value = false
@@ -473,7 +481,7 @@ open class NowPlayingActivity : ComponentActivity() {
             return
         }
         if (isFinishing && panelMode) DolphinExitService.gameEnded()
-        if (isFinishing) { DolphinExitService.hideSides(); recordPlayTime(); session?.let { if (unsaved > 0) prefs.addPlayTime(it.key, unsaved) }; unsaved = 0L; GameWatch.session = null; GameWatch.onSuspended = null; GameWatch.suspended.value = false }
+        if (isFinishing) { DolphinExitService.hideSides(); DolphinExitService.quickButtons(false); recordPlayTime(); session?.let { if (unsaved > 0) prefs.addPlayTime(it.key, unsaved) }; unsaved = 0L; GameWatch.session = null; GameWatch.onSuspended = null; GameWatch.suspended.value = false }
         super.onDestroy()
     }
 
@@ -642,6 +650,39 @@ open class NowPlayingActivity : ComponentActivity() {
             }
         }
         val helperDown = !DolphinExitService.runningState.value && !io.github.hiramrg.delphis.platform.TestHooks.helperUp
+        // "Keep this save" / "Rename kept save" over the Saves tab.
+        var keepState by remember { mutableStateOf<KeepState?>(null) }
+        LaunchedEffect(gameSaves) {
+            if (io.github.hiramrg.delphis.platform.TestHooks.keepPopup && showSaves && keepState == null) gameSaves.firstOrNull()?.let { keepState = KeepState(it) }
+        }
+        val keepField = remember { androidx.compose.ui.focus.FocusRequester() }
+        val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+        fun openKeep() { gameSaves.getOrNull(saveCursor)?.let { keepState = KeepState(it); savesStatus = null } }
+        fun doKeep() {
+            val k = keepState ?: return
+            val id = gid ?: return
+            if (k.busy) return
+            k.busy = true
+            this@NowPlayingActivity.lifecycleScope.launch {
+                val r = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.keepSave(id, k.entry, k.finalName) }
+                k.busy = false
+                if (r == io.github.hiramrg.delphis.platform.DolphinBridge.KeepResult.KEPT) {
+                    keyboard?.hide(); keepState = null; saveCursor = 0; savesVersion++
+                    savesStatus = (if (k.renaming) "Renamed to \u201C${k.finalName}\u201D." else "Kept as \u201C${k.finalName}\u201D. New autosaves never replace it.") to false
+                } else k.failed(r)
+            }
+        }
+        fun deleteKept(e: io.github.hiramrg.delphis.platform.DolphinBridge.SaveEntry) {
+            val id = gid ?: return
+            if (e.kind != io.github.hiramrg.delphis.platform.DolphinBridge.SaveKind.KEPT) return
+            this@NowPlayingActivity.lifecycleScope.launch {
+                val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.deleteKept(id, e.keptId) }
+                keyboard?.hide(); keepState = null; saveCursor = 0; savesVersion++
+                savesStatus = (if (ok) "Deleted \u201C${saveLabel(e)}\u201D." else "Couldn't delete it.") to !ok
+            }
+        }
+        fun keepDelete() { val k = keepState ?: return; if (!k.deleteArmed) k.deleteArmed = true else deleteKept(k.entry) }
+        fun keepType() { runCatching { keepField.requestFocus() }; keyboard?.show() }
         // One screen: Delphis' menu covers Dolphin, so it steps aside first (the helper presses Dolphin's own menu).
         fun loadSave(e: io.github.hiramrg.delphis.platform.DolphinBridge.SaveEntry) {
             val id = gid ?: return
@@ -931,7 +972,8 @@ open class NowPlayingActivity : ComponentActivity() {
                             gameSaves.isEmpty() -> NoSavesYet(Modifier.fillMaxWidth())
                             else -> SavesList(
                                 gameSaves, saveCursor.coerceIn(0, gameSaves.lastIndex), { saveCursor = it }, Modifier.fillMaxSize(),
-                                rowHeight = if (panelMode) 30.dp else 34.dp,
+                                rowHeight = if (panelMode) 30.dp else 34.dp, small = panelMode,
+                                onLongPress = { i -> saveCursor = i; openKeep() },
                             )
                         }
                     } else if (showPicture && hasPicture) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 10.dp) {
@@ -1054,7 +1096,8 @@ open class NowPlayingActivity : ComponentActivity() {
                 } else if (mode == Mode.VIEW && showSaves && gid != null) {
                     // Saves: Back · Save now · Load (or, with the helper stopped, Back · Open Accessibility).
                     val keys = panelMode && !PadGlyphs.touch
-                    val (line, warn) = savesStatus ?: ("Your progress right now is autosaved first, so you can come back to it." to false)
+                    val onKept = gameSaves.getOrNull(saveCursor)?.kind == io.github.hiramrg.delphis.platform.DolphinBridge.SaveKind.KEPT
+                    val (line, warn) = savesStatus ?: ((if (onKept && keys) "Hold X to delete this kept save. " else "") + "Loading autosaves your progress first, so you can come back to it." to false)
                     if (!helperDown) Text(
                         line, fontSize = 11.sp, lineHeight = 14.sp, maxLines = 2,
                         color = if (warn) MaterialTheme.colorScheme.tertiary else LocalWii.current.textDim,
@@ -1064,7 +1107,8 @@ open class NowPlayingActivity : ComponentActivity() {
                         PanelBtn("Back", if (keys) "B" else null, false, Modifier.weight(1f)) { showSaves = false }
                         if (helperDown) PanelBtn("Open Accessibility", if (keys) "A" else null, true, Modifier.weight(2f)) { DolphinExitService.openSettings(this@NowPlayingActivity) }
                         else {
-                            PanelBtn("Save now", if (keys) "X" else null, false, Modifier.weight(1.2f), enabled = !savesBusy) { saveNow() }
+                            PanelBtn(if (onKept) "Rename" else "Keep", if (keys) "Y" else null, false, Modifier.weight(1.1f), enabled = !savesBusy && gameSaves.isNotEmpty()) { openKeep() }
+                            PanelBtn("Save now", if (keys) "X" else null, false, Modifier.weight(1.3f), enabled = !savesBusy) { saveNow() }
                             PanelBtn("Load", if (keys) "A" else null, true, Modifier.weight(1f), enabled = !savesBusy && gameSaves.isNotEmpty()) {
                                 gameSaves.getOrNull(saveCursor)?.let { loadSave(it) }
                             }
@@ -1170,6 +1214,9 @@ open class NowPlayingActivity : ComponentActivity() {
                 val quit = { showBrightness = false; if (prefs.skipExitWarning) closingGame { backToMainMenu() } else { exitDontAsk = false; confirmExit = true } }
                 val restart = { showBrightness = false; plainRestart = true; restartAction = { applyAndRestart(s, preset, remember = false) } }
                 val pending = restartAction
+                panelHolds = if (keepState == null && showSaves && gid != null && mode == Mode.VIEW && !helperDown)
+                    mapOf(KeyEvent.KEYCODE_BUTTON_X to { gameSaves.getOrNull(saveCursor)?.let { e -> if (e.kind == io.github.hiramrg.delphis.platform.DolphinBridge.SaveKind.KEPT) deleteKept(e) else saveNow() } })
+                else emptyMap()
                 panelKeys = when {
                     resumeFailed != null -> mapOf(
                         KeyEvent.KEYCODE_BUTTON_A to { resumeAction() },
@@ -1197,8 +1244,19 @@ open class NowPlayingActivity : ComponentActivity() {
                         KeyEvent.KEYCODE_BUTTON_A to { restartAction = null; pending() },
                         KeyEvent.KEYCODE_BUTTON_B to { restartAction = null },
                     )
+                    keepState != null && showSaves -> mapOf(
+                        // Keep this save: D-pad left / right picks a name, X types one, A keeps, B cancels, L2 deletes a kept one.
+                        KeyEvent.KEYCODE_DPAD_LEFT to { keepState?.step(-1) },
+                        KeyEvent.KEYCODE_DPAD_RIGHT to { keepState?.step(1) },
+                        KeyEvent.KEYCODE_BUTTON_A to { doKeep() },
+                        KeyEvent.KEYCODE_BUTTON_B to { keyboard?.hide(); keepState = null },
+                        KeyEvent.KEYCODE_BUTTON_X to { keepType() },
+                        KeyEvent.KEYCODE_BUTTON_L2 to { if (keepState?.renaming == true) keepDelete() },
+                    )
                     showSaves && gid != null && mode == Mode.VIEW -> mapOf(
-                        // Saves tab: the D-pad moves through the list, A loads, X saves now, B back to Controls.
+                        // Saves tab: the D-pad moves through the list, A loads, X saves now (held on a kept save: deletes it),
+                        // Y keeps / renames, B back to Controls.
+                        KeyEvent.KEYCODE_BUTTON_Y to { if (!helperDown) openKeep() },
                         KeyEvent.KEYCODE_DPAD_UP to { saveCursor = (saveCursor - 1).coerceAtLeast(0) },
                         KeyEvent.KEYCODE_DPAD_DOWN to { saveCursor = (saveCursor + 1).coerceAtMost((gameSaves.size - 1).coerceAtLeast(0)) },
                         KeyEvent.KEYCODE_BUTTON_A to {
@@ -1290,6 +1348,14 @@ open class NowPlayingActivity : ComponentActivity() {
                     onDismiss = { restartAction = null; plainRestart = false },
                     onConfirm = { restartAction = null; plainRestart = false; closingGame(action) },
                 )
+            }
+            keepState?.takeIf { showSaves }?.let { k ->
+                OverlayPanel({ keyboard?.hide(); keepState = null }) {
+                    KeepSavePanel(
+                        k, keys = panelMode && !PadGlyphs.touch, field = keepField, modifier = Modifier.widthIn(max = 440.dp),
+                        onCancel = { keyboard?.hide(); keepState = null }, onType = { keepType() }, onKeep = { doKeep() }, onDelete = { keepDelete() },
+                    )
+                }
             }
             resumeFailed?.let { f ->
                 val whenText = io.github.hiramrg.delphis.platform.ResumeNotice.whenText(this@NowPlayingActivity, f.savedAt)

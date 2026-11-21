@@ -48,6 +48,8 @@ class LoadingOverlay(private val service: android.accessibilityservice.Accessibi
     }
 
     private var root: View? = null
+    /** Showing on a screen right now. */
+    val showing: Boolean get() = root != null
     private var wm: WindowManager? = null
     private var phaseView: TextView? = null
     private var titleView: TextView? = null

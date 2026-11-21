@@ -72,6 +72,7 @@ fun ControllersSettings(act: MainActivity) {
             Text("Add ›", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText)
         }
     }
+    QuickSaveCard(act)
     var touch by remember { mutableStateOf(prefs.touchWhenNoController) }
     GroupCard {
         ToggleRow("Touch controls when no controller is connected", "Dolphin's on-screen buttons. They go away when a controller is connected at the start of a game.", touch) {

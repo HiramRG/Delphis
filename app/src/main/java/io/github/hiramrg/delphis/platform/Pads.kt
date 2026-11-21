@@ -102,6 +102,22 @@ fun rememberPads(prefs: Prefs): List<Pad> {
 }
 
 /** The menu shortcut's buttons as the connected controller prints them. */
+/** What the quick save / load buttons are called on a controller: Select (View, Create, −) and L1 / R1 (LB / RB, L / R). */
+data class QuickNames(val select: String, val l1: String, val r1: String) {
+    val save get() = "$select + $l1"
+    val load get() = "$select + $r1"
+    companion object {
+        fun forVendor(vendorId: Int?): QuickNames = when (vendorId) {
+            0x045e -> QuickNames("View", "LB", "RB")
+            0x054c -> QuickNames("Create", "L1", "R1")
+            0x057e -> QuickNames("−", "L", "R")
+            else -> QuickNames("Select", "L1", "R1")
+        }
+        /** For the first external controller connected now (the Thor's own names otherwise). */
+        fun forConnected(): QuickNames = forVendor(DeviceInfo.gamepads().firstOrNull { it.isExternal }?.vendorId)
+    }
+}
+
 data class ShortcutNames(val home: String, val combo: String) {
     companion object {
         fun forVendor(vendorId: Int?): ShortcutNames = when (vendorId) {

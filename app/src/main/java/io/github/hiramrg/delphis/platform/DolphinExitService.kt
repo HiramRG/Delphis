@@ -8,6 +8,8 @@ import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * Closes the running game the way a player would: opens Dolphin's in-game menu (Back) and taps
@@ -76,8 +78,27 @@ class DolphinExitService : AccessibilityService() {
             s.handler.post { s.testCallback = null; if (GameWatch.session == null) s.menuShortcut(false) }
         }
 
+        /**
+         * The quick save / load buttons (Select + L1 saves, Select + R1 loads), while a game runs and they're on in
+         * Settings. [holdMs]: how long Select + R1 must be held (0 = a press loads).
+         */
+        fun quickButtons(on: Boolean, holdMs: Long = 1000) {
+            val s = instance ?: return
+            s.handler.post {
+                if (s.quickOn != on) CrashLog.event("quick save buttons ${if (on) "on" else "off"}")
+                s.quickOn = on; s.quickHoldMs = holdMs; s.loadHeld = false; s.updateFilter()
+                if (!on) { s.saveToast.hide(); s.menuShot = null }
+            }
+        }
+
+        /**
+         * A picture of the game for a save (Android 11 and up): taken now if the game is on screen, otherwise the one
+         * taken when Delphis' menu last opened over it (one screen). Null when there's none.
+         */
+        suspend fun gamePicture(): android.graphics.Bitmap? = instance?.picture()
+
         /** See [pressQuickSave]. Null when the service isn't running. */
-        suspend fun quickSave(pkg: String): StateResult? = instance?.pressQuickSave(pkg)
+        suspend fun quickSave(pkg: String, closeMenu: Boolean = false): StateResult? = instance?.pressQuickSave(pkg, closeMenu)
 
         /** See [pressQuickLoad]. Null when the service isn't running. */
         suspend fun quickLoad(pkg: String, bootMs: Long = 6000): StateResult? = instance?.pressQuickLoad(pkg, bootMs)
@@ -202,6 +223,8 @@ class DolphinExitService : AccessibilityService() {
 
     override fun onDestroy() {
         loading.hide()
+        saveToast.hide()
+        scope.cancel()
         pill.stop()
         handler.removeCallbacksAndMessages(null)
         instance = null
@@ -213,6 +236,8 @@ class DolphinExitService : AccessibilityService() {
     private val achievementToast by lazy { AchievementToast(this) }
     private val exitBottom by lazy { LoadingOverlay(this) }
     private val sideFill by lazy { SideFill(this) }
+    private val saveToast by lazy { SaveToast(this) }
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)
     private val pill by lazy { DelphisPill(this) { openInGameMenu() } }
     /** While the pill is up: shown only while Dolphin's game is in front (not Delphis' menu, Home or another app). */
     private data class PillArgs(val showFull: Boolean, val opacity: Int, val controller: String, val shortcut: String)
@@ -279,17 +304,152 @@ class DolphinExitService : AccessibilityService() {
     /** Keys whose release is swallowed too (their press opened the menu). */
     private val swallowUp = mutableSetOf<Int>()
 
-    /** Key filtering is only on while a game runs on a one-screen device. */
+    /** The in-game menu shortcut: on while a game runs on a one-screen device. */
     private fun menuShortcut(on: Boolean) {
         if (shortcutOn == on) return
         shortcutOn = on
         selectHeld = false; startHeld = false; swallowUp.clear()
+        updateFilter()
+    }
+
+    /** Key filtering is only on while a game runs and something needs it (one screen's menu shortcut, the quick save buttons). */
+    private fun updateFilter() {
+        val on = shortcutOn || quickOn
+        if (on == filterActive()) return
         runCatching {
             serviceInfo = serviceInfo.apply {
                 flags = if (on) flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
                 else flags and android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS.inv()
             }
-        }.onFailure { CrashLog.event("couldn't change the in-game menu shortcut: ${it.message}") }
+        }.onFailure { CrashLog.event("couldn't change key filtering: ${it.message}") }
+    }
+
+    // ------------------------------------------------------------------ quick save / load buttons
+
+    private var quickOn = false
+    private var quickHoldMs = 1000L
+    /** Select + R1 is being held (the load fires when the time is up, unless it's let go first). */
+    private var loadHeld = false
+    private var holdToken = 0
+    /** A quick save or load is running (another press waits for it). */
+    private var quickBusy = false
+
+    private fun gameDisplay(): Int? = runCatching { DeviceInfo.screenRoles(this, Prefs(this).swapScreens).topDisplayId }.getOrNull()
+
+    /** Select + L1: a fresh autosave, with its picture, without leaving the game. */
+    private fun quickSaveButton() {
+        if (quickBusy) return
+        val id = GameWatch.session?.info?.gameId ?: run { saveToast.failed(gameDisplay(), "Couldn't save", "Delphis doesn't know this game's ID"); return }
+        quickBusy = true
+        scope.launch {
+            try {
+                val display = gameDisplay()
+                val shot = picture()
+                if (Prefs(this@DolphinExitService).pillShown) pill.hold(6_000)
+                saveToast.busy(display, shot, "Saving…", "")
+                val bridge = DolphinBridge(this@DolphinExitService, Prefs(this@DolphinExitService))
+                val ok = bridge.saveNow(id, shot)
+                CrashLog.event("quick save button: ${if (ok) "saved" else "not saved"}")
+                if (ok) {
+                    val t = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.quickStateTime(id) } ?: System.currentTimeMillis()
+                    saveToast.done(display, shot, "Saved", "${io.github.hiramrg.delphis.ui.formatSaveTime(t)} · it's the latest autosave")
+                } else saveToast.failed(
+                    display, "Couldn't save",
+                    if (Prefs(this@DolphinExitService).saveStatesOff) "Dolphin's Enable Savestates setting is off" else "Try again in a moment",
+                )
+            } finally { quickBusy = false }
+        }
+    }
+
+    /** Select + R1 pressed: after [quickHoldMs] of holding (or right away) the latest autosave loads. */
+    private fun quickLoadPressed() {
+        if (quickBusy) return
+        val id = GameWatch.session?.info?.gameId ?: return
+        loadHeld = true
+        val token = ++holdToken
+        scope.launch {
+            val display = gameDisplay()
+            val bridge = DolphinBridge(this@DolphinExitService, Prefs(this@DolphinExitService))
+            val latest = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.saves(id).firstOrNull { it.kind == DolphinBridge.SaveKind.LATEST } }
+            val pic = latest?.picture?.let { f -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { android.graphics.BitmapFactory.decodeFile(f.path) }.getOrNull() } }
+            if (token != holdToken || (!loadHeld && quickHoldMs > 0)) return@launch
+            if (latest == null) { saveToast.failed(display, "Nothing to load yet", "Save first: Select + L1"); return@launch }
+            val line = "Latest autosave · ${io.github.hiramrg.delphis.ui.formatSaveTime(latest.savedAt)}"
+            if (Prefs(this@DolphinExitService).pillShown) pill.hold(quickHoldMs + 9_000)
+            if (quickHoldMs > 0) {
+                saveToast.holding(display, pic, line, quickHoldMs)
+                kotlinx.coroutines.delay(quickHoldMs)
+                if (token != holdToken || !loadHeld) return@launch
+            }
+            loadHeld = false
+            if (quickBusy) return@launch
+            quickBusy = true
+            try {
+                saveToast.busy(display, pic, "Loading…", line)
+                val ok = bridge.loadSaveInGame(id, latest)
+                CrashLog.event("quick load button: ${if (ok) "loaded" else "not loaded"}")
+                if (ok) saveToast.done(display, pic, "Loaded", "Your progress from before is the newest earlier autosave")
+                else saveToast.failed(display, "Couldn't load it", "Try again, or use Dolphin's menu → Load State")
+            } finally { quickBusy = false }
+        }
+    }
+
+    /** Select or R1 let go before the load fired. */
+    private fun quickLoadReleased() {
+        if (!loadHeld) return
+        loadHeld = false
+        holdToken++
+        if (!quickBusy) saveToast.hide()
+    }
+
+    // ------------------------------------------------------------------ pictures of saves
+
+    /** The picture taken when Delphis' menu last opened over the game (one screen), and when. */
+    private var menuShot: android.graphics.Bitmap? = null
+    private var menuShotAt = 0L
+
+    /** The game is what's on its screen: no Delphis menu or loading screen over it, no other app in front. */
+    private fun gameVisible(): Boolean {
+        if (GameWatch.menuOpen || loading.showing) return false
+        val top = topScreenApp()
+        if (top != null && top !in DolphinBridge.KNOWN_PACKAGES) return false
+        return DolphinBridge.KNOWN_PACKAGES.any { runCatching { find(it, "frame_emulation_fragment") != null }.getOrDefault(false) }
+    }
+
+    private suspend fun picture(): android.graphics.Bitmap? {
+        if (android.os.Build.VERSION.SDK_INT < 30) return null
+        if (gameVisible()) shoot()?.let { return it }
+        // Delphis' menu is over the game: the picture from when it opened (if it's from the last half hour).
+        return menuShot?.takeIf { android.os.SystemClock.elapsedRealtime() - menuShotAt < 30 * 60_000L }
+    }
+
+    /** A screenshot of the game's screen, scaled down for a save's picture. Android 11 and up. */
+    private suspend fun shoot(): android.graphics.Bitmap? {
+        if (android.os.Build.VERSION.SDK_INT < 30) return null
+        val display = gameDisplay() ?: android.view.Display.DEFAULT_DISPLAY
+        val result = kotlinx.coroutines.CompletableDeferred<android.graphics.Bitmap?>()
+        shootAsync(display) { result.complete(it) }
+        return kotlinx.coroutines.withTimeoutOrNull(2_000) { result.await() }
+    }
+
+    @android.annotation.TargetApi(30)
+    private fun shootAsync(display: Int, done: (android.graphics.Bitmap?) -> Unit) {
+        runCatching {
+            takeScreenshot(display, mainExecutor, object : TakeScreenshotCallback {
+                override fun onSuccess(r: ScreenshotResult) {
+                    val small = runCatching {
+                        val hw = android.graphics.Bitmap.wrapHardwareBuffer(r.hardwareBuffer, r.colorSpace) ?: return@runCatching null
+                        val soft = hw.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+                        hw.recycle()
+                        val w = io.github.hiramrg.delphis.core.SavePictures.WIDTH
+                        if (soft.width > w) android.graphics.Bitmap.createScaledBitmap(soft, w, (soft.height * w / soft.width).coerceAtLeast(1), true).also { if (it !== soft) soft.recycle() } else soft
+                    }.getOrNull()
+                    runCatching { r.hardwareBuffer.close() }
+                    done(small)
+                }
+                override fun onFailure(errorCode: Int) { CrashLog.event("save picture not taken (error $errorCode)"); done(null) }
+            })
+        }.onFailure { CrashLog.event("save picture not taken: ${it.message}"); done(null) }
     }
 
     /**
@@ -298,7 +458,7 @@ class DolphinExitService : AccessibilityService() {
      * to the game, since a press can't be held back and passed on later).
      */
     override fun onKeyEvent(raw: android.view.KeyEvent): Boolean {
-        if (!shortcutOn) return false
+        if (!shortcutOn && !quickOn) return false
         // Controllers that don't report standard keys (e.g. a Switch Pro Controller): by what they stand for.
         val event = PadKeys.translate(raw, Prefs(this), true)
         val code = event.keyCode
@@ -322,10 +482,22 @@ class DolphinExitService : AccessibilityService() {
                 " from ${raw.device?.name ?: "?"} · game ${gameState()}")
         }
         if (!down && swallowUp.remove(code)) {
-            if (code == android.view.KeyEvent.KEYCODE_BUTTON_SELECT) selectHeld = false
+            if (code == android.view.KeyEvent.KEYCODE_BUTTON_SELECT) { selectHeld = false; quickLoadReleased() }
             if (code == android.view.KeyEvent.KEYCODE_BUTTON_START) startHeld = false
+            if (code == android.view.KeyEvent.KEYCODE_BUTTON_R1) quickLoadReleased()
             return true
         }
+        // Quick save / load: Select + L1 saves, Select + R1 loads. L1 / R1 then never reach the game (Select already
+        // did: a press can't be held back and passed on later).
+        if (code == android.view.KeyEvent.KEYCODE_BUTTON_SELECT) { selectHeld = down; if (!down) quickLoadReleased() }
+        if (quickOn && (code == android.view.KeyEvent.KEYCODE_BUTTON_L1 || code == android.view.KeyEvent.KEYCODE_BUTTON_R1) && fromGamepad(event)) {
+            if (down && event.repeatCount == 0 && selectHeld && gameInFront()) {
+                swallowUp += code
+                if (code == android.view.KeyEvent.KEYCODE_BUTTON_L1) handler.post { quickSaveButton() } else handler.post { quickLoadPressed() }
+                return true
+            }
+        }
+        if (!shortcutOn) return false
         fun open(): Boolean { swallowUp += code; handler.post { openInGameMenu() }; return true }
         when (code) {
             // Some tablets report a controller's Home button as Android's Home key.
@@ -365,6 +537,8 @@ class DolphinExitService : AccessibilityService() {
             // The session too, in case Android closed the menu meanwhile (it's then opened fresh with it).
             .also { i -> GameWatch.session?.writeTo(i) }
         val top = DeviceInfo.screenRoles(this, Prefs(this).swapScreens).topDisplayId
+        // The game as it is now, for the picture of a save made while the menu covers it (taken before the menu draws).
+        if (android.os.Build.VERSION.SDK_INT >= 30 && gameVisible()) shootAsync(top) { b -> if (b != null) { menuShot = b; menuShotAt = android.os.SystemClock.elapsedRealtime() } }
         val options = android.app.ActivityOptions.makeBasic().setLaunchDisplayId(top).toBundle()
         runCatching { startActivity(intent, options) }.onFailure { CrashLog.event("couldn't open the in-game menu: ${it.message}") }
         pill.setVisible(false)
@@ -489,7 +663,7 @@ class DolphinExitService : AccessibilityService() {
      * Opens Dolphin's menu and presses "Quick Save". The menu is left open (exiting next uses it).
      * The state is written in the background by Dolphin; the caller waits for the file.
      */
-    suspend fun pressQuickSave(pkg: String): StateResult {
+    suspend fun pressQuickSave(pkg: String, closeMenu: Boolean = false): StateResult {
         if (find(pkg, "frame_emulation_fragment") == null && find(pkg, "menu_exit") == null) return StateResult.NO_GAME
         if (!openMenu(pkg)) return StateResult.FAILED
         // The button is hidden while Dolphin's "Enable Savestates" setting is off.
@@ -497,7 +671,12 @@ class DolphinExitService : AccessibilityService() {
         val save = find(pkg, "menu_quicksave")?.takeIf { it.isVisibleToUser }
             ?: return if (find(pkg, "menu_quicksave") == null) StateResult.SAVE_STATES_OFF else StateResult.FAILED
         delay(300)
-        return if (click(save)) StateResult.DONE else StateResult.FAILED
+        val ok = click(save)
+        if (closeMenu) {
+            delay(400)
+            if (find(pkg, "menu_exit") != null) dolphinBack(pkg) // close the menu, the game goes on
+        }
+        return if (ok) StateResult.DONE else StateResult.FAILED
     }
 
     /**
