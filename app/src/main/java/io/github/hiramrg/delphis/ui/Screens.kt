@@ -2757,18 +2757,17 @@ private fun HoldToExit(modifier: Modifier) {
     val progress = remember { androidx.compose.animation.core.Animatable(0f) }
     LaunchedEffect(Unit) { progress.animateTo(1f, androidx.compose.animation.core.tween(1000, easing = androidx.compose.animation.core.LinearEasing)) }
     val shape = RoundedCornerShape(18.dp)
+    // One centred line beside the ring; the pill is at least 300 dp wide so it always looks the same.
     Row(
-        modifier.shadow(14.dp, shape).clip(shape).background(if (c.dark) Color(0xFF22272D) else c.card).border(2.dp, c.accent, shape).padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier.shadow(14.dp, shape).clip(shape).background(if (c.dark) Color(0xFF22272D) else c.card).border(2.dp, c.accent, shape)
+            .widthIn(min = 300.dp).padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
     ) {
-        androidx.compose.foundation.Canvas(Modifier.size(30.dp)) {
+        androidx.compose.foundation.Canvas(Modifier.size(32.dp)) {
             val st = androidx.compose.ui.graphics.drawscope.Stroke(4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
             drawArc(c.cardBorder, 0f, 360f, false, style = st)
             drawArc(c.accent, -90f, 360f * progress.value, false, style = st)
         }
-        Column {
-            HintText("Keep holding Ⓑ to exit", fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
-            Text("Closes Delphis", fontSize = 11.5.sp, color = c.textDim)
-        }
+        HintText("Keep holding Ⓑ to exit Delphis", fontSize = 14.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text)
     }
 }
