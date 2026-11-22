@@ -7,6 +7,7 @@ import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
@@ -55,6 +56,7 @@ val SYMBOL_ICONS: Map<String, ImageVector> = mapOf(
     "⌕" to Icons.Filled.Search, "▤" to Icons.Filled.SearchOff, "⦸" to Icons.Filled.CloudOff, "▦" to Icons.Filled.Map,
     "◎" to Icons.Filled.Mouse, "◉" to Icons.Filled.RadioButtonChecked, "✥" to Icons.Filled.OpenWith, "⤴" to Icons.Filled.North,
     "⤒" to Icons.Filled.VerticalAlignTop, "⤓" to Icons.Filled.VerticalAlignBottom, "⟲" to Icons.Filled.RotateLeft, "⟳" to Icons.Filled.RotateRight,
+    "⌫" to Icons.AutoMirrored.Filled.Backspace,
 )
 
 /** Icons with a colour of their own (a warning stays amber whatever the text colour). */

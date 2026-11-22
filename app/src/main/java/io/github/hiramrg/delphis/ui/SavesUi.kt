@@ -162,11 +162,13 @@ fun SavesList(
                 SavePicture(e.picture, Modifier.size(thumbW, thumbH))
                 Spacer(Modifier.width(10.dp))
                 if (e.kind == SaveKind.KEPT) {
+                    // The name gets the whole width (two lines at most), the time goes under it.
                     PinMark()
                     Spacer(Modifier.width(5.dp))
-                    Text(saveLabel(e), fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 2, lineHeight = 16.sp, modifier = Modifier.weight(1f))
-                    Spacer(Modifier.width(8.dp))
-                    Text(formatSaveTime(e.savedAt), fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1)
+                    Column(Modifier.weight(1f)) {
+                        Text(saveLabel(e), fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 2, lineHeight = 16.sp)
+                        Text(formatSaveTime(e.savedAt), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1, lineHeight = 13.sp)
+                    }
                 } else {
                     Text(formatSaveTime(e.savedAt), fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Text(saveLabel(e), fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1)
@@ -476,14 +478,19 @@ fun SaveFlowPanel(flow: SaveFlow, keys: Boolean, loadLabel: String, modifier: Mo
 private fun SavePopup(flow: SaveFlow, e: SaveEntry, keys: Boolean, loadLabel: String, modifier: Modifier) {
     val c = LocalWii.current
     val bs = flow.buttons(e)
+    // A kept save's Delete sits apart, in the top corner (the ring reaches it first, going left).
+    val del = bs.indexOf(SaveFlow.Btn.DELETE)
     PopupPanel(
         saveCaps(e), if (e.kind == SaveKind.KEPT) saveLabel(e) else formatSaveTime(e.savedAt), modifier.widthIn(max = 480.dp),
+        corner = if (del < 0) null else ({
+            PanelBtn("Delete", if (keys) "X" else null, false, Modifier.litRing(keys && flow.ring == del, ButtonShape), warn = true, enabled = !flow.busy) { flow.press(SaveFlow.Btn.DELETE) }
+        }),
         buttons = {
             bs.forEachIndexed { i, b ->
                 val lit = keys && flow.ring == i
                 val m = Modifier.litRing(lit, ButtonShape)
                 when (b) {
-                    SaveFlow.Btn.DELETE -> { PanelBtn("Delete", if (keys) "X" else null, false, m, warn = true, enabled = !flow.busy) { flow.press(b) }; Spacer(Modifier.weight(1f)) }
+                    SaveFlow.Btn.DELETE -> {}
                     SaveFlow.Btn.BACK -> PanelBtn(if (keys) "Back" else "Cancel", if (keys) "B" else null, false, m) { flow.press(b) }
                     SaveFlow.Btn.KEEP -> PanelBtn(if (e.kind == SaveKind.KEPT) "Rename" else "Keep", if (keys) "Y" else null, false, m) { flow.press(b) }
                     SaveFlow.Btn.LOAD -> PanelBtn("▶ $loadLabel", if (keys) "A" else null, true, m) { flow.press(b) }
