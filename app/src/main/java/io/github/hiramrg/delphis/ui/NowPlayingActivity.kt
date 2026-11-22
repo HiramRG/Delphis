@@ -945,7 +945,7 @@ open class NowPlayingActivity : ComponentActivity() {
                     )
                     if (panelMode) KeyIcon("R1")
                     // 📷 (one screen): the menu steps aside first, so the picture is of the game.
-                    if (panelMode) { Spacer(Modifier.weight(1f)); TopChip("📷") { takeScreenshot() } }
+                    if (panelMode) { Spacer(Modifier.weight(1f)); TopChip("📷", modifier = Modifier.height(28.dp)) { takeScreenshot() } }
                 }
                 Spacer(Modifier.height(8.dp))
 
