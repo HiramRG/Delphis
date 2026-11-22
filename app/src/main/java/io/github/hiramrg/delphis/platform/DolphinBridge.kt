@@ -549,6 +549,28 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
     private suspend fun stateTime(gameId: String): Long? =
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { quickStateTime(gameId) }
 
+    /** (time, size) of the game's Quick Save file. */
+    private suspend fun stateInfo(gameId: String): Pair<Long, Long>? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        latestAutosave(gameId)?.let { it.second to it.third }
+    }
+
+    /**
+     * Dolphin writes a save in the background and keeps writing for a while after the file first changes (a
+     * 37 MB save was copied at 21 MB on a Galaxy Tab): waits until its time and size stop changing (three
+     * readings in a row, 1.2 s), at most [maxMs]. True when it settled.
+     */
+    private suspend fun waitUntilWritten(gameId: String, maxMs: Long): Boolean = kotlinx.coroutines.withTimeoutOrNull(maxMs) {
+        var last: Pair<Long, Long>? = null
+        var same = 0
+        while (same < 3) {
+            val now = stateInfo(gameId)
+            same = if (now != null && now == last) same + 1 else 0
+            last = now
+            kotlinx.coroutines.delay(400)
+        }
+        true
+    } ?: false
+
     /**
      * Presses Dolphin's Quick Save and waits (up to 10 s) for the state file to be written. True when it was.
      * [shot] is the save's picture; without one it's taken now ([capture]) while the game is on screen.
@@ -556,6 +578,8 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
      */
     private suspend fun autoSave(pkg: String, gameId: String, shot: android.graphics.Bitmap? = null, capture: Boolean = true, closeMenu: Boolean = false): Boolean {
         val picture = shot ?: if (capture) DolphinExitService.gamePicture() else null
+        // A save made just before may still be being written: copy it only once it's whole.
+        waitUntilWritten(gameId, 6_000)
         // Keep a copy of what's in the slot now, in case the new save turns out broken.
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { backupCurrentAutosave(gameId) }
         val before = stateTime(gameId) ?: 0L
@@ -572,8 +596,10 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
                 prefs.saveStatesOff = false
                 val saved = kotlinx.coroutines.withTimeoutOrNull(10_000) {
                     while ((stateTime(gameId) ?: 0L) <= before) kotlinx.coroutines.delay(300)
-                    // Written; give Dolphin a moment to finish and close the file.
-                    kotlinx.coroutines.delay(500)
+                }?.let {
+                    // Started; now wait until Dolphin has finished writing it (it goes on in the background).
+                    if (!waitUntilWritten(gameId, 20_000)) CrashLog.event("autosave of $gameId: still changing after 20 s")
+                    Unit
                 }
                 CrashLog.event(if (saved != null) "autosaved $gameId" else "autosave of $gameId not confirmed in 10 s")
                 lastSaveNote = if (saved != null) "saved" + (if (picture == null) " (no picture)" else "") else "Quick Save pressed, but no file was written in 10 s"
@@ -688,8 +714,18 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
     private fun writeQuickSlot(gameId: String, file: java.io.File, picture: ByteArray? = null) {
         val tree = prefs.dolphinTreeUri ?: error("no Dolphin folder")
         val uri = resolve(tree, DolphinConfigWriter.quickStatePath(gameId), create = true) ?: error("couldn't open the save slot")
-        resolver.openOutputStream(uri, "wt")?.use { out -> file.inputStream().use { it.copyTo(out, 256 * 1024) } } ?: error("couldn't write the save slot")
-        if (picture != null) quickStateTime(gameId)?.let { writePicture(gameId, it, picture) }
+        // Written twice if needed: a save Dolphin was still finishing could land on top of it.
+        repeat(3) { attempt ->
+            resolver.openOutputStream(uri, "wt")?.use { out -> file.inputStream().use { it.copyTo(out, 256 * 1024) } } ?: error("couldn't write the save slot")
+            Thread.sleep(800)
+            val size = latestAutosave(gameId)?.third
+            if (size == file.length()) {
+                if (attempt > 0) CrashLog.event("save slot of $gameId: Dolphin was still writing, wrote it again")
+                if (picture != null) quickStateTime(gameId)?.let { writePicture(gameId, it, picture) }
+                return
+            }
+        }
+        error("Dolphin kept writing its own save over it")
     }
 
     /** A save's picture as bytes (read before its file can move or be pruned). */

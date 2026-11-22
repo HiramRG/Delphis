@@ -32,8 +32,12 @@ class AutosaveTest {
         assertEquals(null, AutosaveBackups.savedAt("1700.s09.tmp"))
         val names = listOf("100.s09", "400.s09", "200.s09", "300.s09", "500.s09.tmp", "x.s09")
         assertEquals(listOf("400.s09", "300.s09", "200.s09", "100.s09"), AutosaveBackups.newestFirst(names))
-        assertEquals(listOf("100.s09"), AutosaveBackups.toDelete(names))
-        assertTrue(AutosaveBackups.toDelete(listOf("1.s09", "2.s09")).isEmpty())
+        assertEquals(listOf("100.s09"), AutosaveBackups.toDelete(names, gapMs = 0))
+        assertTrue(AutosaveBackups.toDelete(listOf("1.s09", "2.s09"), gapMs = 0).isEmpty())
+        // Three loads in three minutes: only the newest of those stays, the older, spaced-out ones survive.
+        val m = 60_000L
+        val spaced = listOf(100 * m, 99 * m, 98 * m, 80 * m, 60 * m).map { AutosaveBackups.fileName(it) }
+        assertEquals(listOf(99 * m, 98 * m).map { AutosaveBackups.fileName(it) }, AutosaveBackups.toDelete(spaced))
     }
 
     @Test

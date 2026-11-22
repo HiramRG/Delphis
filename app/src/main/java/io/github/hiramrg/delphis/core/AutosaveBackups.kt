@@ -19,6 +19,20 @@ object AutosaveBackups {
     fun newestFirst(names: Collection<String>): List<String> =
         names.filter { savedAt(it) != null }.sortedByDescending { savedAt(it)!! }
 
-    /** The backups to delete so only the newest [keep] remain. */
-    fun toDelete(names: Collection<String>, keep: Int = KEEP): List<String> = newestFirst(names).drop(keep)
+    /** Earlier autosaves closer together than this count as one: only the newer is kept. */
+    const val MIN_GAP_MS = 5 * 60_000L
+
+    /**
+     * The backups to delete so only the newest [keep] remain, at least [gapMs] apart: loading a few saves in a
+     * row (each one autosaves first) replaces the newest earlier autosave instead of pushing the older ones out.
+     */
+    fun toDelete(names: Collection<String>, keep: Int = KEEP, gapMs: Long = MIN_GAP_MS): List<String> {
+        val kept = mutableListOf<String>()
+        var last = Long.MAX_VALUE
+        for (n in newestFirst(names)) {
+            val t = savedAt(n)!!
+            if (kept.size < keep && (kept.isEmpty() || last - t >= gapMs)) { kept += n; last = t }
+        }
+        return newestFirst(names) - kept.toSet()
+    }
 }
