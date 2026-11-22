@@ -901,8 +901,6 @@ open class NowPlayingActivity : ComponentActivity() {
                         val resumeFocus = remember { androidx.compose.ui.focus.FocusRequester() }
                         LaunchedEffect(openSignal) { delay(150); runCatching { resumeFocus.requestFocus() } }
                         // D-pad down goes straight to the action buttons instead of stopping at the map's toggle.
-                        // 📷: the menu steps aside first, so the picture is of the game.
-                        TopChip("📷", modifier = Modifier.padding(end = 6.dp)) { takeScreenshot() }
                         PanelBtn("▶ Resume", if (showPicture || showSaves) null else "A", false, Modifier.focusRequester(resumeFocus).focusProperties { if (mode == Mode.VIEW && !(preset.isTrackpad && padView)) down = changeFocus }) { resumeGame() }
                     } else {
                         // Trackpad on screen: the action row is replaced by the pad's controls, so Quit stays up here.
@@ -946,6 +944,8 @@ open class NowPlayingActivity : ComponentActivity() {
                         tab, { selectTab(it) }, height = 28.dp,
                     )
                     if (panelMode) KeyIcon("R1")
+                    // 📷 (one screen): the menu steps aside first, so the picture is of the game.
+                    if (panelMode) { Spacer(Modifier.weight(1f)); TopChip("📷") { takeScreenshot() } }
                 }
                 Spacer(Modifier.height(8.dp))
 
