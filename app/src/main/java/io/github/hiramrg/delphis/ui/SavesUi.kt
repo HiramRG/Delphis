@@ -616,7 +616,8 @@ private fun KeyCap(label: String, lit: Boolean, modifier: Modifier, onClick: () 
 @Composable
 fun SavesDialog(
     gameTitle: String?, entries: List<SaveEntry>, onDismiss: () -> Unit,
-    actions: SaveActions? = null, yourNames: () -> List<String> = { emptyList() }, onChanged: () -> Unit = {}, onPlay: (SaveEntry) -> Unit,
+    actions: SaveActions? = null, yourNames: () -> List<String> = { emptyList() }, onChanged: () -> Unit = {},
+    screenshots: Int = 0, onScreenshots: (() -> Unit)? = null, onPlay: (SaveEntry) -> Unit,
 ) {
     val c = LocalWii.current
     val focus = remember { FocusRequester() }
@@ -643,6 +644,7 @@ fun SavesDialog(
                         AndroidKey.KEYCODE_DPAD_UP -> { index = (index - 1).coerceAtLeast(0); true }
                         AndroidKey.KEYCODE_BUTTON_A, AndroidKey.KEYCODE_DPAD_CENTER, AndroidKey.KEYCODE_ENTER -> { current?.let { if (actions != null) flow.show(it) else onPlay(it) }; true }
                         AndroidKey.KEYCODE_BUTTON_START -> { current?.let(onPlay); true }
+                        AndroidKey.KEYCODE_BUTTON_Y -> { if (screenshots > 0) onScreenshots?.invoke(); true }
                         AndroidKey.KEYCODE_BUTTON_B, AndroidKey.KEYCODE_BACK -> { onDismiss(); true }
                         else -> true
                     }
@@ -654,6 +656,7 @@ fun SavesDialog(
                 Modifier.width(500.dp),
                 buttons = {
                     PanelBtn("Close", if (keys) "B" else null, false, onClick = onDismiss)
+                    if (screenshots > 0 && onScreenshots != null) PanelBtn("📷 Screenshots ($screenshots)", if (keys) "Y" else null, false, onClick = onScreenshots)
                     PanelBtn("Open", if (keys) "A" else null, true) { current?.let { if (actions != null) flow.show(it) else onPlay(it) } }
                 },
             ) {

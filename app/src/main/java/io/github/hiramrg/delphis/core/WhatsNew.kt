@@ -5,15 +5,15 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 60
+    const val RELEASE = 61
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("Saves with pictures.", "Every save now shows what was on screen when it was made, on the game page and in the game. (Android 11 and up.)"),
-        Item("Tap a save to choose.", "Each save opens its own pop-up: load it, keep it under a name, rename it or delete it. Kept saves stay at the top and new autosaves never replace them."),
-        Item("Name saves anywhere.", "Delphis has its own keyboard for naming saves, so it works on the Thor's bottom screen and with a controller, with suggestions and the names you used before."),
-        Item("Quick save and load buttons.", "While playing: Select + L1 saves, hold Select + R1 to load the latest save. Change or turn it off in Settings → Controls."),
+        Item("Automatic saves.", "New Settings → Saves: save every 10, 20 or 30 minutes while you play, when the battery gets low, and (being tested) when the screen turns off."),
+        Item("Screenshots.", "Tap 📷 on the bottom screen or press Select + Y: the game goes to your Photos, in Pictures/Delphis. See them from the game's Saves window."),
+        Item("Back up and move.", "New Settings → Backup: one file with your presets, kept saves, settings, favorites and play time, for a new device or after reinstalling."),
+        Item("Tap a save to choose.", "Each save opens its own pop-up: load it, keep it under a name, rename it or delete it."),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

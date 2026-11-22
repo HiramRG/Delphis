@@ -245,7 +245,7 @@ fun HomeScreen(act: MainActivity) {
     LaunchedEffect(Unit) { delay(1500); act.checkDolphinRa() }
     // One screen: ask about the controller (none, or not checked yet). Then, once per opening, the Delphis check's
     // notice if something needs attention ("close games" off, updates not allowed…), and a crash report offer.
-    LaunchedEffect(Unit) { delay(600); act.checkControllerOnHome(); delay(900); act.checkHealthOnHome(); delay(1500); act.checkCrashOnHome() }
+    LaunchedEffect(Unit) { delay(600); act.checkControllerOnHome(); delay(900); act.checkHealthOnHome(); delay(1500); act.checkCrashOnHome(); delay(4000); act.checkBackupOnHome() }
     val c = LocalWii.current
     @Suppress("UNUSED_VARIABLE") val v = act.statsVersion
     val lastPlayed = act.prefs.lastPlayed()
@@ -1463,6 +1463,11 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     // Saves: the latest autosave, the earlier ones Delphis keeps, and Dolphin's own save slots.
     var savesVersion by remember { mutableIntStateOf(0) }
     var showSaves by remember { mutableStateOf(io.github.hiramrg.delphis.platform.TestHooks.savesDialog) }
+    // Screenshots of this game (Photos → Pictures/Delphis/<game>): from the Saves window (Y), or R2 when there are no saves.
+    var shotsVersion by remember { mutableIntStateOf(0) }
+    val shots = rememberScreenshots(game.info.title, shotsVersion)
+    var showShots by remember { mutableStateOf(io.github.hiramrg.delphis.platform.TestHooks.screenshotsDialog) }
+    if (showShots && shots.isNotEmpty()) ScreenshotsDialog(game.info.title, shots, onDismiss = { showShots = false }, onChanged = { shotsVersion++ })
     val saves by produceState(io.github.hiramrg.delphis.platform.TestHooks.saves, game.key, act.statsVersion, savesVersion) {
         if (io.github.hiramrg.delphis.platform.TestHooks.saves.isEmpty()) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.saves(game.info.gameId) }
     }
@@ -1478,7 +1483,8 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                 delete = { e -> id != null && kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.deleteKept(id, e.keptId) } },
             )
         }
-        SavesDialog(game.info.title, saves, onDismiss = { showSaves = false }, actions = actions, yourNames = { game.info.gameId?.let { act.prefs.keptNames(it) }.orEmpty() }, onChanged = { savesVersion++ }) { chosen ->
+        SavesDialog(game.info.title, saves, onDismiss = { showSaves = false }, actions = actions, yourNames = { game.info.gameId?.let { act.prefs.keptNames(it) }.orEmpty() }, onChanged = { savesVersion++ },
+            screenshots = shots.size, onScreenshots = { showSaves = false; showShots = true }) { chosen ->
             showSaves = false
             val id = game.info.gameId ?: return@SavesDialog
             act.lifecycleScope.launch {
@@ -1609,7 +1615,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             KeyEvent.KEYCODE_DPAD_UP -> { p.move(-1); true }
             KeyEvent.KEYCODE_BUTTON_X -> { if (e.repeatCount == 0 && p.editTarget != null) p.editing = true; true }
             KeyEvent.KEYCODE_BUTTON_Y -> { if (e.repeatCount == 0) showList = !showList; true }
-            KeyEvent.KEYCODE_BUTTON_R2 -> { if (e.repeatCount == 0 && saves.isNotEmpty()) showSaves = true; true }
+            KeyEvent.KEYCODE_BUTTON_R2 -> { if (e.repeatCount == 0) { if (saves.isNotEmpty()) showSaves = true else if (shots.isNotEmpty()) showShots = true }; true }
             KeyEvent.KEYCODE_BUTTON_L2 -> { if (e.repeatCount == 0 && !showList) viewToggle++; true }
             KeyEvent.KEYCODE_BUTTON_SELECT -> {
                 if (e.repeatCount == 0) { if (multiplayer) showPlayers = true else if (hasPicture) openScreen() }
@@ -1653,6 +1659,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             )
             // Saves (R2): pick which save Play continues from.
             if (saves.isNotEmpty()) GameChip("↺ Saves (${saves.size})", "R2") { showSaves = true }
+            else if (shots.isNotEmpty()) GameChip("📷 Screenshots (${shots.size})", "R2") { showShots = true }
             Spacer(Modifier.height(2.dp))
             GameButton("▶", if (shown == null) "Choose a style" else "Play", "A", primary = true, enabled = shown != null) { p.play() }
         }
@@ -1705,12 +1712,13 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                     PanelBtn("✎ Edit", "X", false, enabled = p.editTarget != null) { p.editing = true }
                     val canReset = shown != null && p.isEdited(shown)
                     val canDelete = shown != null && act.store.isMine(shown.id)
-                    if (canReset || canDelete || saves.isNotEmpty()) Box {
+                    if (canReset || canDelete || saves.isNotEmpty() || shots.isNotEmpty()) Box {
                         GameChip("⋯", null) { menu = true }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) { PadKeysBox(onBack = { menu = false }) { Column {
                             if (canReset) DropdownMenuItem(text = { Text("↺ Reset to default", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; confirmReset = shown })
                             if (canDelete) DropdownMenuItem(text = { Text("🗑 Delete this preset", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; confirmDelete = shown })
                             if (saves.isNotEmpty()) DropdownMenuItem(text = { HintText("↺ Saves (${saves.size}) · R2", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.text) }, onClick = { menu = false; showSaves = true })
+                            if (shots.isNotEmpty()) DropdownMenuItem(text = { Text("📷 Screenshots (${shots.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.text) }, onClick = { menu = false; showShots = true })
                         } } }
                     }
                 }
@@ -2067,7 +2075,8 @@ fun SettingsSection.title(act: MainActivity): String = if (this == SettingsSecti
 
 enum class SettingsSection(val label: String) {
     APPEARANCE("Appearance"), SOUND("Sound"), CONTROLS("Controls"), GYRO("Gyro aiming"), CLOSING("Closing games"),
-    DISPLAY("Display"), BOTTOM("Bottom screen"), ACHIEVEMENTS("Achievements"), LIBRARY("Library & folders"), FRONTENDS("Frontends"), UPDATES("Updates"), HELP("Diagnostics"),
+    DISPLAY("Display"), BOTTOM("Bottom screen"), SAVES("Saves"), ACHIEVEMENTS("Achievements"), LIBRARY("Library & folders"), BACKUP("Backup"),
+    FRONTENDS("Frontends"), UPDATES("Updates"), HELP("Diagnostics"),
 }
 
 @Composable
@@ -2126,6 +2135,8 @@ fun SettingsScreen(act: MainActivity) {
                     SettingsSection.BOTTOM -> BottomScreenSettings(act)
                     SettingsSection.ACHIEVEMENTS -> AchievementsSettings(act) { t, sub, on, change -> SwitchRow(t, sub, on, change) }
                     SettingsSection.LIBRARY -> LibrarySettings(act)
+                    SettingsSection.SAVES -> SavesSettings(act)
+                    SettingsSection.BACKUP -> BackupSettings(act)
                     SettingsSection.FRONTENDS -> FrontendSettings(act)
                     SettingsSection.UPDATES -> UpdatePanel(act)
                     SettingsSection.HELP -> DelphisCheckCard(act)
@@ -2179,6 +2190,8 @@ private fun settingsIcon(s: SettingsSection): androidx.compose.ui.graphics.vecto
     SettingsSection.BOTTOM -> Icons.Outlined.StayCurrentLandscape
     SettingsSection.ACHIEVEMENTS -> Icons.Outlined.EmojiEvents
     SettingsSection.LIBRARY -> Icons.Outlined.Folder
+    SettingsSection.SAVES -> Icons.Outlined.Save
+    SettingsSection.BACKUP -> Icons.Outlined.Backup
     SettingsSection.FRONTENDS -> Icons.Outlined.Launch
     SettingsSection.UPDATES -> Icons.Outlined.Download
     SettingsSection.HELP -> Icons.Outlined.HelpOutline
@@ -2319,6 +2332,7 @@ private fun ControlsSettings(act: MainActivity) {
     SwitchRow("Invert motion steering", "For the Mario Kart \"tilt the Thor\" layout, if turning left steers right.", invert) { invert = it; prefs.invertMotion = it }
     RumbleCard(act)
     QuickSaveCard(act)
+    ScreenshotCard(act)
     Text("Gamepad name override (leave empty to use the checked/detected one)", fontSize = 13.sp)
     OutlinedTextField(
         value = deviceName, onValueChange = { deviceName = it; prefs.deviceName = it.ifBlank { null } },

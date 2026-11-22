@@ -82,13 +82,26 @@ class DolphinExitService : AccessibilityService() {
          * The quick save / load buttons (Select + L1 saves, Select + R1 loads), while a game runs and they're on in
          * Settings. [holdMs]: how long Select + R1 must be held (0 = a press loads).
          */
-        fun quickButtons(on: Boolean, holdMs: Long = 1000) {
+        fun quickButtons(on: Boolean, holdMs: Long = 1000, screenshot: Boolean = false) {
             val s = instance ?: return
             s.handler.post {
                 if (s.quickOn != on) CrashLog.event("quick save buttons ${if (on) "on" else "off"}")
-                s.quickOn = on; s.quickHoldMs = holdMs; s.loadHeld = false; s.updateFilter()
-                if (!on) { s.saveToast.hide(); s.menuShot = null }
+                s.quickOn = on; s.quickHoldMs = holdMs; s.loadHeld = false; s.shotOn = screenshot; s.updateFilter()
+                if (!on && !screenshot) { s.saveToast.hide(); s.menuShot = null }
             }
+        }
+
+        /** A game started ([running]) or ended: the automatic saves (screen off, timed, low battery) follow it. */
+        fun gameSession(running: Boolean) {
+            val s = instance ?: return
+            s.handler.post { if (running) s.startAutoSaves() else s.stopAutoSaves() }
+        }
+
+        /** The camera button: a screenshot of the game's screen. False when the helper isn't running. */
+        fun screenshot(): Boolean {
+            val s = instance ?: return false
+            s.handler.post { s.screenshotButton() }
+            return true
         }
 
         /**
@@ -223,6 +236,7 @@ class DolphinExitService : AccessibilityService() {
 
     override fun onDestroy() {
         loading.hide()
+        stopAutoSaves()
         saveToast.hide()
         scope.cancel()
         pill.stop()
@@ -314,7 +328,7 @@ class DolphinExitService : AccessibilityService() {
 
     /** Key filtering is only on while a game runs and something needs it (one screen's menu shortcut, the quick save buttons). */
     private fun updateFilter() {
-        val on = shortcutOn || quickOn
+        val on = shortcutOn || quickOn || shotOn
         if (on == filterActive()) return
         runCatching {
             serviceInfo = serviceInfo.apply {
@@ -402,6 +416,187 @@ class DolphinExitService : AccessibilityService() {
         if (!quickBusy) saveToast.hide()
     }
 
+    // ------------------------------------------------------------------ automatic saves while a game runs
+
+    private var autoJob: kotlinx.coroutines.Job? = null
+    private var autoReceiver: android.content.BroadcastReceiver? = null
+    /** The low-battery save was made this charge. */
+    private var lowBatterySaved = false
+    /** How the save when the screen turned off went ("ok" / "fail"), shown when the screen comes back on. */
+    private var sleepResult: Pair<Boolean, Long?>? = null
+    private var sleepSaving = false
+
+    private fun screenOn() = runCatching { (getSystemService(POWER_SERVICE) as android.os.PowerManager).isInteractive }.getOrDefault(true)
+    private val deviceWord get() = if (android.os.Build.MODEL.contains("Thor", ignoreCase = true)) "the Thor" else "your device"
+
+    fun startAutoSaves() {
+        if (autoJob != null) return
+        val r = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                when (i.action) {
+                    Intent.ACTION_SCREEN_OFF -> onScreenOff()
+                    Intent.ACTION_SCREEN_ON -> handler.postDelayed({ showSleepResult() }, 1_200)
+                    Intent.ACTION_BATTERY_CHANGED -> onBattery(i)
+                }
+            }
+        }
+        val f = android.content.IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_BATTERY_CHANGED) }
+        runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= 33) registerReceiver(r, f, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(r, f)
+            autoReceiver = r
+        }.onFailure { CrashLog.event("automatic saves: couldn't watch the screen / battery: ${it.message}") }
+        // Timed saves: checked every minute, saved when the latest autosave is older than the chosen time.
+        autoJob = scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(60_000)
+                val p = Prefs(this@DolphinExitService)
+                val min = p.timedSaveMinutes
+                val id = GameWatch.session?.info?.gameId ?: continue
+                if (min <= 0 || !p.autoSaveFor(id) || quickBusy || !screenOn() || !gameInFront()) continue
+                val bridge = DolphinBridge(this@DolphinExitService, p)
+                val last = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.quickStateTime(id) } ?: 0L
+                if (System.currentTimeMillis() - last < min * 60_000L) continue
+                automaticSave(id, timed = true)
+            }
+        }
+        CrashLog.event("automatic saves on (screen off, timed, low battery)")
+    }
+
+    fun stopAutoSaves() {
+        autoJob?.cancel(); autoJob = null
+        autoReceiver?.let { runCatching { unregisterReceiver(it) } }; autoReceiver = null
+    }
+
+    /** A timed or low-battery save, with its small pop-up. */
+    private suspend fun automaticSave(id: String, timed: Boolean, batteryLine: String? = null): Boolean {
+        if (quickBusy) return false
+        quickBusy = true
+        try {
+            val p = Prefs(this)
+            val display = gameDisplay()
+            val shot = picture()
+            val bridge = DolphinBridge(this, p)
+            val ok = bridge.saveNow(id, shot)
+            CrashLog.event("${if (timed) "timed" else "low battery"} save: ${if (ok) "saved" else "not saved (${DolphinBridge.lastSaveNote})"}")
+            if (ok) {
+                val time = io.github.hiramrg.delphis.ui.formatSaveTime(System.currentTimeMillis())
+                if (!timed) saveToast.done(display, shot, batteryLine ?: "Battery low: game saved", "Keep playing, or plug in · $time", 4_500, saveToast.amberEdge)
+                else if (p.timedSaveToast) saveToast.done(display, shot, "Saved", "Timed autosave · $time", 2_000)
+            }
+            return ok
+        } finally { quickBusy = false }
+    }
+
+    private fun onBattery(i: Intent) {
+        val level = i.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+        val scale = i.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1)
+        val charging = i.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0
+        if (level < 0) return
+        val pct = level * 100 / scale
+        if (charging) { lowBatterySaved = false; return }
+        val p = Prefs(this)
+        val at = p.lowBatteryLevel
+        val id = GameWatch.session?.info?.gameId ?: return
+        if (at <= 0 || pct > at || lowBatterySaved || !p.autoSaveFor(id) || quickBusy || !screenOn() || !gameInFront()) return
+        lowBatterySaved = true
+        scope.launch { if (!automaticSave(id, timed = false, batteryLine = "Battery at $pct%: game saved")) lowBatterySaved = false }
+    }
+
+    /**
+     * The screen turned off during a game (Thor closed, power button): try to save before Android pauses Dolphin.
+     * Whether this can work at all is still being tested, so every try is written to the Diagnostics report: what
+     * the helper could see, what happened, how long it took.
+     */
+    private fun onScreenOff() {
+        val p = Prefs(this)
+        val id = GameWatch.session?.info?.gameId ?: return
+        if (!p.saveOnSleep || !p.autoSaveFor(id)) return
+        val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+        if (quickBusy || sleepSaving) { p.sleepSaveLog = listOf("$stamp · SKIPPED · another save was running") + p.sleepSaveLog; return }
+        sleepSaving = true; quickBusy = true
+        val wake = runCatching {
+            (getSystemService(POWER_SERVICE) as android.os.PowerManager).newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "Delphis:sleepSave").apply { setReferenceCounted(false); acquire(25_000) }
+        }.getOrNull()
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        // What the helper can see right after the screen went off: the test's main question.
+        val top = runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull() ?: "nothing readable"
+        val view = DolphinBridge.KNOWN_PACKAGES.any { runCatching { find(it, "frame_emulation_fragment") != null }.getOrDefault(false) }
+        scope.launch {
+            var ok = false
+            var after: Long? = null
+            try {
+                val bridge = DolphinBridge(this@DolphinExitService, p)
+                val before = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.quickStateTime(id) }
+                DolphinBridge.lastSaveNote = ""
+                ok = kotlinx.coroutines.withTimeoutOrNull(18_000) { bridge.saveNow(id) } ?: false
+                after = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.quickStateTime(id) }
+                val secs = (android.os.SystemClock.elapsedRealtime() - t0) / 1000.0
+                val line = "$stamp · ${if (ok) "SAVED" else "NOT SAVED"} in ${"%.1f".format(java.util.Locale.US, secs)} s · " +
+                    (DolphinBridge.lastSaveNote.ifEmpty { "took longer than 18 s" }) +
+                    " · window on top: ${if (top in DolphinBridge.KNOWN_PACKAGES) "Dolphin" else if (top == packageName) "Delphis" else top}" +
+                    " · Dolphin's game view: ${if (view) "found" else "not found"}" +
+                    " · save file ${if (after != null && after != before) "written" else "unchanged"}" +
+                    " · screen ${if (screenOn()) "back on" else "still off"}"
+                p.sleepSaveLog = listOf(line) + p.sleepSaveLog
+                CrashLog.event("sleep save: $line")
+                sleepResult = ok to (if (ok) after else before)
+            } finally {
+                quickBusy = false; sleepSaving = false
+                runCatching { wake?.release() }
+                if (screenOn()) showSleepResult()
+            }
+        }
+    }
+
+    /** Back on: how the save when the screen turned off went. */
+    private fun showSleepResult() {
+        if (sleepSaving) return
+        val (ok, t) = sleepResult ?: return
+        sleepResult = null
+        val display = gameDisplay()
+        val id = GameWatch.session?.info?.gameId
+        scope.launch {
+            val time = t?.let { io.github.hiramrg.delphis.ui.formatSaveTime(it) }
+            if (ok) {
+                val pic = id?.let { g -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { DolphinBridge(this@DolphinExitService, Prefs(this@DolphinExitService)).latestPicture(g)?.let { runCatching { android.graphics.BitmapFactory.decodeFile(it.path) }.getOrNull() } } }
+                saveToast.done(display, pic, "Saved before $deviceWord slept", "${time ?: "Just now"} · it's the latest autosave", 4_000, saveToast.amberEdge)
+            } else saveToast.failed(display, "Couldn't save before sleep", if (time != null) "Your last save is from $time" else "There's no save of this game yet")
+        }
+    }
+
+    // ------------------------------------------------------------------ screenshots
+
+    private var shotOn = false
+    private var shotBusy = false
+
+    /** The camera button / Select + Y: a full-size picture of the game's screen into Photos (Pictures/Delphis/<game>). */
+    private fun screenshotButton() {
+        if (shotBusy) return
+        val title = GameWatch.session?.info?.title
+        val display = gameDisplay()
+        if (android.os.Build.VERSION.SDK_INT < 30) { saveToast.failed(display, "Screenshots need Android 11", "This device can't take them from Delphis"); return }
+        shotBusy = true
+        scope.launch {
+            try {
+                if (!gameVisible()) { saveToast.failed(display, "Screenshot not taken", "The game isn't on screen"); return@launch }
+                val result = kotlinx.coroutines.CompletableDeferred<android.graphics.Bitmap?>()
+                shootAsync(display ?: android.view.Display.DEFAULT_DISPLAY, full = true) { result.complete(it) }
+                val full = kotlinx.coroutines.withTimeoutOrNull(3_000) { result.await() }
+                if (full == null) { saveToast.failed(display, "Screenshot not taken", "Android didn't give Delphis the picture. Try again."); return@launch }
+                saveToast.flash(display)
+                val p = Prefs(this@DolphinExitService)
+                val (uri, thumb) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    val pic = if (p.screenshotGameOnly) Screenshots.gameOnly(full) else full
+                    val u = Screenshots.save(this@DolphinExitService, pic, title)
+                    u to android.graphics.Bitmap.createScaledBitmap(pic, 192, (pic.height * 192 / pic.width).coerceAtLeast(1), true)
+                }
+                kotlinx.coroutines.delay(300) // after the flash
+                if (uri != null) saveToast.done(display, thumb, "Screenshot saved", "Photos → ${io.github.hiramrg.delphis.core.ScreenshotNames.relativePath(title).trimEnd('/')}")
+                else saveToast.failed(display, "Screenshot not saved", "There was no room for it, or Photos refused it")
+            } finally { shotBusy = false }
+        }
+    }
+
     // ------------------------------------------------------------------ pictures of saves
 
     /** The picture taken when Delphis' menu last opened over the game (one screen), and when. */
@@ -433,7 +628,7 @@ class DolphinExitService : AccessibilityService() {
     }
 
     @android.annotation.TargetApi(30)
-    private fun shootAsync(display: Int, done: (android.graphics.Bitmap?) -> Unit) {
+    private fun shootAsync(display: Int, full: Boolean = false, done: (android.graphics.Bitmap?) -> Unit) {
         runCatching {
             takeScreenshot(display, mainExecutor, object : TakeScreenshotCallback {
                 override fun onSuccess(r: ScreenshotResult) {
@@ -442,7 +637,7 @@ class DolphinExitService : AccessibilityService() {
                         val soft = hw.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
                         hw.recycle()
                         val w = io.github.hiramrg.delphis.core.SavePictures.WIDTH
-                        if (soft.width > w) android.graphics.Bitmap.createScaledBitmap(soft, w, (soft.height * w / soft.width).coerceAtLeast(1), true).also { if (it !== soft) soft.recycle() } else soft
+                        if (!full && soft.width > w) android.graphics.Bitmap.createScaledBitmap(soft, w, (soft.height * w / soft.width).coerceAtLeast(1), true).also { if (it !== soft) soft.recycle() } else soft
                     }.getOrNull()
                     runCatching { r.hardwareBuffer.close() }
                     done(small)
@@ -458,7 +653,7 @@ class DolphinExitService : AccessibilityService() {
      * to the game, since a press can't be held back and passed on later).
      */
     override fun onKeyEvent(raw: android.view.KeyEvent): Boolean {
-        if (!shortcutOn && !quickOn) return false
+        if (!shortcutOn && !quickOn && !shotOn) return false
         // Controllers that don't report standard keys (e.g. a Switch Pro Controller): by what they stand for.
         val event = PadKeys.translate(raw, Prefs(this), true)
         val code = event.keyCode
@@ -490,6 +685,12 @@ class DolphinExitService : AccessibilityService() {
         // Quick save / load: Select + L1 saves, Select + R1 loads. L1 / R1 then never reach the game (Select already
         // did: a press can't be held back and passed on later).
         if (code == android.view.KeyEvent.KEYCODE_BUTTON_SELECT) { selectHeld = down; if (!down) quickLoadReleased() }
+        // Screenshot: Select + Y.
+        if (shotOn && code == android.view.KeyEvent.KEYCODE_BUTTON_Y && fromGamepad(event) && down && event.repeatCount == 0 && selectHeld && gameInFront()) {
+            swallowUp += code
+            handler.post { screenshotButton() }
+            return true
+        }
         if (quickOn && (code == android.view.KeyEvent.KEYCODE_BUTTON_L1 || code == android.view.KeyEvent.KEYCODE_BUTTON_R1) && fromGamepad(event)) {
             if (down && event.repeatCount == 0 && selectHeld && gameInFront()) {
                 swallowUp += code

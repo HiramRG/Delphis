@@ -423,6 +423,46 @@ class Prefs(context: Context) {
     var pillOpacity: Int
         get() = sp.getInt("pill_opacity", 60).coerceIn(20, 100)
         set(v) = sp.edit().putInt("pill_opacity", v.coerceIn(20, 100)).apply()
+    // ---------------------------------------------------------------- automatic saves (Settings → Saves)
+    /** Save when the screen turns off during a game (closing the Thor, power button). */
+    var saveOnSleep: Boolean
+        get() = sp.getBoolean("save_on_sleep", true)
+        set(v) = sp.edit().putBoolean("save_on_sleep", v).apply()
+    /** Also autosave every N minutes while playing (0 = off). */
+    var timedSaveMinutes: Int
+        get() = sp.getInt("timed_save_minutes", 10)
+        set(v) = sp.edit().putInt("timed_save_minutes", v).apply()
+    /** Show the small "Saved" pop-up for timed saves. */
+    var timedSaveToast: Boolean
+        get() = sp.getBoolean("timed_save_toast", true)
+        set(v) = sp.edit().putBoolean("timed_save_toast", v).apply()
+    /** Save once per charge when the battery reaches this % (0 = off). */
+    var lowBatteryLevel: Int
+        get() = sp.getInt("low_battery_level", 10)
+        set(v) = sp.edit().putInt("low_battery_level", v).apply()
+    /** How the saves when the screen turned off went (newest first, up to 8): the Diagnostics report shows them. */
+    var sleepSaveLog: List<String>
+        get() = sp.getString("sleep_save_log", null)?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
+        set(v) = sp.edit().putString("sleep_save_log", v.take(8).joinToString("\n")).apply()
+
+    // ---------------------------------------------------------------- screenshots
+    /** Select + Y takes a screenshot while playing. */
+    var screenshotButton: Boolean
+        get() = sp.getBoolean("screenshot_button", true)
+        set(v) = sp.edit().putBoolean("screenshot_button", v).apply()
+    /** Screenshots without the black bars at the sides (true) or the whole screen. */
+    var screenshotGameOnly: Boolean
+        get() = sp.getBoolean("screenshot_game_only", true)
+        set(v) = sp.edit().putBoolean("screenshot_game_only", v).apply()
+
+    // ---------------------------------------------------------------- backups
+    var lastBackupAt: Long
+        get() = sp.getLong("last_backup_at", 0L)
+        set(v) = sp.edit().putLong("last_backup_at", v).apply()
+    var backupReminder: Boolean
+        get() = sp.getBoolean("backup_reminder", false)
+        set(v) = sp.edit().putBoolean("backup_reminder", v).apply()
+
     /** Names you gave kept saves of [gameId] (newest first, up to 8): offered first when naming the next one. */
     fun keptNames(gameId: String): List<String> =
         sp.getString("kept_names_" + gameId.filter { it.isLetterOrDigit() }, null)?.split('\n')?.filter { it.isNotBlank() }.orEmpty()

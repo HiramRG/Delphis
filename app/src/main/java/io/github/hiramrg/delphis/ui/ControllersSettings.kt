@@ -73,6 +73,7 @@ fun ControllersSettings(act: MainActivity) {
         }
     }
     QuickSaveCard(act)
+    ScreenshotCard(act)
     var touch by remember { mutableStateOf(prefs.touchWhenNoController) }
     GroupCard {
         ToggleRow("Touch controls when no controller is connected", "Dolphin's on-screen buttons. They go away when a controller is connected at the start of a game.", touch) {

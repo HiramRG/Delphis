@@ -410,6 +410,110 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // ---------------------------------------------------------------- backups (Settings → Backup)
+
+    /** The "Make a backup" pop-up is open. */
+    var backupPrompt by mutableStateOf(io.github.hiramrg.delphis.platform.TestHooks.backupPanel == 1)
+    /** A backup file was picked: what it holds, before restoring. */
+    var restorePreview by mutableStateOf<Pair<android.net.Uri?, io.github.hiramrg.delphis.platform.Backup.Preview>?>(
+        if (io.github.hiramrg.delphis.platform.TestHooks.backupPanel == 2) null to io.github.hiramrg.delphis.platform.Backup.Preview(
+            System.currentTimeMillis() - 86_400_000L, "AYN Thor", 330,
+            listOf(
+                io.github.hiramrg.delphis.platform.Backup.PartInfo(io.github.hiramrg.delphis.platform.Backup.Part.PRESETS, "14 presets · 6 KB", 6_000, 14),
+                io.github.hiramrg.delphis.platform.Backup.PartInfo(io.github.hiramrg.delphis.platform.Backup.Part.KEPT, "7 saves of 3 games · 260 MB", 260_000_000, 7),
+                io.github.hiramrg.delphis.platform.Backup.PartInfo(io.github.hiramrg.delphis.platform.Backup.Part.SETTINGS, "controllers, screens, looks, per-game choices · 4 KB", 4_000, 120),
+                io.github.hiramrg.delphis.platform.Backup.PartInfo(io.github.hiramrg.delphis.platform.Backup.Part.PLAY, "favorites, play time, last played · 3 KB", 3_000, 4),
+            ),
+        ) else null,
+    )
+    /** A backup or restore is running. */
+    var backupBusy by mutableStateOf(false)
+    private var backupParts: Set<io.github.hiramrg.delphis.platform.Backup.Part> = emptySet()
+
+    private fun libraryGameIds() = games.mapNotNull { it.info.gameId }.distinct()
+
+    /** What each part of a backup would hold now (for the pop-up). */
+    suspend fun backupSummary() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        io.github.hiramrg.delphis.platform.Backup.summary(this@MainActivity, bridge, libraryGameIds())
+    }
+
+    private val createBackup = registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri == null) return@registerForActivityResult
+        backupBusy = true
+        lifecycleScope.launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                        io.github.hiramrg.delphis.platform.Backup.write(this@MainActivity, out, backupParts, bridge, libraryGameIds(), runCatching { updater.installedVersionCode() }.getOrDefault(0))
+                    } ?: error("couldn't write there")
+                }
+            }
+            backupBusy = false
+            ok.onSuccess { infos ->
+                prefs.lastBackupAt = System.currentTimeMillis()
+                setupVersion++
+                Notices.done(this@MainActivity, "Backup saved", formatSize(infos.sumOf { it.bytes }) + " · " + infos.joinToString(" · ") { it.part.label.substringBefore(",").lowercase() })
+            }.onFailure {
+                io.github.hiramrg.delphis.platform.CrashLog.event("backup failed: ${it.message}")
+                Notices.problem(this@MainActivity, "Backup not saved", "Couldn't write the file there. Try another place (Downloads works on every device).")
+            }
+        }
+    }
+
+    /** Makes a backup of [parts]: Android asks where to save it. */
+    fun startBackup(parts: Set<io.github.hiramrg.delphis.platform.Backup.Part>) {
+        backupParts = parts
+        backupPrompt = false
+        runCatching { createBackup.launch(io.github.hiramrg.delphis.platform.Backup.fileName()) }
+            .onFailure { Notices.problem(this, "Can't save files here", "This device has no file picker.") }
+    }
+
+    private val openBackup = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@registerForActivityResult
+        lifecycleScope.launch {
+            val preview = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { io.github.hiramrg.delphis.platform.Backup.preview(this@MainActivity, uri) }
+            if (preview == null) Notices.problem(this@MainActivity, "That isn't a Delphis backup", "Pick a file made with Settings → Backup → Back up.")
+            else restorePreview = uri to preview
+        }
+    }
+
+    /** Restore: pick a backup file (what it holds is shown before anything changes). */
+    fun pickBackup() {
+        runCatching { openBackup.launch(arrayOf("application/zip", "application/octet-stream", "application/x-zip-compressed")) }
+            .onFailure { Notices.problem(this, "Can't open files here", "This device has no file picker.") }
+    }
+
+    fun runRestore(parts: Set<io.github.hiramrg.delphis.platform.Backup.Part>, replace: Boolean) {
+        val uri = restorePreview?.first ?: run { restorePreview = null; return }
+        restorePreview = null
+        backupBusy = true
+        lifecycleScope.launch {
+            val summary = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { io.github.hiramrg.delphis.platform.Backup.restore(this@MainActivity, uri, parts, replace, bridge) }
+            }
+            backupBusy = false
+            setupVersion++
+            summary.onSuccess { Notices.done(this@MainActivity, "Backup restored", it.replaceFirstChar { c -> c.uppercase() }) }
+                .onFailure {
+                    io.github.hiramrg.delphis.platform.CrashLog.event("restore failed: ${it.message}")
+                    Notices.problem(this@MainActivity, "Couldn't restore it", "The file may be damaged. Nothing else was changed after the problem.")
+                }
+        }
+    }
+
+    private var backupNoticeShown = false
+
+    /** Home, once per opening: "Time for a backup" when the reminder is on and the last one is over a month old. */
+    fun checkBackupOnHome() {
+        if (backupNoticeShown || !prefs.backupReminder || !isSetUp()) return
+        val last = prefs.lastBackupAt
+        if (last != 0L && System.currentTimeMillis() - last < 30L * 86_400_000L) return
+        backupNoticeShown = true
+        Notices.info(this, "Time for a backup", if (last == 0L) "You haven't made one yet." else "Your last backup is from ${formatSaveTime(last)}.", "Back up") {
+            settingsSection = SettingsSection.BACKUP; screen = Screen.Settings
+        }
+    }
+
     /** Non-null while the "What's new" card is showing (holds the version name). */
     private var whatsNewVersion by mutableStateOf<String?>(null)
 

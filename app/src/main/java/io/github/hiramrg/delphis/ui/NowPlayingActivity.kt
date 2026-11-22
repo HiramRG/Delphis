@@ -114,6 +114,14 @@ open class NowPlayingActivity : ComponentActivity() {
         if (s != null) bridge.bringToFront(s.uri, DeviceInfo.screenRoles(this, prefs.swapScreens).topDisplayId)
     }
 
+    /** The camera button: a screenshot of the game (one screen: the menu steps aside first). */
+    protected fun takeScreenshot() {
+        lifecycleScope.launch {
+            if (panelMode) { resumeGame(); delay(700) }
+            if (!DolphinExitService.screenshot()) Notices.problem(this@NowPlayingActivity, "Screenshot not taken", "Delphis' helper is off (Settings → Accessibility).")
+        }
+    }
+
     /** Set when the player quits from this menu (so closing it ends the session; Android closing it doesn't). */
     private var quitting = false
     /** One screen: opened without a game; closed right away and touches nothing on the way out. */
@@ -451,7 +459,9 @@ open class NowPlayingActivity : ComponentActivity() {
     private fun watch(s: GameSession?, announce: Boolean = true) {
         if (panelMode && s != null && announce) DolphinExitService.gameStarted(this, s.key)
         // Select + L1 / R1 save and load while the game runs (on the Thor too).
-        DolphinExitService.quickButtons(s != null && prefs.quickSaveButtons, prefs.quickLoadHoldMs)
+        DolphinExitService.quickButtons(s != null && prefs.quickSaveButtons, prefs.quickLoadHoldMs, s != null && prefs.screenshotButton)
+        // Saves when the screen turns off, every few minutes and at low battery (Settings → Saves).
+        DolphinExitService.gameSession(s != null)
         GameWatch.session = s
         GameWatch.unexpectedStop.value = false
         GameWatch.suspended.value = false
@@ -482,7 +492,7 @@ open class NowPlayingActivity : ComponentActivity() {
             return
         }
         if (isFinishing && panelMode) DolphinExitService.gameEnded()
-        if (isFinishing) { DolphinExitService.hideSides(); DolphinExitService.quickButtons(false); recordPlayTime(); session?.let { if (unsaved > 0) prefs.addPlayTime(it.key, unsaved) }; unsaved = 0L; GameWatch.session = null; GameWatch.onSuspended = null; GameWatch.suspended.value = false }
+        if (isFinishing) { DolphinExitService.hideSides(); DolphinExitService.quickButtons(false); DolphinExitService.gameSession(false); recordPlayTime(); session?.let { if (unsaved > 0) prefs.addPlayTime(it.key, unsaved) }; unsaved = 0L; GameWatch.session = null; GameWatch.onSuspended = null; GameWatch.suspended.value = false }
         super.onDestroy()
     }
 
@@ -891,10 +901,13 @@ open class NowPlayingActivity : ComponentActivity() {
                         val resumeFocus = remember { androidx.compose.ui.focus.FocusRequester() }
                         LaunchedEffect(openSignal) { delay(150); runCatching { resumeFocus.requestFocus() } }
                         // D-pad down goes straight to the action buttons instead of stopping at the map's toggle.
+                        // 📷: the menu steps aside first, so the picture is of the game.
+                        TopChip("📷", modifier = Modifier.padding(end = 6.dp)) { takeScreenshot() }
                         PanelBtn("▶ Resume", if (showPicture || showSaves) null else "A", false, Modifier.focusRequester(resumeFocus).focusProperties { if (mode == Mode.VIEW && !(preset.isTrackpad && padView)) down = changeFocus }) { resumeGame() }
                     } else {
                         // Trackpad on screen: the action row is replaced by the pad's controls, so Quit stays up here.
                         if (preset.isTrackpad && padView && mode == Mode.VIEW) TopChip("Quit") { if (prefs.skipExitWarning) closingGame { backToMainMenu() } else confirmExit = true }
+                        TopChip("📷", modifier = Modifier.padding(end = 6.dp)) { takeScreenshot() }
                         TopChip("☀", on = showBrightness) {
                             showPicture = false; showSaves = false
                             showBrightness = !showBrightness

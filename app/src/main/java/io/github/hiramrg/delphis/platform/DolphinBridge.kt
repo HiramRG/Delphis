@@ -30,6 +30,9 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
     private val resolver: ContentResolver get() = context.contentResolver
 
     companion object {
+        /** How the last autosave went, in words (for Diagnostics: the sleep save test). */
+        @Volatile var lastSaveNote = ""
+
         val KNOWN_PACKAGES = listOf(
             "org.dolphinemu.dolphinemu",
             "org.dolphinemu.dolphinemu.debug",
@@ -556,7 +559,15 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         // Keep a copy of what's in the slot now, in case the new save turns out broken.
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { backupCurrentAutosave(gameId) }
         val before = stateTime(gameId) ?: 0L
-        when (DolphinExitService.quickSave(pkg, closeMenu)) {
+        val result = DolphinExitService.quickSave(pkg, closeMenu)
+        lastSaveNote = when (result) {
+            null -> "the helper isn't running"
+            DolphinExitService.StateResult.NO_GAME -> "Dolphin's game wasn't found on screen"
+            DolphinExitService.StateResult.FAILED -> "Dolphin's menu didn't open or Quick Save couldn't be pressed"
+            DolphinExitService.StateResult.SAVE_STATES_OFF -> "Dolphin's save states are off"
+            DolphinExitService.StateResult.DONE -> "Quick Save pressed"
+        }
+        when (result) {
             DolphinExitService.StateResult.DONE -> {
                 prefs.saveStatesOff = false
                 val saved = kotlinx.coroutines.withTimeoutOrNull(10_000) {
@@ -565,6 +576,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
                     kotlinx.coroutines.delay(500)
                 }
                 CrashLog.event(if (saved != null) "autosaved $gameId" else "autosave of $gameId not confirmed in 10 s")
+                lastSaveNote = if (saved != null) "saved" + (if (picture == null) " (no picture)" else "") else "Quick Save pressed, but no file was written in 10 s"
                 if (saved != null && picture != null) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     stateTime(gameId)?.let { storePicture(gameId, it, picture) }
                 }
@@ -753,6 +765,28 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         if (!DolphinExitService.running) return false
         return autoSave(pkg, gameId, shot, closeMenu = true)
     }
+
+    // ------------------------------------------------------------------ for backups
+
+    /** The game's latest autosave: (where, when, size), or null. Call off the main thread. */
+    fun latestAutosave(gameId: String): Triple<Uri, Long, Long>? = stateFiles(gameId)[DolphinConfigWriter.quickStatePath(gameId).last()]
+
+    /** The picture of the game's latest autosave, if there is one. */
+    fun latestPicture(gameId: String): java.io.File? {
+        val t = latestAutosave(gameId)?.second ?: return null
+        val d = pictureDir(gameId)
+        return SavePictures.nearest(d.list()?.toList().orEmpty(), t)?.let { java.io.File(d, it) }
+    }
+
+    /** Puts [file] (a restored autosave) into the game's Quick Save slot; what was there becomes an earlier autosave. */
+    fun restoreAutosaveFile(gameId: String, file: java.io.File, picture: ByteArray?): Boolean = runCatching {
+        backupCurrentAutosave(gameId)
+        writeQuickSlot(gameId, file, picture)
+        true
+    }.getOrElse { CrashLog.event("couldn't restore the autosave of $gameId: ${it.message}"); false }
+
+    /** Where kept saves live (for backups). */
+    val keptSavesRoot: java.io.File get() = java.io.File(context.filesDir, "kept-saves")
 
     // ------------------------------------------------------------------ pictures
 

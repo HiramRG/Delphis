@@ -25,6 +25,11 @@ object TestHooks {
     @Volatile @JvmField var helperStopped = false
     /** The layout check opens a save's pop-up (1), its delete check (2) or the naming keyboard (3) over the Saves list. */
     @Volatile @JvmField var savePopup = 0
+    /** The layout check opens Settings → Backup's pop-ups: 1 = Make a backup, 2 = Restore (a made-up backup). */
+    @Volatile @JvmField var backupPanel = 0
+    /** Made-up screenshots for the game page's gallery (the layout check), and whether it opens. */
+    @Volatile @JvmField var screenshots: List<Screenshots.Shot> = emptyList()
+    @Volatile @JvmField var screenshotsDialog = false
 
     /** The layout check pretends this controller is connected (one screen): vendor id, e.g. 0x045e = Xbox. */
     @Volatile @JvmField var padVendor: Int? = null

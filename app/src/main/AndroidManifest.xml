@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Settings → Rumble → "Try it": buzzing a motor through Android needs this. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Keeps the processor awake for a few seconds while the game is saved as the screen turns off. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Wi-Fi icon in Home's bar (connected or not, signal bars). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Lets Delphis fully close Dolphin so a restarted game picks up new controls. -->

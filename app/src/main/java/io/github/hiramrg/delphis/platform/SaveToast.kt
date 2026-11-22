@@ -42,8 +42,8 @@ class SaveToast(private val service: android.accessibilityservice.AccessibilityS
     /** "Saving…" / "Loading…" (stays until the next call). */
     fun busy(displayId: Int?, picture: Bitmap?, text: String, line: String) = show(displayId, picture, text, line, blue, ringMs = -1, stayMs = 0)
 
-    /** Done: shown for 3 s. */
-    fun done(displayId: Int?, picture: Bitmap?, text: String, line: String) = show(displayId, picture, text, line, blue, ringMs = null, stayMs = 3_000)
+    /** Done: shown for [stayMs] (3 s). */
+    fun done(displayId: Int?, picture: Bitmap?, text: String, line: String, stayMs: Long = 3_000, edge: Int = blue) = show(displayId, picture, text, line, edge, ringMs = null, stayMs = stayMs)
 
     /** Something went wrong: shown for 4.5 s, amber. */
     fun failed(displayId: Int?, text: String, line: String) = show(displayId, null, text, line, amber, ringMs = null, stayMs = 4_500)
@@ -73,6 +73,28 @@ class SaveToast(private val service: android.accessibilityservice.AccessibilityS
         }
         if (stayMs > 0) handler.postDelayed(hideRunnable, stayMs)
     }
+
+    /** A quick white flash over the game's screen (a screenshot was taken). */
+    fun flash(displayId: Int?) {
+        runCatching {
+            val ctx: Context = if (android.os.Build.VERSION.SDK_INT >= 30 && displayId != null) {
+                val display = service.getSystemService(DisplayManager::class.java).getDisplay(displayId)
+                if (display != null) service.createWindowContext(display, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, null) else service
+            } else service
+            val manager = ctx.getSystemService(WindowManager::class.java)
+            val v = View(ctx).apply { setBackgroundColor(Color.WHITE); alpha = 0.75f }
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT,
+            )
+            manager.addView(v, params)
+            v.animate().alpha(0f).setDuration(260).withEndAction { runCatching { manager.removeView(v) } }.start()
+        }
+    }
+
+    val amberEdge get() = amber
 
     fun hide() {
         handler.removeCallbacks(hideRunnable)

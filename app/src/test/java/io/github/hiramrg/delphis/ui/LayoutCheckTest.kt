@@ -165,11 +165,34 @@ class LayoutCheckTest {
                     TestHooks.savesDialog = true; TestHooks.savePopup = 3; act.screen = Screen.Home; settle(100); act.openGame(games[0])
                 }
                 TestHooks.saves = emptyList()
+                TestHooks.screenshots = (1..9).map { io.github.hiramrg.delphis.platform.Screenshots.Shot(android.net.Uri.parse("content://test/shot/$it"), now - it * 60_000L) }
+                show(act, size, "Game page with screenshots", after = { act.screen = Screen.Home }) { act.screen = Screen.Home; settle(100); act.openGame(games[0]) }
+                show(act, size, "Game page · Screenshots", after = { TestHooks.screenshotsDialog = false; act.screen = Screen.Home }) {
+                    TestHooks.screenshotsDialog = true; act.screen = Screen.Home; settle(100); act.openGame(games[0])
+                }
+                TestHooks.screenshots = emptyList()
                 show(act, size, "Home · helper stopped", after = { TestHooks.helperStopped = false; act.setupVersion++ }) { TestHooks.helperStopped = true; act.setupVersion++; act.screen = Screen.Home }
             }
             for (s in SettingsSection.entries) {
                 if (size.oneScreen && s == SettingsSection.BOTTOM) continue
                 show(act, size, "Settings → ${s.label}") { act.screen = Screen.Settings; act.settingsSection = s }
+            }
+            // Settings → Backup's pop-ups (the restore one with a made-up backup).
+            show(act, size, "Settings → Backup · Make a backup", after = { act.backupPrompt = false }) {
+                act.screen = Screen.Settings; act.settingsSection = SettingsSection.BACKUP; act.backupPrompt = true
+            }
+            show(act, size, "Settings → Backup · Restore", after = { act.restorePreview = null }) {
+                act.screen = Screen.Settings; act.settingsSection = SettingsSection.BACKUP
+                act.restorePreview = null to io.github.hiramrg.delphis.platform.Backup.Preview(
+                    System.currentTimeMillis() - 86_400_000L, "AYN Thor", 330,
+                    listOf(
+                        io.github.hiramrg.delphis.platform.Backup.PartInfo(io.github.hiramrg.delphis.platform.Backup.Part.PRESETS, "14 presets · 6 KB", 6_000, 14),
+                        io.github.hiramrg.delphis.platform.Backup.PartInfo(io.github.hiramrg.delphis.platform.Backup.Part.KEPT, "7 saves of 3 games · 260 MB", 260_000_000, 7),
+                        io.github.hiramrg.delphis.platform.Backup.PartInfo(io.github.hiramrg.delphis.platform.Backup.Part.AUTOSAVES, "12 games · 410 MB", 410_000_000, 12),
+                        io.github.hiramrg.delphis.platform.Backup.PartInfo(io.github.hiramrg.delphis.platform.Backup.Part.SETTINGS, "controllers, screens, looks, per-game choices · 4 KB", 4_000, 120),
+                        io.github.hiramrg.delphis.platform.Backup.PartInfo(io.github.hiramrg.delphis.platform.Backup.Part.PLAY, "favorites, play time, last played · 3 KB", 3_000, 4),
+                    ),
+                )
             }
             // The bottom bar with an Xbox controller's hints, in dark mode (where they wrapped on the Galaxy Tab).
             if (size.oneScreen) for (s in listOf(SettingsSection.DISPLAY, SettingsSection.CONTROLS)) {
