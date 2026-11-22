@@ -423,6 +423,14 @@ class Prefs(context: Context) {
     var pillOpacity: Int
         get() = sp.getInt("pill_opacity", 60).coerceIn(20, 100)
         set(v) = sp.edit().putInt("pill_opacity", v.coerceIn(20, 100)).apply()
+    /** Names you gave kept saves of [gameId] (newest first, up to 8): offered first when naming the next one. */
+    fun keptNames(gameId: String): List<String> =
+        sp.getString("kept_names_" + gameId.filter { it.isLetterOrDigit() }, null)?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
+    fun rememberKeptName(gameId: String, name: String) {
+        val list = (listOf(name) + keptNames(gameId).filterNot { it.equals(name, ignoreCase = true) }).take(8)
+        sp.edit().putString("kept_names_" + gameId.filter { it.isLetterOrDigit() }, list.joinToString("\n")).apply()
+    }
+
     /** Quick save / load buttons while playing: Select + L1 saves, Select + R1 loads (Settings → Controls). */
     var quickSaveButtons: Boolean
         get() = sp.getBoolean("quick_save_buttons", true)

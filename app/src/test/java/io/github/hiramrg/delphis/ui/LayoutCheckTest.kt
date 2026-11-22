@@ -155,8 +155,14 @@ class LayoutCheckTest {
                 show(act, size, "Game page · Saves", after = { TestHooks.savesDialog = false; act.screen = Screen.Home }) {
                     TestHooks.savesDialog = true; act.screen = Screen.Home; settle(100); act.openGame(games[0])
                 }
-                show(act, size, "Game page · Saves · Rename kept save", after = { TestHooks.savesDialog = false; TestHooks.keepPopup = false; act.screen = Screen.Home }) {
-                    TestHooks.savesDialog = true; TestHooks.keepPopup = true; act.screen = Screen.Home; settle(100); act.openGame(games[0])
+                show(act, size, "Game page · Saves · Kept save", after = { TestHooks.savesDialog = false; TestHooks.savePopup = 0; act.screen = Screen.Home }) {
+                    TestHooks.savesDialog = true; TestHooks.savePopup = 1; act.screen = Screen.Home; settle(100); act.openGame(games[0])
+                }
+                show(act, size, "Game page · Saves · Delete kept save", after = { TestHooks.savesDialog = false; TestHooks.savePopup = 0; act.screen = Screen.Home }) {
+                    TestHooks.savesDialog = true; TestHooks.savePopup = 2; act.screen = Screen.Home; settle(100); act.openGame(games[0])
+                }
+                show(act, size, "Game page · Saves · Rename (keyboard)", after = { TestHooks.savesDialog = false; TestHooks.savePopup = 0; act.screen = Screen.Home }) {
+                    TestHooks.savesDialog = true; TestHooks.savePopup = 3; act.screen = Screen.Home; settle(100); act.openGame(games[0])
                 }
                 TestHooks.saves = emptyList()
                 show(act, size, "Home · helper stopped", after = { TestHooks.helperStopped = false; act.setupVersion++ }) { TestHooks.helperStopped = true; act.setupVersion++; act.screen = Screen.Home }
@@ -301,11 +307,19 @@ class LayoutCheckTest {
             TestHooks.padVendor = 0x045e
             inGameMenu(phone, InGameMenuActivity::class.java, session(g, preset), "In-game Saves · Xbox")
             inGameMenu(tablet, InGameMenuActivity::class.java, session(g, preset), "In-game Saves · Xbox")
-            TestHooks.keepPopup = true
-            inGameMenu(phone, InGameMenuActivity::class.java, session(g, preset), "In-game Saves · Rename kept save · Xbox")
+            TestHooks.savePopup = 1
+            inGameMenu(phone, InGameMenuActivity::class.java, session(g, preset), "In-game Saves · Kept save · Xbox")
+            TestHooks.savePopup = 3
+            inGameMenu(phone, InGameMenuActivity::class.java, session(g, preset), "In-game Saves · Rename (keyboard) · Xbox")
+            inGameMenu(tablet, InGameMenuActivity::class.java, session(g, preset), "In-game Saves · Rename (keyboard) · Xbox")
             TestHooks.padVendor = null
-            inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Saves · Rename kept save (Thor)")
-            TestHooks.keepPopup = false
+            TestHooks.savePopup = 1
+            inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Saves · Kept save (Thor)")
+            TestHooks.savePopup = 2
+            inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Saves · Delete kept save (Thor)")
+            TestHooks.savePopup = 3
+            inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Saves · Rename (keyboard) (Thor)")
+            TestHooks.savePopup = 0
             inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Saves (Thor)")
             TestHooks.helperUp = false
             inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Saves, helper stopped (Thor)")

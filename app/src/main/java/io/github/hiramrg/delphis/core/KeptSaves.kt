@@ -8,8 +8,8 @@ object KeptSaves {
     /** Kept saves per game. */
     const val MAX = 10
     const val NAME_MAX = 40
-    /** The quick picks in the "Keep this save" pop-up. */
-    val SUGGESTIONS = listOf("Before the castle", "Before the boss", "Good spot", "All coins")
+    /** Quick picks for naming a kept save that fit any game (after the names you used before for that game). */
+    val SUGGESTIONS = listOf("Before a boss", "New area", "Checkpoint", "Best run", "Try again later")
 
     /** One line, no control characters, at most [NAME_MAX] characters. */
     fun cleanName(raw: String): String =

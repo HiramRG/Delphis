@@ -23,8 +23,8 @@ object TestHooks {
     /** The layout check opens the game page's Saves list ([saves]) / shows Home's "helper has stopped" banner. */
     @Volatile @JvmField var savesDialog = false
     @Volatile @JvmField var helperStopped = false
-    /** The layout check opens the "Keep this save" pop-up over the Saves list (in game and on the game page). */
-    @Volatile @JvmField var keepPopup = false
+    /** The layout check opens a save's pop-up (1), its delete check (2) or the naming keyboard (3) over the Saves list. */
+    @Volatile @JvmField var savePopup = 0
 
     /** The layout check pretends this controller is connected (one screen): vendor id, e.g. 0x045e = Xbox. */
     @Volatile @JvmField var padVendor: Int? = null

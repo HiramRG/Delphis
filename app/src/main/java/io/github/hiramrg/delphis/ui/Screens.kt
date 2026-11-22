@@ -1470,11 +1470,15 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
         val actions = remember(game.key) {
             val id = game.info.gameId
             SaveActions(
-                keep = { e, name -> if (id == null) io.github.hiramrg.delphis.platform.DolphinBridge.KeepResult.FAILED else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.keepSave(id, e, name) } },
+                keep = { e, name ->
+                    if (id == null) io.github.hiramrg.delphis.platform.DolphinBridge.KeepResult.FAILED
+                    else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.keepSave(id, e, name) }
+                        .also { if (it == io.github.hiramrg.delphis.platform.DolphinBridge.KeepResult.KEPT) act.prefs.rememberKeptName(id, io.github.hiramrg.delphis.core.KeptSaves.cleanName(name)) }
+                },
                 delete = { e -> id != null && kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { act.bridge.deleteKept(id, e.keptId) } },
             )
         }
-        SavesDialog(game.info.title, saves, onDismiss = { showSaves = false }, actions = actions, onChanged = { savesVersion++ }) { chosen ->
+        SavesDialog(game.info.title, saves, onDismiss = { showSaves = false }, actions = actions, yourNames = { game.info.gameId?.let { act.prefs.keptNames(it) }.orEmpty() }, onChanged = { savesVersion++ }) { chosen ->
             showSaves = false
             val id = game.info.gameId ?: return@SavesDialog
             act.lifecycleScope.launch {

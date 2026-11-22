@@ -7,6 +7,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,14 +29,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -47,7 +47,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -55,10 +54,7 @@ import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -79,7 +75,7 @@ fun saveLabel(e: SaveEntry): String = when (e.kind) {
 }
 
 /** How long X is held on a kept save to delete it. */
-const val DELETE_HOLD_MS = 1000L
+const val DELETE_HOLD_MS = 1000L // (no longer used for deleting: Delete is in the save pop-up)
 
 /** A save's picture, or a plain tile with ↺ when it has none (Dolphin's own slots, Android 10). */
 @Composable
@@ -182,87 +178,58 @@ fun SavesList(
     }
 }
 
-/** What the "Keep this save" pop-up is showing: the save, the name being typed, the suggestion picked. */
-class KeepState(val entry: SaveEntry) {
-    var name by mutableStateOf(entry.name.orEmpty())
-    /** The highlighted suggestion (-1 = none). */
-    var chip by mutableIntStateOf(if (entry.name == null) 0 else -1)
-    var deleteArmed by mutableStateOf(false)
-    var status by mutableStateOf<String?>(null)
-    var busy by mutableStateOf(false)
-    val renaming get() = entry.kind == SaveKind.KEPT
-    init { if (entry.name == null) name = KeptSaves.SUGGESTIONS[0] }
-
-    /** The D-pad: left / right through the suggestions (picking one fills in the name). */
-    fun step(d: Int) {
-        val n = KeptSaves.SUGGESTIONS.size
-        chip = if (chip < 0) (if (d > 0) 0 else n - 1) else (chip + d).coerceIn(0, n - 1)
-        name = KeptSaves.SUGGESTIONS[chip]
-    }
-
-    /** The name to keep it under: what was typed, or "Kept save" if that's empty. */
-    val finalName get() = KeptSaves.cleanName(name).ifEmpty { "Kept save" }
-
-    /** Words for a [KeepResult] that didn't work. */
-    fun failed(r: KeepResult) {
-        status = if (r == KeepResult.FULL) "You already keep ${KeptSaves.MAX} saves for this game. Delete one first (hold X on it, or Rename → Delete)."
-        else "Couldn't keep it. Nothing was changed."
+/** A ring drawn when [on] (the controller's cursor inside a pop-up), like the focus ring: breathing, with a gap. */
+fun Modifier.litRing(on: Boolean, shape: androidx.compose.ui.graphics.Shape, width: Dp = 3.dp): Modifier = androidx.compose.ui.composed {
+    if (!on) return@composed this
+    val ring = breathingAccent()
+    val gap = LocalWii.current.bg
+    this.drawWithContent {
+        drawContent()
+        val w = width.toPx(); val g = 2.5.dp.toPx()
+        fun stroke(inset: Float, sw: Float, col: Color) {
+            val sz = androidx.compose.ui.geometry.Size(size.width - 2 * inset, size.height - 2 * inset)
+            if (sz.width <= 0f || sz.height <= 0f) return
+            val outline = shape.createOutline(sz, layoutDirection, this)
+            translate(inset, inset) { drawOutline(outline, col, style = androidx.compose.ui.graphics.drawscope.Stroke(sw)) }
+        }
+        stroke(w / 2f, w, ring)
+        stroke(w + g / 2f, g, gap)
     }
 }
 
-/**
- * "Keep this save" / "Rename kept save": the picture and time, the name (X types it with the keyboard), the
- * suggestions (D-pad left / right), and for a kept save, Delete in the corner. Short enough for a phone's in-game
- * panel. Keys are handled by the caller.
- */
+/** The green shield before "Safe to load". */
 @Composable
-fun KeepSavePanel(
-    k: KeepState, keys: Boolean, field: FocusRequester, modifier: Modifier = Modifier,
-    onCancel: () -> Unit, onType: () -> Unit, onKeep: () -> Unit, onDelete: () -> Unit, onTypingDone: () -> Unit = {},
-) {
+fun ShieldMark(size: Dp = 16.dp) {
+    val green = Color(0xFF3FBF6F)
+    Canvas(Modifier.size(size)) {
+        val w = this.size.width
+        val p = Path().apply {
+            moveTo(w * 0.5f, w * 0.04f); lineTo(w * 0.88f, w * 0.18f); lineTo(w * 0.88f, w * 0.46f)
+            cubicTo(w * 0.88f, w * 0.72f, w * 0.72f, w * 0.88f, w * 0.5f, w * 0.97f)
+            cubicTo(w * 0.28f, w * 0.88f, w * 0.12f, w * 0.72f, w * 0.12f, w * 0.46f)
+            lineTo(w * 0.12f, w * 0.18f); close()
+        }
+        drawPath(p, green)
+        val tick = Path().apply { moveTo(w * 0.32f, w * 0.5f); lineTo(w * 0.45f, w * 0.63f); lineTo(w * 0.68f, w * 0.36f) }
+        drawPath(tick, Color(0xFF0A2533), style = androidx.compose.ui.graphics.drawscope.Stroke(w * 0.1f, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+    }
+}
+
+/** The line above the Saves buttons: "Safe to load: where you are now is saved first.", or [status] for a few seconds. */
+@Composable
+fun SafeToLoadLine(status: Pair<String, Boolean>?, modifier: Modifier = Modifier) {
     val c = LocalWii.current
-    val keyboard = LocalSoftwareKeyboardController.current
-    PopupPanel(
-        if (k.renaming) "Rename kept save" else "Keep this save", formatSaveTime(k.entry.savedAt), modifier.widthIn(max = 440.dp),
-        corner = if (k.renaming) ({
-            PanelBtn(if (k.deleteArmed) "Press again to delete" else "Delete", if (keys) "L2" else null, false, warn = true, enabled = !k.busy, onClick = onDelete)
-        }) else null,
-        buttons = {
-            PanelBtn("Cancel", if (keys) "B" else null, false, onClick = onCancel)
-            PanelBtn("Type", if (keys) "X" else null, false, onClick = onType)
-            PanelBtn(if (k.renaming) "Save" else "Keep", if (keys) "A" else null, true, enabled = !k.busy, onClick = onKeep)
-        },
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SavePicture(k.entry.picture, Modifier.size(80.dp, 45.dp))
-            val shape = RoundedCornerShape(12.dp)
-            Box(
-                Modifier.weight(1f).height(42.dp).clip(shape).background(c.accentSoft).border(2.dp, c.accent, shape).padding(horizontal = 12.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                if (k.name.isEmpty()) Text("Name it, or pick one below", fontSize = 13.sp, color = c.textDim, maxLines = 1)
-                BasicTextField(
-                    k.name, { k.name = it.take(KeptSaves.NAME_MAX); k.chip = KeptSaves.SUGGESTIONS.indexOf(k.name) },
-                    Modifier.fillMaxWidth().focusRequester(field),
-                    singleLine = true,
-                    textStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, color = c.text),
-                    cursorBrush = SolidColor(c.accent),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { keyboard?.hide(); onTypingDone() }),
-                )
-            }
-        }
-        // The suggestions on one line; the highlighted one is scrolled into view.
-        val chips = rememberLazyListState()
-        LaunchedEffect(k.chip) { if (k.chip >= 0) runCatching { chips.animateScrollToItem(k.chip) } }
-        LazyRow(state = chips, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(KeptSaves.SUGGESTIONS.size) { i -> val t = KeptSaves.SUGGESTIONS[i]; WiiChip(t, k.chip == i, { k.chip = i; k.name = t }) }
-        }
-        Text(
-            k.status ?: "Kept saves stay at the top and new autosaves never replace them.",
-            fontSize = 12.sp, lineHeight = 15.sp, maxLines = 2,
-            fontWeight = if (k.status != null) FontWeight.Bold else null, color = if (k.status != null) c.orange else c.textDim,
-        )
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (status == null) {
+            ShieldMark()
+            Text(
+                androidx.compose.ui.text.buildAnnotatedString {
+                    pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.ExtraBold, color = c.text)); append("Safe to load:"); pop()
+                    append(" where you are now is saved first.")
+                },
+                fontSize = 11.5.sp, lineHeight = 14.sp, maxLines = 2, color = c.textDim,
+            )
+        } else Text(status.first, fontSize = 11.5.sp, lineHeight = 14.sp, maxLines = 2, fontWeight = FontWeight.Bold, color = if (status.second) c.orange else c.text)
     }
 }
 
@@ -273,124 +240,437 @@ class SaveActions(
 )
 
 /**
- * Game page: "Continue from which save?". D-pad chooses, A plays from it, Y keeps it (or renames a kept one),
- * holding X deletes a kept one, B closes. Playing from an earlier save, a kept one or a slot puts it in the Quick
- * Save slot first; the save that was there is kept, so you can switch back.
+ * Naming a save in Delphis' own keyboard (Android's keyboard can't open on the Thor's bottom screen): the name,
+ * suggestions (your names for this game first, then ones for any game), three rows of keys and the buttons.
+ * [row] / [col] is the controller's ring: row 0 suggestions, 1–3 keys, 4 buttons.
+ */
+class NameState(val entry: SaveEntry, yourNames: List<String>) {
+    val renaming get() = entry.kind == SaveKind.KEPT
+    /** (name, it's one of yours). */
+    val suggestions: List<Pair<String, Boolean>> = run {
+        val mine = yourNames.map { KeptSaves.cleanName(it) }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }.take(6)
+        mine.map { it to true } + KeptSaves.SUGGESTIONS.filter { s -> mine.none { it.equals(s, ignoreCase = true) } }.map { it to false }
+    }
+    var name by mutableStateOf(entry.name.orEmpty())
+    var shift by mutableStateOf(name.isEmpty())
+    var numbers by mutableStateOf(false)
+    var row by mutableIntStateOf(if (renaming || suggestions.isEmpty()) 4 else 0)
+    var col by mutableIntStateOf(if (renaming || suggestions.isEmpty()) 3 else 0)
+
+    fun keys(r: Int): List<String> = when (r) {
+        1 -> (if (numbers) "1234567890" else "QWERTYUIOP").map { it.toString() }
+        2 -> (if (numbers) "-'!?&.,:#" else "ASDFGHJKL").map { it.toString() } + BACKSPACE
+        3 -> (if (numbers) "()/+@*\"" else "ZXCVBNM").map { it.toString() } + SPACE
+        else -> emptyList()
+    }
+    private fun size(r: Int) = when (r) { 0 -> suggestions.size; 4 -> 4; else -> keys(r).size }
+
+    /** The D-pad: [dr] rows, [dc] columns (moving between rows keeps about the same place across). */
+    fun move(dr: Int, dc: Int) {
+        if (dc != 0) { col = (col + dc).coerceIn(0, size(row) - 1); return }
+        var nr = row + dr
+        if (nr == 0 && suggestions.isEmpty()) nr += dr
+        if (nr !in 0..4) return
+        val frac = if (size(row) > 1) col.toFloat() / (size(row) - 1) else 0f
+        row = nr
+        col = kotlin.math.round(frac * (size(nr) - 1)).toInt().coerceIn(0, size(nr) - 1)
+    }
+
+    fun press(label: String) = when (label) {
+        BACKSPACE -> backspace()
+        SPACE -> type(' ')
+        else -> label.forEach { type(it) }
+    }
+
+    fun type(ch: Char) {
+        if (name.length >= KeptSaves.NAME_MAX) return
+        if (ch == ' ' && (name.isEmpty() || name.endsWith(' '))) return
+        name += if (ch.isLetter()) (if (shift) ch.uppercaseChar() else ch.lowercaseChar()) else ch
+        if (ch.isLetter()) shift = false
+    }
+
+    fun backspace() { name = name.dropLast(1); if (name.isEmpty()) shift = true }
+
+    fun pick(i: Int) { suggestions.getOrNull(i)?.let { name = it.first; shift = false } }
+
+    /** What a key shows (letters follow Shift). */
+    fun shown(label: String) = if (label.length == 1 && label[0].isLetter()) (if (shift) label.uppercase() else label.lowercase()) else label
+
+    /** The name to keep it under: what was typed, or "Kept save" if that's empty. */
+    val finalName get() = KeptSaves.cleanName(name).ifEmpty { "Kept save" }
+
+    companion object { const val BACKSPACE = "⌫"; const val SPACE = "Space" }
+}
+
+/**
+ * The save pop-up and what comes after it: tap (or A on) a save → its pop-up (Load, Keep / Rename, Delete for a
+ * kept save, Back) → the delete check or the naming keyboard. Shared by the in-game Saves tab and the game page,
+ * so touch and buttons work the same way everywhere. [load] plays / loads the save; [done] reports what happened.
+ */
+class SaveFlow(
+    private val scope: kotlinx.coroutines.CoroutineScope,
+    private val actions: SaveActions,
+    private val yourNames: () -> List<String>,
+    private val load: (SaveEntry) -> Unit,
+    private val done: (message: String, problem: Boolean) -> Unit,
+) {
+    enum class Step { SAVE, DELETE, NAME }
+    enum class Btn { DELETE, BACK, KEEP, LOAD }
+
+    var entry by mutableStateOf<SaveEntry?>(null); private set
+    var step by mutableStateOf(Step.SAVE); private set
+    /** The controller's ring on the pop-up's buttons. */
+    var ring by mutableIntStateOf(0)
+    var naming by mutableStateOf<NameState?>(null); private set
+    var busy by mutableStateOf(false); private set
+    var problem by mutableStateOf<String?>(null)
+    val open get() = entry != null
+
+    fun buttons(e: SaveEntry): List<Btn> = buildList { if (e.kind == SaveKind.KEPT) add(Btn.DELETE); add(Btn.BACK); add(Btn.KEEP); add(Btn.LOAD) }
+
+    fun show(e: SaveEntry) { entry = e; step = Step.SAVE; naming = null; problem = null; ring = buttons(e).indexOf(Btn.LOAD) }
+    fun close() { entry = null; naming = null; step = Step.SAVE; problem = null }
+
+    /** B: one step back (naming / delete check → the save pop-up → closed). */
+    fun back() {
+        val e = entry ?: return
+        when (step) {
+            Step.SAVE -> close()
+            Step.DELETE -> { step = Step.SAVE; ring = buttons(e).indexOf(Btn.DELETE) }
+            Step.NAME -> { step = Step.SAVE; naming = null; problem = null; ring = buttons(e).indexOf(Btn.KEEP) }
+        }
+    }
+
+    fun press(b: Btn) {
+        val e = entry ?: return
+        if (busy) return
+        when (b) {
+            Btn.DELETE -> { step = Step.DELETE; ring = 0 }
+            Btn.BACK -> close()
+            Btn.KEEP -> { naming = NameState(e, runCatching(yourNames).getOrDefault(emptyList())); problem = null; step = Step.NAME }
+            Btn.LOAD -> { close(); load(e) }
+        }
+    }
+
+    fun confirmDelete() {
+        val e = entry ?: return
+        if (busy) return
+        busy = true
+        scope.launch {
+            val ok = runCatching { actions.delete(e) }.getOrDefault(false)
+            busy = false
+            close()
+            done(if (ok) "Deleted “${saveLabel(e)}”." else "Couldn't delete it.", !ok)
+        }
+    }
+
+    fun keep() {
+        val n = naming ?: return
+        val e = entry ?: return
+        if (busy) return
+        busy = true
+        scope.launch {
+            val r = runCatching { actions.keep(e, n.finalName) }.getOrDefault(KeepResult.FAILED)
+            busy = false
+            if (r == KeepResult.KEPT) {
+                close()
+                done(if (n.renaming) "Renamed to “${n.finalName}”." else "Kept as “${n.finalName}”. New autosaves never replace it.", false)
+            } else problem = if (r == KeepResult.FULL) "You already keep ${KeptSaves.MAX} saves for this game. Delete one first." else "Couldn't keep it. Nothing was changed."
+        }
+    }
+
+    /** The naming panel's buttons: Cancel · 123 / ABC · Aa · Keep. */
+    fun nameButton(i: Int) {
+        val n = naming ?: return
+        when (i) { 0 -> back(); 1 -> n.numbers = !n.numbers; 2 -> n.shift = !n.shift; else -> keep() }
+    }
+
+    /** A controller button while the pop-up is open; true when it was used. */
+    fun key(code: Int): Boolean {
+        val e = entry ?: return false
+        when (step) {
+            Step.SAVE -> {
+                val bs = buttons(e)
+                when (code) {
+                    AndroidKey.KEYCODE_DPAD_LEFT -> ring = (ring - 1).coerceAtLeast(0)
+                    AndroidKey.KEYCODE_DPAD_RIGHT -> ring = (ring + 1).coerceAtMost(bs.lastIndex)
+                    AndroidKey.KEYCODE_BUTTON_A, AndroidKey.KEYCODE_DPAD_CENTER, AndroidKey.KEYCODE_ENTER -> press(bs[ring.coerceIn(0, bs.lastIndex)])
+                    AndroidKey.KEYCODE_BUTTON_START -> press(Btn.LOAD)
+                    AndroidKey.KEYCODE_BUTTON_B, AndroidKey.KEYCODE_BACK -> close()
+                    AndroidKey.KEYCODE_BUTTON_Y -> press(Btn.KEEP)
+                    AndroidKey.KEYCODE_BUTTON_X -> if (e.kind == SaveKind.KEPT) press(Btn.DELETE)
+                    AndroidKey.KEYCODE_DPAD_UP, AndroidKey.KEYCODE_DPAD_DOWN -> {}
+                    else -> return false
+                }
+            }
+            Step.DELETE -> when (code) {
+                AndroidKey.KEYCODE_DPAD_LEFT -> ring = 0
+                AndroidKey.KEYCODE_DPAD_RIGHT -> ring = 1
+                AndroidKey.KEYCODE_BUTTON_A, AndroidKey.KEYCODE_DPAD_CENTER, AndroidKey.KEYCODE_ENTER -> if (ring == 1) confirmDelete() else back()
+                AndroidKey.KEYCODE_BUTTON_X -> confirmDelete()
+                AndroidKey.KEYCODE_BUTTON_B, AndroidKey.KEYCODE_BACK -> back()
+                AndroidKey.KEYCODE_DPAD_UP, AndroidKey.KEYCODE_DPAD_DOWN -> {}
+                else -> return false
+            }
+            Step.NAME -> {
+                val n = naming ?: return false
+                when (code) {
+                    AndroidKey.KEYCODE_DPAD_UP -> n.move(-1, 0)
+                    AndroidKey.KEYCODE_DPAD_DOWN -> n.move(1, 0)
+                    AndroidKey.KEYCODE_DPAD_LEFT -> n.move(0, -1)
+                    AndroidKey.KEYCODE_DPAD_RIGHT -> n.move(0, 1)
+                    AndroidKey.KEYCODE_BUTTON_A, AndroidKey.KEYCODE_DPAD_CENTER, AndroidKey.KEYCODE_ENTER -> when (n.row) {
+                        0 -> n.pick(n.col)
+                        4 -> nameButton(n.col)
+                        else -> n.keys(n.row).getOrNull(n.col)?.let { n.press(it) }
+                    }
+                    AndroidKey.KEYCODE_BUTTON_X -> n.backspace()
+                    AndroidKey.KEYCODE_BUTTON_Y -> n.type(' ')
+                    AndroidKey.KEYCODE_BUTTON_START -> keep()
+                    AndroidKey.KEYCODE_BUTTON_B, AndroidKey.KEYCODE_BACK -> back()
+                    else -> return false
+                }
+            }
+        }
+        return true
+    }
+
+    /** Every controller button the pop-up answers, for the in-game panel's key map. */
+    val keyCodes = listOf(
+        AndroidKey.KEYCODE_DPAD_UP, AndroidKey.KEYCODE_DPAD_DOWN, AndroidKey.KEYCODE_DPAD_LEFT, AndroidKey.KEYCODE_DPAD_RIGHT,
+        AndroidKey.KEYCODE_BUTTON_A, AndroidKey.KEYCODE_BUTTON_B, AndroidKey.KEYCODE_BUTTON_X, AndroidKey.KEYCODE_BUTTON_Y, AndroidKey.KEYCODE_BUTTON_START,
+    )
+}
+
+/** "Autosave · latest" / "Kept save" / "Dolphin save slot 3". */
+private fun saveCaps(e: SaveEntry) = when (e.kind) {
+    SaveKind.KEPT -> "Kept save"
+    SaveKind.LATEST -> "Autosave · latest"
+    SaveKind.EARLIER -> "Autosave · earlier"
+    SaveKind.SLOT -> "Dolphin save slot ${e.slot}"
+}
+
+private fun saveAbout(e: SaveEntry) = when (e.kind) {
+    SaveKind.KEPT -> "Stays until you delete it."
+    SaveKind.LATEST -> "Your latest autosave. New autosaves replace it, unless you keep it."
+    SaveKind.EARLIER -> "Delphis keeps the 3 newest earlier autosaves. Keep it to hold on to it."
+    SaveKind.SLOT -> "Made in Dolphin's own menu."
+}
+
+/**
+ * Whichever panel [flow] is on: the save pop-up, the delete check or the naming keyboard. [keys]: a controller is
+ * in use (button icons and the ring). [loadLabel]: "Load" in game, "Play from here" on the game page.
+ */
+@Composable
+fun SaveFlowPanel(flow: SaveFlow, keys: Boolean, loadLabel: String, modifier: Modifier = Modifier) {
+    val e = flow.entry ?: return
+    when (flow.step) {
+        SaveFlow.Step.SAVE -> SavePopup(flow, e, keys, loadLabel, modifier)
+        SaveFlow.Step.DELETE -> DeleteCheck(flow, e, keys, modifier)
+        SaveFlow.Step.NAME -> flow.naming?.let { NamePanel(flow, it, keys, modifier) }
+    }
+}
+
+@Composable
+private fun SavePopup(flow: SaveFlow, e: SaveEntry, keys: Boolean, loadLabel: String, modifier: Modifier) {
+    val c = LocalWii.current
+    val bs = flow.buttons(e)
+    PopupPanel(
+        saveCaps(e), if (e.kind == SaveKind.KEPT) saveLabel(e) else formatSaveTime(e.savedAt), modifier.widthIn(max = 480.dp),
+        buttons = {
+            bs.forEachIndexed { i, b ->
+                val lit = keys && flow.ring == i
+                val m = Modifier.litRing(lit, ButtonShape)
+                when (b) {
+                    SaveFlow.Btn.DELETE -> { PanelBtn("Delete", if (keys) "X" else null, false, m, warn = true, enabled = !flow.busy) { flow.press(b) }; Spacer(Modifier.weight(1f)) }
+                    SaveFlow.Btn.BACK -> PanelBtn(if (keys) "Back" else "Cancel", if (keys) "B" else null, false, m) { flow.press(b) }
+                    SaveFlow.Btn.KEEP -> PanelBtn(if (e.kind == SaveKind.KEPT) "Rename" else "Keep", if (keys) "Y" else null, false, m) { flow.press(b) }
+                    SaveFlow.Btn.LOAD -> PanelBtn("▶ $loadLabel", if (keys) "A" else null, true, m) { flow.press(b) }
+                }
+            }
+        },
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            SavePicture(e.picture, Modifier.size(144.dp, 81.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                if (e.kind == SaveKind.KEPT) Text(formatSaveTime(e.savedAt), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 1)
+                Text(saveAbout(e), fontSize = 12.sp, lineHeight = 15.sp, color = c.textDim)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeleteCheck(flow: SaveFlow, e: SaveEntry, keys: Boolean, modifier: Modifier) {
+    val c = LocalWii.current
+    PopupPanel(
+        "Delete kept save", "Delete “${saveLabel(e)}”?", modifier.widthIn(max = 440.dp),
+        buttons = {
+            PanelBtn("Cancel", if (keys) "B" else null, false, Modifier.litRing(keys && flow.ring == 0, ButtonShape)) { flow.back() }
+            PanelBtn("Delete", if (keys) "X" else null, false, Modifier.litRing(keys && flow.ring == 1, ButtonShape), warn = true, enabled = !flow.busy) { flow.confirmDelete() }
+        },
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SavePicture(e.picture, Modifier.size(96.dp, 54.dp))
+            Text("This can't be undone. Your autosaves aren't touched.", fontSize = 12.5.sp, lineHeight = 16.sp, color = c.textDim, modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun NamePanel(flow: SaveFlow, n: NameState, keys: Boolean, modifier: Modifier) {
+    val c = LocalWii.current
+    PopupPanel(
+        null, if (n.renaming) "Rename kept save" else "Keep this save", modifier.widthIn(max = 460.dp),
+        buttons = {
+            val labels = listOf("Cancel", if (n.numbers) "ABC" else "123", "Aa", if (n.renaming) "Save" else "Keep")
+            labels.forEachIndexed { i, l ->
+                val key = if (!keys) null else when (i) { 0 -> "B"; 3 -> "⊕"; else -> null }
+                PanelBtn(l, key, i == 3, Modifier.litRing(keys && n.row == 4 && n.col == i, ButtonShape), enabled = i != 3 || !flow.busy) { flow.nameButton(i) }
+            }
+        },
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SavePicture(n.entry.picture, Modifier.size(70.dp, 39.dp))
+            val shape = RoundedCornerShape(12.dp)
+            Row(
+                Modifier.weight(1f).height(40.dp).clip(shape).background(c.accentSoft).border(2.dp, c.accent, shape).padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (n.name.isEmpty()) Text("Type a name, or pick one below", fontSize = 13.sp, color = c.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                else Text(n.name, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Box(Modifier.padding(start = 2.dp).width(2.dp).height(20.dp).background(c.accent))
+            }
+        }
+        if (n.suggestions.isNotEmpty()) {
+            val chips = rememberLazyListState()
+            LaunchedEffect(n.row, n.col) { if (n.row == 0) runCatching { chips.animateScrollToItem((n.col - 1).coerceAtLeast(0)) } }
+            LazyRow(state = chips, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(n.suggestions.size) { i ->
+                    val (t, mine) = n.suggestions[i]
+                    NameChip(t, mine, picked = n.name == t, lit = keys && n.row == 0 && n.col == i) { n.pick(i) }
+                }
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            for (r in 1..3) Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                n.keys(r).forEachIndexed { i, k ->
+                    val w = if (k == NameState.SPACE) 3f else 1f
+                    KeyCap(n.shown(k), lit = keys && n.row == r && n.col == i, Modifier.weight(w)) { n.press(k) }
+                }
+            }
+        }
+        flow.problem?.let { Text(it, fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.Bold, color = c.orange) }
+    }
+}
+
+@Composable
+private fun NameChip(text: String, mine: Boolean, picked: Boolean, lit: Boolean, onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(50)
+    Row(
+        Modifier.height(32.dp).litRing(lit, shape).clip(shape)
+            .then(if (picked) Modifier.background(c.accent) else Modifier.background(c.card).border(2.dp, c.cardBorder, shape))
+            .clickable(onClick = onClick).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        val fg = if (picked) c.onAccent else c.text
+        if (mine) PersonMark(fg)
+        Text(text, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1)
+    }
+}
+
+/** Marks a suggestion as a name you used before. */
+@Composable
+private fun PersonMark(color: Color) {
+    Canvas(Modifier.size(11.dp)) {
+        val w = size.width
+        drawCircle(color, radius = w * 0.24f, center = Offset(w * 0.5f, w * 0.28f))
+        drawArc(color, 180f, 180f, true, topLeft = Offset(w * 0.08f, w * 0.58f), size = androidx.compose.ui.geometry.Size(w * 0.84f, w * 0.84f))
+    }
+}
+
+@Composable
+private fun KeyCap(label: String, lit: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val c = LocalWii.current
+    val shape = RoundedCornerShape(7.dp)
+    Box(
+        modifier.height(30.dp).litRing(lit, shape).clip(shape).background(if (c.dark) Color(0xFF353C45) else c.bg).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Text(label, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 1) }
+}
+
+/**
+ * Game page: "Continue from which save?". D-pad chooses, A (or a tap) opens the save's pop-up: Play from here,
+ * Keep / Rename, Delete for a kept save. B closes. Playing from an earlier save, a kept one or a slot puts it in
+ * the Quick Save slot first; the save that was there is kept, so you can switch back.
  */
 @Composable
 fun SavesDialog(
     gameTitle: String?, entries: List<SaveEntry>, onDismiss: () -> Unit,
-    actions: SaveActions? = null, onChanged: () -> Unit = {}, onPlay: (SaveEntry) -> Unit,
+    actions: SaveActions? = null, yourNames: () -> List<String> = { emptyList() }, onChanged: () -> Unit = {}, onPlay: (SaveEntry) -> Unit,
 ) {
     val c = LocalWii.current
     val focus = remember { FocusRequester() }
-    val field = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
-    val keyboard = LocalSoftwareKeyboardController.current
+    val keys = !PadGlyphs.touch
     // Start on the save Play continues from.
     var index by remember { mutableIntStateOf(entries.indexOfFirst { it.kind == SaveKind.LATEST }.coerceAtLeast(0)) }
-    var keep by remember { mutableStateOf<KeepState?>(if (io.github.hiramrg.delphis.platform.TestHooks.keepPopup) entries.firstOrNull()?.let { KeepState(it) } else null) }
-    var status by remember { mutableStateOf<String?>(null) }
-    var xDown by remember { mutableLongStateOf(0L) }
+    var status by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    val flow = remember(actions) {
+        SaveFlow(scope, actions ?: SaveActions({ _, _ -> KeepResult.FAILED }, { false }), yourNames, onPlay) { msg, bad -> status = msg to bad; index = 0; onChanged() }
+    }
+    LaunchedEffect(Unit) { testOpen(flow, entries) }
     val current = entries.getOrNull(index.coerceIn(0, (entries.size - 1).coerceAtLeast(0)))
 
-    fun openKeep() { if (actions != null) current?.let { keep = KeepState(it); status = null } }
-    fun doKeep() {
-        val k = keep ?: return
-        val a = actions ?: return
-        if (k.busy) return
-        k.busy = true
-        scope.launch {
-            val r = a.keep(k.entry, k.finalName)
-            k.busy = false
-            if (r == KeepResult.KEPT) { keep = null; status = if (k.renaming) "Renamed." else "Kept as “${k.finalName}”."; index = 0; onChanged() } else k.failed(r)
-        }
-    }
-    fun doDelete(e: SaveEntry) {
-        val a = actions ?: return
-        scope.launch {
-            val ok = a.delete(e)
-            keep = null
-            status = if (ok) "Deleted “${saveLabel(e)}”." else "Couldn't delete it."
-            index = 0; onChanged()
-        }
-    }
-    fun keepDelete() {
-        val k = keep ?: return
-        if (!k.deleteArmed) { k.deleteArmed = true; return }
-        doDelete(k.entry)
-    }
-
-    ScaledDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    ScaledDialog(onDismissRequest = { if (flow.open) flow.back() else onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(
             Modifier.focusRequester(focus).focusable()
                 .onPreviewKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     val code = e.key.nativeKeyCode
-                    val k = keep
-                    if (k != null) {
-                        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                        when (code) {
-                            AndroidKey.KEYCODE_DPAD_LEFT -> { k.step(-1); true }
-                            AndroidKey.KEYCODE_DPAD_RIGHT -> { k.step(1); true }
-                            AndroidKey.KEYCODE_BUTTON_A -> { doKeep(); true }
-                            AndroidKey.KEYCODE_BUTTON_B -> { keep = null; runCatching { focus.requestFocus() }; true }
-                            AndroidKey.KEYCODE_BUTTON_X -> { runCatching { field.requestFocus() }; keyboard?.show(); true }
-                            AndroidKey.KEYCODE_BUTTON_L2 -> { if (k.renaming) keepDelete(); true }
-                            else -> false
-                        }
-                    } else {
-                        // Holding X on a kept save deletes it (let go before the second: nothing happens).
-                        if (code == AndroidKey.KEYCODE_BUTTON_X) {
-                            if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) xDown = e.nativeKeyEvent.eventTime
-                            if (e.type == KeyEventType.KeyDown && xDown > 0 && e.nativeKeyEvent.eventTime - xDown >= DELETE_HOLD_MS) {
-                                xDown = 0
-                                current?.takeIf { it.kind == SaveKind.KEPT }?.let { doDelete(it) }
-                            }
-                            if (e.type == KeyEventType.KeyUp) xDown = 0
-                            return@onPreviewKeyEvent true
-                        }
-                        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                        when (code) {
-                            AndroidKey.KEYCODE_DPAD_DOWN -> { index = (index + 1).coerceAtMost(entries.lastIndex); true }
-                            AndroidKey.KEYCODE_DPAD_UP -> { index = (index - 1).coerceAtLeast(0); true }
-                            AndroidKey.KEYCODE_BUTTON_A, AndroidKey.KEYCODE_DPAD_CENTER, AndroidKey.KEYCODE_ENTER, AndroidKey.KEYCODE_BUTTON_START ->
-                                { current?.let(onPlay); true }
-                            AndroidKey.KEYCODE_BUTTON_Y -> { openKeep(); true }
-                            AndroidKey.KEYCODE_BUTTON_B, AndroidKey.KEYCODE_BACK -> { onDismiss(); true }
-                            else -> true
-                        }
+                    if (flow.open) return@onPreviewKeyEvent flow.key(code) || true
+                    when (code) {
+                        AndroidKey.KEYCODE_DPAD_DOWN -> { index = (index + 1).coerceAtMost(entries.lastIndex); true }
+                        AndroidKey.KEYCODE_DPAD_UP -> { index = (index - 1).coerceAtLeast(0); true }
+                        AndroidKey.KEYCODE_BUTTON_A, AndroidKey.KEYCODE_DPAD_CENTER, AndroidKey.KEYCODE_ENTER -> { current?.let { if (actions != null) flow.show(it) else onPlay(it) }; true }
+                        AndroidKey.KEYCODE_BUTTON_START -> { current?.let(onPlay); true }
+                        AndroidKey.KEYCODE_BUTTON_B, AndroidKey.KEYCODE_BACK -> { onDismiss(); true }
+                        else -> true
                     }
                 },
         ) {
-            val k = keep
-            if (k != null) KeepSavePanel(
-                k, keys = !PadGlyphs.touch, field = field, modifier = Modifier.width(440.dp),
-                onCancel = { keep = null; runCatching { focus.requestFocus() } },
-                onType = { runCatching { field.requestFocus() }; keyboard?.show() },
-                onKeep = { doKeep() }, onDelete = { keepDelete() },
-                onTypingDone = { runCatching { focus.requestFocus() } },
-            ) else PopupPanel(
+            if (flow.open) SaveFlowPanel(flow, keys, "Play from here", Modifier.width(500.dp))
+            else PopupPanel(
                 listOfNotNull("Saves", gameTitle).joinToString(" · "), "Continue from which save?",
                 Modifier.width(500.dp),
                 buttons = {
-                    PanelBtn("Close", "B", false, onClick = onDismiss)
-                    if (actions != null) PanelBtn(if (current?.kind == SaveKind.KEPT) "Rename" else "Keep", "Y", false) { openKeep() }
-                    PanelBtn("▶ Play from here", "A", true) { current?.let(onPlay) }
+                    PanelBtn("Close", if (keys) "B" else null, false, onClick = onDismiss)
+                    PanelBtn("Open", if (keys) "A" else null, true) { current?.let { if (actions != null) flow.show(it) else onPlay(it) } }
                 },
             ) {
                 Text(
-                    status ?: (if (current?.kind == SaveKind.KEPT) "Hold X to delete this kept save. " else "") +
-                        "Play starts from the one you pick. The others stay here, so you can switch back.",
-                    fontSize = 12.sp, color = if (status != null) c.text else c.textDim, lineHeight = 15.sp, maxLines = 2,
+                    status?.first ?: "Pick a save to play from it, keep it or delete it. The others stay here, so you can switch back.",
+                    fontSize = 12.sp, color = if (status?.second == true) c.orange else if (status != null) c.text else c.textDim, lineHeight = 15.sp, maxLines = 2,
                 )
                 SavesList(
-                    entries, index, { index = it }, Modifier.fillMaxWidth().heightIn(max = 300.dp), latestTag = "Next Play",
-                    onLongPress = if (actions != null) { i -> index = i; openKeep() } else null, small = true,
+                    entries, if (keys) index else -1, { i -> index = i; entries.getOrNull(i)?.let { if (actions != null) flow.show(it) else onPlay(it) } },
+                    Modifier.fillMaxWidth().heightIn(max = 300.dp), latestTag = "Next Play", small = true,
                 )
             }
         }
     }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    LaunchedEffect(flow.open) { runCatching { focus.requestFocus() } }
+}
+
+/** The layout check opens the pop-up (1), the delete check (2) or the naming keyboard (3) on the first save. */
+fun testOpen(flow: SaveFlow, entries: List<SaveEntry>) {
+    val step = io.github.hiramrg.delphis.platform.TestHooks.savePopup
+    val e = entries.firstOrNull() ?: return
+    if (step <= 0 || flow.open) return
+    flow.show(e)
+    if (step == 2 && e.kind == SaveKind.KEPT) flow.press(SaveFlow.Btn.DELETE)
+    if (step == 3) flow.press(SaveFlow.Btn.KEEP)
 }
 
 /** Shown in the Saves tab when the game has none yet. */

@@ -52,6 +52,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import io.github.hiramrg.delphis.core.GameDatabase
+import io.github.hiramrg.delphis.core.KeptSaves
 import io.github.hiramrg.delphis.core.Preset
 import io.github.hiramrg.delphis.core.PresetLibrary
 import io.github.hiramrg.delphis.platform.CoverActivity
@@ -650,39 +651,6 @@ open class NowPlayingActivity : ComponentActivity() {
             }
         }
         val helperDown = !DolphinExitService.runningState.value && !io.github.hiramrg.delphis.platform.TestHooks.helperUp
-        // "Keep this save" / "Rename kept save" over the Saves tab.
-        var keepState by remember { mutableStateOf<KeepState?>(null) }
-        LaunchedEffect(gameSaves) {
-            if (io.github.hiramrg.delphis.platform.TestHooks.keepPopup && showSaves && keepState == null) gameSaves.firstOrNull()?.let { keepState = KeepState(it) }
-        }
-        val keepField = remember { androidx.compose.ui.focus.FocusRequester() }
-        val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-        fun openKeep() { gameSaves.getOrNull(saveCursor)?.let { keepState = KeepState(it); savesStatus = null } }
-        fun doKeep() {
-            val k = keepState ?: return
-            val id = gid ?: return
-            if (k.busy) return
-            k.busy = true
-            this@NowPlayingActivity.lifecycleScope.launch {
-                val r = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.keepSave(id, k.entry, k.finalName) }
-                k.busy = false
-                if (r == io.github.hiramrg.delphis.platform.DolphinBridge.KeepResult.KEPT) {
-                    keyboard?.hide(); keepState = null; saveCursor = 0; savesVersion++
-                    savesStatus = (if (k.renaming) "Renamed to \u201C${k.finalName}\u201D." else "Kept as \u201C${k.finalName}\u201D. New autosaves never replace it.") to false
-                } else k.failed(r)
-            }
-        }
-        fun deleteKept(e: io.github.hiramrg.delphis.platform.DolphinBridge.SaveEntry) {
-            val id = gid ?: return
-            if (e.kind != io.github.hiramrg.delphis.platform.DolphinBridge.SaveKind.KEPT) return
-            this@NowPlayingActivity.lifecycleScope.launch {
-                val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.deleteKept(id, e.keptId) }
-                keyboard?.hide(); keepState = null; saveCursor = 0; savesVersion++
-                savesStatus = (if (ok) "Deleted \u201C${saveLabel(e)}\u201D." else "Couldn't delete it.") to !ok
-            }
-        }
-        fun keepDelete() { val k = keepState ?: return; if (!k.deleteArmed) k.deleteArmed = true else deleteKept(k.entry) }
-        fun keepType() { runCatching { keepField.requestFocus() }; keyboard?.show() }
         // One screen: Delphis' menu covers Dolphin, so it steps aside first (the helper presses Dolphin's own menu).
         fun loadSave(e: io.github.hiramrg.delphis.platform.DolphinBridge.SaveEntry) {
             val id = gid ?: return
@@ -714,6 +682,27 @@ open class NowPlayingActivity : ComponentActivity() {
                 if (panelMode) { delay(300); DolphinExitService.openMenu() }
             }
         }
+        // A save's pop-up (Load, Keep / Rename, Delete) and what follows it; tapping or A on a save opens it.
+        val saveFlow = remember(gid) {
+            SaveFlow(
+                this@NowPlayingActivity.lifecycleScope,
+                SaveActions(
+                    keep = { e, name ->
+                        val id = gid
+                        if (id == null) io.github.hiramrg.delphis.platform.DolphinBridge.KeepResult.FAILED
+                        else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.keepSave(id, e, name) }
+                            .also { if (it == io.github.hiramrg.delphis.platform.DolphinBridge.KeepResult.KEPT) prefs.rememberKeptName(id, KeptSaves.cleanName(name)) }
+                    },
+                    delete = { e -> val id = gid; id != null && kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.deleteKept(id, e.keptId) } },
+                ),
+                yourNames = { gid?.let { prefs.keptNames(it) }.orEmpty() },
+                load = { e -> loadSave(e) },
+            ) { msg, bad -> savesStatus = msg to bad; saveCursor = 0; savesVersion++ }
+        }
+        LaunchedEffect(gameSaves, showSaves) { if (showSaves) testOpen(saveFlow, gameSaves) }
+        LaunchedEffect(showSaves) { if (!showSaves) saveFlow.close() }
+        // A message replaces "Safe to load" for a few seconds (not while something is still running).
+        LaunchedEffect(savesStatus, savesBusy) { if (savesStatus != null && !savesBusy) { delay(6_000); savesStatus = null } }
         val picTabs = pictureTabs(screenChoice != null, gameLook != null, gameRes != null)
         val picShown = if (pictureTab in picTabs) pictureTab else picTabs.first()
         val hasPicture = screenChoice != null || gameLook != null || gameRes != null
@@ -970,11 +959,15 @@ open class NowPlayingActivity : ComponentActivity() {
                                 HelperStoppedInfo("which is what loads and makes saves during a game", "Or use Dolphin's own menu: Save State / Load State.")
                             }
                             gameSaves.isEmpty() -> NoSavesYet(Modifier.fillMaxWidth())
-                            else -> SavesList(
-                                gameSaves, saveCursor.coerceIn(0, gameSaves.lastIndex), { saveCursor = it }, Modifier.fillMaxSize(),
-                                rowHeight = if (panelMode) 30.dp else 34.dp, small = panelMode,
-                                onLongPress = { i -> saveCursor = i; openKeep() },
-                            )
+                            else -> {
+                                // With a controller the ring sits on the D-pad's save; with touch only the opened one is lit.
+                                val keys = panelMode && !PadGlyphs.touch
+                                val lit = if (keys) saveCursor.coerceIn(0, gameSaves.lastIndex) else saveFlow.entry?.let { gameSaves.indexOf(it) } ?: -1
+                                SavesList(
+                                    gameSaves, lit, { i -> saveCursor = i; if (!savesBusy) gameSaves.getOrNull(i)?.let { saveFlow.show(it) } }, Modifier.fillMaxSize(),
+                                    rowHeight = if (panelMode) 30.dp else 34.dp, small = panelMode,
+                                )
+                            }
                         }
                     } else if (showPicture && hasPicture) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 10.dp) {
                         // Picture: the second tab of the same box (the box, the card and the buttons stay put).
@@ -1096,21 +1089,15 @@ open class NowPlayingActivity : ComponentActivity() {
                 } else if (mode == Mode.VIEW && showSaves && gid != null) {
                     // Saves: Back · Save now · Load (or, with the helper stopped, Back · Open Accessibility).
                     val keys = panelMode && !PadGlyphs.touch
-                    val onKept = gameSaves.getOrNull(saveCursor)?.kind == io.github.hiramrg.delphis.platform.DolphinBridge.SaveKind.KEPT
-                    val (line, warn) = savesStatus ?: ((if (onKept && keys) "Hold X to delete this kept save. " else "") + "Loading autosaves your progress first, so you can come back to it." to false)
-                    if (!helperDown) Text(
-                        line, fontSize = 11.sp, lineHeight = 14.sp, maxLines = 2,
-                        color = if (warn) MaterialTheme.colorScheme.tertiary else LocalWii.current.textDim,
-                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp, start = 4.dp, end = 4.dp),
-                    )
+                    if (!helperDown) SafeToLoadLine(savesStatus, Modifier.fillMaxWidth().padding(top = 5.dp, start = 4.dp, end = 4.dp))
                     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         PanelBtn("Back", if (keys) "B" else null, false, Modifier.weight(1f)) { showSaves = false }
                         if (helperDown) PanelBtn("Open Accessibility", if (keys) "A" else null, true, Modifier.weight(2f)) { DolphinExitService.openSettings(this@NowPlayingActivity) }
                         else {
-                            PanelBtn(if (onKept) "Rename" else "Keep", if (keys) "Y" else null, false, Modifier.weight(1.1f), enabled = !savesBusy && gameSaves.isNotEmpty()) { openKeep() }
-                            PanelBtn("Save now", if (keys) "X" else null, false, Modifier.weight(1.3f), enabled = !savesBusy) { saveNow() }
-                            PanelBtn("Load", if (keys) "A" else null, true, Modifier.weight(1f), enabled = !savesBusy && gameSaves.isNotEmpty()) {
-                                gameSaves.getOrNull(saveCursor)?.let { loadSave(it) }
+                            // Load, Keep, Rename and Delete are in each save's pop-up; with a controller A opens the ringed save.
+                            PanelBtn("Save now", if (keys) "X" else null, false, Modifier.weight(1.6f), enabled = !savesBusy) { saveNow() }
+                            if (keys) PanelBtn("Open", "A", true, Modifier.weight(1f), enabled = !savesBusy && gameSaves.isNotEmpty()) {
+                                gameSaves.getOrNull(saveCursor)?.let { saveFlow.show(it) }
                             }
                         }
                     }
@@ -1214,9 +1201,6 @@ open class NowPlayingActivity : ComponentActivity() {
                 val quit = { showBrightness = false; if (prefs.skipExitWarning) closingGame { backToMainMenu() } else { exitDontAsk = false; confirmExit = true } }
                 val restart = { showBrightness = false; plainRestart = true; restartAction = { applyAndRestart(s, preset, remember = false) } }
                 val pending = restartAction
-                panelHolds = if (keepState == null && showSaves && gid != null && mode == Mode.VIEW && !helperDown)
-                    mapOf(KeyEvent.KEYCODE_BUTTON_X to { gameSaves.getOrNull(saveCursor)?.let { e -> if (e.kind == io.github.hiramrg.delphis.platform.DolphinBridge.SaveKind.KEPT) deleteKept(e) else saveNow() } })
-                else emptyMap()
                 panelKeys = when {
                     resumeFailed != null -> mapOf(
                         KeyEvent.KEYCODE_BUTTON_A to { resumeAction() },
@@ -1244,24 +1228,15 @@ open class NowPlayingActivity : ComponentActivity() {
                         KeyEvent.KEYCODE_BUTTON_A to { restartAction = null; pending() },
                         KeyEvent.KEYCODE_BUTTON_B to { restartAction = null },
                     )
-                    keepState != null && showSaves -> mapOf(
-                        // Keep this save: D-pad left / right picks a name, X types one, A keeps, B cancels, L2 deletes a kept one.
-                        KeyEvent.KEYCODE_DPAD_LEFT to { keepState?.step(-1) },
-                        KeyEvent.KEYCODE_DPAD_RIGHT to { keepState?.step(1) },
-                        KeyEvent.KEYCODE_BUTTON_A to { doKeep() },
-                        KeyEvent.KEYCODE_BUTTON_B to { keyboard?.hide(); keepState = null },
-                        KeyEvent.KEYCODE_BUTTON_X to { keepType() },
-                        KeyEvent.KEYCODE_BUTTON_L2 to { if (keepState?.renaming == true) keepDelete() },
-                    )
+                    // A save's pop-up, its delete check or the naming keyboard: the flow answers every button it uses.
+                    saveFlow.open && showSaves -> saveFlow.keyCodes.associateWith { code -> { saveFlow.key(code); Unit } }
                     showSaves && gid != null && mode == Mode.VIEW -> mapOf(
-                        // Saves tab: the D-pad moves through the list, A loads, X saves now (held on a kept save: deletes it),
-                        // Y keeps / renames, B back to Controls.
-                        KeyEvent.KEYCODE_BUTTON_Y to { if (!helperDown) openKeep() },
+                        // Saves tab: the D-pad moves through the list, A opens the save's pop-up, X saves now, B back to Controls.
                         KeyEvent.KEYCODE_DPAD_UP to { saveCursor = (saveCursor - 1).coerceAtLeast(0) },
                         KeyEvent.KEYCODE_DPAD_DOWN to { saveCursor = (saveCursor + 1).coerceAtMost((gameSaves.size - 1).coerceAtLeast(0)) },
                         KeyEvent.KEYCODE_BUTTON_A to {
                             if (helperDown) DolphinExitService.openSettings(this@NowPlayingActivity)
-                            else gameSaves.getOrNull(saveCursor)?.let { loadSave(it) }
+                            else if (!savesBusy) gameSaves.getOrNull(saveCursor)?.let { saveFlow.show(it) }
                         },
                         KeyEvent.KEYCODE_BUTTON_X to { if (!helperDown) saveNow() },
                         KeyEvent.KEYCODE_BUTTON_B to { showSaves = false },
@@ -1349,13 +1324,8 @@ open class NowPlayingActivity : ComponentActivity() {
                     onConfirm = { restartAction = null; plainRestart = false; closingGame(action) },
                 )
             }
-            keepState?.takeIf { showSaves }?.let { k ->
-                OverlayPanel({ keyboard?.hide(); keepState = null }) {
-                    KeepSavePanel(
-                        k, keys = panelMode && !PadGlyphs.touch, field = keepField, modifier = Modifier.widthIn(max = 440.dp),
-                        onCancel = { keyboard?.hide(); keepState = null }, onType = { keepType() }, onKeep = { doKeep() }, onDelete = { keepDelete() },
-                    )
-                }
+            if (saveFlow.open && showSaves) OverlayPanel({ saveFlow.back() }) {
+                SaveFlowPanel(saveFlow, keys = panelMode && !PadGlyphs.touch, loadLabel = "Load", modifier = Modifier.widthIn(max = 480.dp))
             }
             resumeFailed?.let { f ->
                 val whenText = io.github.hiramrg.delphis.platform.ResumeNotice.whenText(this@NowPlayingActivity, f.savedAt)
