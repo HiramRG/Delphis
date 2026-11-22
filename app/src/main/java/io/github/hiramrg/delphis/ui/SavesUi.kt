@@ -40,6 +40,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -179,7 +180,7 @@ fun SavesList(
 }
 
 /** A ring drawn when [on] (the controller's cursor inside a pop-up), like the focus ring: breathing, with a gap. */
-fun Modifier.litRing(on: Boolean, shape: androidx.compose.ui.graphics.Shape, width: Dp = 3.dp): Modifier = androidx.compose.ui.composed {
+fun Modifier.litRing(on: Boolean, shape: androidx.compose.ui.graphics.Shape, width: Dp = 3.dp): Modifier = composed {
     if (!on) return@composed this
     val ring = breathingAccent()
     val gap = LocalWii.current.bg
