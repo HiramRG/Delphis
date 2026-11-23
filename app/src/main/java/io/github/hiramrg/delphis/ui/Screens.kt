@@ -1658,14 +1658,15 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                 fontSize = 10.5.sp, color = c.textDim, maxLines = 3, overflow = TextOverflow.Ellipsis, lineHeight = 13.sp,
             )
             // Saves (R2): pick which save Play continues from.
-            if (saves.isNotEmpty()) GameChip("↺ Saves (${saves.size})", "R2") { showSaves = true }
-            else if (shots.isNotEmpty()) GameChip("📷 Screenshots (${shots.size})", "R2") { showShots = true }
+            // As wide as the cover (one column of equal-width controls).
+            if (saves.isNotEmpty()) GameChip("↺ Saves (${saves.size})", "R2", modifier = Modifier.fillMaxWidth()) { showSaves = true }
+            else if (shots.isNotEmpty()) GameChip("📷 Screenshots (${shots.size})", "R2", modifier = Modifier.fillMaxWidth()) { showShots = true }
             Spacer(Modifier.height(2.dp))
             GameButton("▶", if (shown == null) "Choose a style" else "Play", "A", primary = true, enabled = shown != null) { p.play() }
         }
         // Right: one row of chips, then the controls card.
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 achievements?.let { a -> GameChip("🏆 ${a.unlocked}/${a.total}", "R3") { showAchievements = true } }
                 if (multiplayer) {
                     val newPad = pads.any { !it.builtIn && it.byLabel == null }
@@ -1681,45 +1682,47 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                     ).ifEmpty { listOf("▣ Picture") }
                     GameChip(parts.joinToString(" · "), if (multiplayer) "L3" else "⊖") { openScreen() }
                 }
-                Spacer(Modifier.weight(1f))
-                if (canAutosave) GameChip((if (gameAutosave) "✓ " else "") + "Autosave", "L1", on = gameAutosave) { toggleGameAutosave() }
-                GameChip((if (p.rememberChoice) "✓ " else "") + "Remember", "R1", on = p.rememberChoice) { p.rememberChoice = !p.rememberChoice }
             }
             WiiCard(Modifier.fillMaxWidth().weight(1f), radius = 20.dp, padding = 12.dp) {
                 // Header: what the map shows. "✓ Selected controls" only when it's the preset in use.
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Header: what the map shows. Its buttons sit on the small "Selected controls" line (size S), so the
+                // name gets the whole width under them (two lines at most).
+                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(Modifier.size(76.dp, 52.dp).clip(RoundedCornerShape(12.dp)).background(if (c.dark) c.sidebar else c.bg), contentAlignment = Alignment.Center) {
                         shown?.let { PresetIcon(it, Modifier.size(60.dp, 44.dp)) }
                     }
                     Column(Modifier.weight(1f)) {
-                        when {
-                            shown == null -> Text("CONTROLS", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp)
-                            p.browsing -> HintText(PadGlyphs.or("Ⓐ USE THESE CONTROLS", "TAP TO USE THESE CONTROLS"), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, letterSpacing = 1.sp)
-                            else -> SelectedControlsTitle(10.sp)
+                        Row(Modifier.fillMaxWidth().height(ControlSize.S), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(Modifier.weight(1f)) {
+                                when {
+                                    shown == null -> Text("CONTROLS", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp, maxLines = 1)
+                                    p.browsing -> HintText(PadGlyphs.or("Ⓐ USE THESE CONTROLS", "TAP TO USE THESE CONTROLS"), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, letterSpacing = 1.sp, maxLines = 1)
+                                    else -> SelectedControlsTitle(10.sp)
+                                }
+                            }
+                            PanelBtn(if (showList) "Done" else "Change", "Y", false, Modifier.then(if (showList) Modifier.border(2.dp, c.accent, RoundedCornerShape(50)) else Modifier), small = true) { showList = !showList }
+                            PanelBtn("✎ Edit", "X", false, enabled = p.editTarget != null, small = true) { p.editing = true }
+                            val canReset = shown != null && p.isEdited(shown)
+                            val canDelete = shown != null && act.store.isMine(shown.id)
+                            if (canReset || canDelete || saves.isNotEmpty() || shots.isNotEmpty()) Box {
+                                GameChip("⋯", null, height = ControlSize.S) { menu = true }
+                                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) { PadKeysBox(onBack = { menu = false }) { Column {
+                                    if (canReset) DropdownMenuItem(text = { Text("↺ Reset to default", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; confirmReset = shown })
+                                    if (canDelete) DropdownMenuItem(text = { Text("🗑 Delete this preset", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; confirmDelete = shown })
+                                    if (saves.isNotEmpty()) DropdownMenuItem(text = { HintText("↺ Saves (${saves.size}) · R2", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.text) }, onClick = { menu = false; showSaves = true })
+                                    if (shots.isNotEmpty()) DropdownMenuItem(text = { Text("📷 Screenshots (${shots.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.text) }, onClick = { menu = false; showShots = true })
+                                } } }
+                            }
                         }
-                        // A long name scrolls rather than being cut.
-                        FitText(
+                        Text(
                             if (shown == null) androidx.compose.ui.text.AnnotatedString(p.suggestion.question)
                             else androidx.compose.ui.text.buildAnnotatedString {
                                 append(withOrangeTags(shown.name, c.orange))
                                 if (p.isEdited(shown)) withStyle(androidx.compose.ui.text.SpanStyle(color = EditedAmber)) { append("  ●") }
                             },
-                            TextStyle(fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = c.text), maxLines = 1,
+                            fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 2, lineHeight = 19.sp,
                         )
-                        shown?.let { FitText(it.controller.label, TextStyle(fontSize = 11.sp, color = c.textDim), maxLines = 1) }
-                    }
-                    PanelBtn(if (showList) "Done" else "Change", "Y", false, Modifier.then(if (showList) Modifier.border(2.dp, c.accent, RoundedCornerShape(50)) else Modifier)) { showList = !showList }
-                    PanelBtn("✎ Edit", "X", false, enabled = p.editTarget != null) { p.editing = true }
-                    val canReset = shown != null && p.isEdited(shown)
-                    val canDelete = shown != null && act.store.isMine(shown.id)
-                    if (canReset || canDelete || saves.isNotEmpty() || shots.isNotEmpty()) Box {
-                        GameChip("⋯", null) { menu = true }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) { PadKeysBox(onBack = { menu = false }) { Column {
-                            if (canReset) DropdownMenuItem(text = { Text("↺ Reset to default", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; confirmReset = shown })
-                            if (canDelete) DropdownMenuItem(text = { Text("🗑 Delete this preset", color = Color(0xFFF0866E), fontWeight = FontWeight.Bold) }, onClick = { menu = false; confirmDelete = shown })
-                            if (saves.isNotEmpty()) DropdownMenuItem(text = { HintText("↺ Saves (${saves.size}) · R2", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.text) }, onClick = { menu = false; showSaves = true })
-                            if (shots.isNotEmpty()) DropdownMenuItem(text = { Text("📷 Screenshots (${shots.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.text) }, onClick = { menu = false; showShots = true })
-                        } } }
+                        shown?.let { Text(it.controller.label, fontSize = 11.sp, color = c.textDim, maxLines = 2, lineHeight = 13.sp) }
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -1740,6 +1743,10 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
     androidx.activity.compose.BackHandler(enabled = showList && !companion) { showList = false }
     AppBottomBar(null, leading = {
         if (showList && !companion) HomeBarPill("Back") { showList = false } else HomeBarPill { act.screen = Screen.Home }
+    }, trailing = {
+        // This game's settings, on the right of the bar (L1 / R1); blue rim + ✓ when on.
+        if (canAutosave) GameChip((if (gameAutosave) "✓ " else "") + "Autosave", "L1", on = gameAutosave) { toggleGameAutosave() }
+        GameChip((if (p.rememberChoice) "✓ " else "") + "Remember", "R1", on = p.rememberChoice) { p.rememberChoice = !p.rememberChoice }
     })
     }
     confirmReset?.let { r -> ResetConfirm(r.name, wide = true, onKeep = { confirmReset = null }) { confirmReset = null; p.resetToDefault(r) } }
@@ -1774,16 +1781,16 @@ private fun screenChipLabel(sc: io.github.hiramrg.delphis.core.GameScreen.Choice
 
 /** A chip in the game page's top row: text, then the button that toggles it in small grey type ("L1"). */
 @Composable
-private fun GameChip(text: String, key: String?, on: Boolean = false, warn: Boolean = false, outline: Boolean = false, height: androidx.compose.ui.unit.Dp = 32.dp, onClick: () -> Unit) {
+private fun GameChip(text: String, key: String?, on: Boolean = false, warn: Boolean = false, outline: Boolean = false, height: androidx.compose.ui.unit.Dp = ControlSize.M, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = ChipShape
     Row(
-        Modifier.height(height).channel(shape, lit = on || outline)
+        modifier.height(height).channel(shape, lit = on || outline)
             .then(if (warn) Modifier.border(2.dp, c.orange, shape) else Modifier)
-            .clickable(onClick = onClick).padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .clickable(onClick = onClick).padding(start = 14.dp, end = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {
-        Text(text, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = if (warn) c.orange else c.text, maxLines = 1, onTextLayout = { TextFit.check(text, it) })
+        Text(text, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = if (warn) c.orange else c.text, maxLines = 1, onTextLayout = { TextFit.check(text, it) })
         if (key != null) KeyIcon(key)
     }
 }
@@ -1798,7 +1805,7 @@ private fun GameButton(icon: String, label: String, key: String, primary: Boolea
     val shape = ButtonShape
     val fg = if (primary) Color(0xFF0A2533) else c.text
     Row(
-        Modifier.fillMaxWidth().height(40.dp).alpha(if (enabled) 1f else 0.45f).focusRing(shape).channel(shape, primary)
+        Modifier.fillMaxWidth().height(if (primary) ControlSize.L else ControlSize.M).alpha(if (enabled) 1f else 0.45f).focusRing(shape).channel(shape, primary)
             .clickable(enabled = enabled, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
     ) {
@@ -1827,7 +1834,8 @@ class PresetGroups(choices: List<Preset>, alternatives: List<Preset>, mine: List
     val mine = mine.filter { m -> main.none { it.id == m.id } }
     val gyro = all.filter { it.kind() == 1 && it !in main }
     val trackpad = all.filter { it.kind() == 2 && it !in main }
-    val others = alternatives.filter { it.kind() == 0 && it !in main }
+    // The generic layout with the same name as this game's own version ("Sideways Wii Remote") isn't listed twice.
+    val others = alternatives.filter { o -> o.kind() == 0 && o !in main && (main + this.mine).none { it.name.equals(o.name, ignoreCase = true) } }
     /** The sections in order: key, title (null = "Suggested for <game>"), presets. */
     val sections get() = listOf(
         Triple("suggested", null, main),

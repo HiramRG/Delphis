@@ -699,7 +699,14 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         fun pic(t: Long) = SavePictures.nearest(pics, t)?.let { java.io.File(picDir, it) }
         val latest = files[DolphinConfigWriter.quickStatePath(gameId).last()]
         latest?.let { (uri, t, size) -> out += SaveEntry(SaveKind.LATEST, t, size, SaveSlots.QUICK, uri = uri, picture = pic(t)) }
-        val backups = autosaveBackups(gameId)
+        // An earlier autosave that's the same save as the latest one (or a newer earlier one) isn't a second save:
+        // loading the latest autosave used to leave such a copy. It's removed.
+        val seen = mutableSetOf<String>()
+        latest?.let { (uri, _, size) -> fingerprint(size) { resolver.openInputStream(uri) }?.let { seen += it } }
+        val backups = autosaveBackups(gameId).filter { b ->
+            val fp = fingerprint(b.size) { b.file.inputStream() } ?: return@filter true
+            if (seen.add(fp)) true else { CrashLog.event("removed a duplicate earlier autosave of $gameId"); b.file.delete(); false }
+        }
         backups.forEach { out += SaveEntry(SaveKind.EARLIER, it.savedAt, it.size, backup = it, picture = pic(it.savedAt)) }
         // Pictures of autosaves that are gone (only when the slot could be read, so a missing folder deletes nothing).
         if (latest != null) SavePictures.unused(pics, backups.map { it.savedAt } + latest.second).forEach { java.io.File(picDir, it).delete() }
@@ -726,6 +733,28 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             }
         }
         error("Dolphin kept writing its own save over it")
+    }
+
+    /** Size + checksums of the first and last 64 KB: equal for two copies of the same save. */
+    private fun fingerprint(size: Long, open: () -> java.io.InputStream?): String? = runCatching {
+        val chunk = 64 * 1024
+        open()?.use { input ->
+            val crc = java.util.zip.CRC32()
+            val buf = ByteArray(chunk)
+            var n = input.readNBytesCompat(buf)
+            crc.update(buf, 0, n)
+            val head = crc.value
+            val skip = size - chunk - n
+            if (skip > 0) { var left = skip; while (left > 0) { val s = input.skip(left); if (s <= 0) break; left -= s } }
+            crc.reset(); n = input.readNBytesCompat(buf); crc.update(buf, 0, n)
+            "$size:$head:${crc.value}"
+        }
+    }.getOrNull()
+
+    private fun java.io.InputStream.readNBytesCompat(buf: ByteArray): Int {
+        var total = 0
+        while (total < buf.size) { val r = read(buf, total, buf.size - total); if (r < 0) break; total += r }
+        return total
     }
 
     /** A save's picture as bytes (read before its file can move or be pruned). */

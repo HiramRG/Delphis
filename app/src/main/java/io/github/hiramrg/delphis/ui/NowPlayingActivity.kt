@@ -939,13 +939,14 @@ open class NowPlayingActivity : ComponentActivity() {
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     if (panelMode) KeyIcon("L1")
-                    Segmented(
-                        tabs.map { it to when (it) { 1 -> "🏆 Achievements"; 2 -> "▭ Picture"; 3 -> "↺ Saves"; else -> "🎮 Controls" } },
-                        tab, { selectTab(it) }, height = 28.dp,
+                    // Equal-width tabs, icon over name: they fit with any text size.
+                    IconTabs(
+                        tabs.map { when (it) { 1 -> Triple(it, "🏆", "Achievements"); 2 -> Triple(it, "▭", "Picture"); 3 -> Triple(it, "↺", "Saves"); else -> Triple(it, "🎮", "Controls") } },
+                        tab, { selectTab(it) }, Modifier.weight(1f),
                     )
                     if (panelMode) KeyIcon("R1")
-                    // 📷 (one screen): the menu steps aside first, so the picture is of the game.
-                    if (panelMode) { Spacer(Modifier.weight(1f)); CameraChip { takeScreenshot() } }
+                    // 📷 (one screen): a button beside the tabs, not a tab; the menu steps aside first, so the picture is of the game.
+                    if (panelMode) CameraChip { takeScreenshot() }
                 }
                 Spacer(Modifier.height(8.dp))
 

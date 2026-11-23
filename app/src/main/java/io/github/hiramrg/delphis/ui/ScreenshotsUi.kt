@@ -49,15 +49,18 @@ import androidx.compose.ui.window.DialogProperties
 import io.github.hiramrg.delphis.platform.Screenshots
 import kotlinx.coroutines.launch
 
-/** The camera button in the one-screen menu's tabs row: as tall as the tabs, drawn as an icon. */
+/** The camera button beside the one-screen menu's tabs: as tall as them, icon over "Photo", so it reads as a button. */
 @Composable
 fun CameraChip(onClick: () -> Unit) {
     val c = LocalWii.current
-    val shape = ChipShape
-    Box(
-        Modifier.width(44.dp).height(28.dp).focusRing(shape).channel(shape).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.PhotoCamera, "Screenshot", Modifier.size(16.dp), tint = c.text) }
+    val shape = RoundedCornerShape(14.dp)
+    androidx.compose.foundation.layout.Column(
+        Modifier.width(56.dp).height(44.dp).focusRing(shape).channel(shape).clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+    ) {
+        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.PhotoCamera, null, Modifier.size(16.dp), tint = c.text)
+        Text("Photo", fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, maxLines = 1, lineHeight = 12.sp)
+    }
 }
 
 /** The game's screenshots, newest first (re-read when [version] changes). */

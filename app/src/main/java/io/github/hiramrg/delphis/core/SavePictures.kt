@@ -5,11 +5,12 @@ import kotlin.math.abs
 /**
  * Pictures of saves: what was on the game's screen when a save was made, kept in Delphis' own storage as
  * `<save time ms>.jpg`. A picture belongs to the save made at (about) that time: Dolphin can touch the file a
- * moment after Delphis reads its time, so a few seconds either way still count.
+ * moment after Delphis reads its time, so a few seconds either way still count (not more: two saves a few
+ * seconds apart, like the one made before loading and the loaded one, must keep their own pictures).
  */
 object SavePictures {
     /** How far a picture's time may be from its save's. */
-    const val TOLERANCE_MS = 15_000L
+    const val TOLERANCE_MS = 4_000L
     /** Width the pictures are stored at (the lists show them small). */
     const val WIDTH = 384
 

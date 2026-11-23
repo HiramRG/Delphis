@@ -129,6 +129,31 @@ fun ToggleRow(title: String, sub: String?, on: Boolean, onChange: (Boolean) -> U
     SettingRow(title, sub, onClick = { onChange(!on) }) { ThemedToggle(on) }
 }
 
+/**
+ * Tabs that always fit: one track, every tab the same width, the icon over a small name ([options]: value, icon,
+ * name). The in-game menu's Controls / Achievements / Picture / Saves.
+ */
+@Composable
+fun <T> IconTabs(options: List<Triple<T, String, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier, height: Dp = 44.dp) {
+    val c = LocalWii.current
+    val track = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(11.dp)
+    Row(modifier.height(height).clip(track).background(if (c.dark) Color(0xFF15181C) else c.bar).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        options.forEach { (v, icon, label) ->
+            val on = v == selected
+            val fg = if (on) c.onAccent else c.textDim
+            Column(
+                Modifier.weight(1f).fillMaxHeight().rememberFocus("tab-$label").focusRing(shape, width = 2.5.dp).clip(shape)
+                    .background(if (on) c.accent else Color.Transparent).clickable { onSelect(v) },
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+            ) {
+                Text(icon, fontSize = 14.sp, color = fg, maxLines = 1, lineHeight = 15.sp)
+                Text(label, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1, lineHeight = 12.sp)
+            }
+        }
+    }
+}
+
 /** Segmented switch ("4:3 | 16:9", "Thor | List", "Slow | Normal | Fast"). */
 @Composable
 fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier, height: Dp = 30.dp) {
@@ -147,19 +172,25 @@ fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> 
     }
 }
 
-/** 40 dp button with its button icon: "Restore" + Ⓐ. [key] null = no icon. */
+/**
+ * Delphis' control sizes: L 48 dp (the main action: Play, Resume), M 40 dp (page chips, page buttons, the bar),
+ * S 34 dp (buttons inside a card). Every button is icon · words · button letter, in that order.
+ */
+object ControlSize { val L = 48.dp; val M = 40.dp; val S = 34.dp }
+
+/** A button with its button icon: "Restore" + Ⓐ. [key] null = no icon. M (40 dp), or S (34 dp) when [small]. */
 @Composable
-fun PanelBtn(label: String, key: String?, primary: Boolean, modifier: Modifier = Modifier, enabled: Boolean = true, warn: Boolean = false, onClick: () -> Unit) {
+fun PanelBtn(label: String, key: String?, primary: Boolean, modifier: Modifier = Modifier, enabled: Boolean = true, warn: Boolean = false, small: Boolean = false, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = ButtonShape
     Row(
-        modifier.height(40.dp).rememberFocus("btn-$label").focusRing(shape).channel(shape, primary)
-            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        modifier.height(if (small) ControlSize.S else ControlSize.M).rememberFocus("btn-$label").focusRing(shape).channel(shape, primary)
+            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = if (small) 12.dp else 16.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (small) 6.dp else 8.dp, Alignment.CenterHorizontally),
     ) {
         val fg = if (warn && !primary) c.orange.copy(alpha = if (enabled) 1f else 0.4f) else channelText(primary, enabled)
-        Text(label, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1, onTextLayout = { TextFit.check(label, it) })
-        if (key != null) KeyIcon(key, if (primary) fg.copy(alpha = 0.75f) else c.textDim)
+        Text(label, fontSize = if (small) 13.sp else 14.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1, onTextLayout = { TextFit.check(label, it) })
+        if (key != null) KeyIcon(key, if (primary) fg.copy(alpha = 0.75f) else c.textDim, if (small) 16.dp else 18.dp)
     }
 }
 
@@ -274,11 +305,13 @@ fun EmptyState(icon: String, title: String, sub: String, modifier: Modifier = Mo
  * [hints] uses the glyph form, e.g. "✚ Steps  Ⓐ Choose  Ⓑ Back".
  */
 @Composable
-fun AppBottomBar(hints: String?, modifier: Modifier = Modifier, leading: @Composable RowScope.() -> Unit = {}) {
+fun AppBottomBar(hints: String?, modifier: Modifier = Modifier, leading: @Composable RowScope.() -> Unit = {}, trailing: (@Composable RowScope.() -> Unit)? = null) {
     WiiBar(
         modifier = modifier,
         left = leading,
         right = {
+            // Things for this page on the right (the game page: Autosave, Remember), before the status icons.
+            trailing?.invoke(this)
             // Button hints only with a controller (touch: every action is on screen).
             if (hints != null && (!PadGlyphs.touch || !hasKeys(hints))) HintText(hints, Modifier.weight(1f, fill = false), fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.End)
             SystemStatusIcons(Modifier.padding(start = 10.dp))
