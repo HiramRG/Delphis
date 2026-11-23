@@ -57,14 +57,15 @@ import kotlin.math.min
 @Config(sdk = [34])
 class LayoutCheckTest {
 
-    private data class Size(val id: String, val label: String, val qualifiers: String, val oneScreen: Boolean, val labels: ButtonLabels?)
+    private data class Size(val id: String, val label: String, val qualifiers: String, val oneScreen: Boolean, val labels: ButtonLabels?, val fontScale: Float = 1f)
 
     private data class Problem(val size: String, val screen: String, val what: String, val shot: String)
 
     private val thor = Size("thor", "Thor top 700×393", "w700dp-h393dp-land-hdpi", false, ButtonLabels.NINTENDO)
     private val bottom = Size("bottom", "Thor bottom 451×393", "w451dp-h393dp-land-hdpi", false, ButtonLabels.NINTENDO)
     private val phone = Size("phone", "Phone 820×370", "w820dp-h370dp-land-hdpi", true, ButtonLabels.XBOX)
-    private val tablet = Size("tablet", "Tablet 1480×924", "w1480dp-h924dp-land-mdpi", true, null)
+    // Text at 130%: Android's larger font / display size (the Galaxy Tab report: cut chips and tabs).
+    private val tablet = Size("tablet", "Tablet 1480×924 · text 130%", "w1480dp-h924dp-land-mdpi", true, null, 1.3f)
     private val sizes = listOf(thor, bottom, phone, tablet)
 
     private val out = File("build/layout-check").apply { deleteRecursively(); mkdirs() }
@@ -379,7 +380,7 @@ class LayoutCheckTest {
 
     private fun withMain(size: Size, block: (MainActivity) -> Unit) {
         step("${size.id}: starting Delphis")
-        RuntimeEnvironment.setQualifiers(size.qualifiers)
+        RuntimeEnvironment.setQualifiers(size.qualifiers); RuntimeEnvironment.setFontScale(size.fontScale)
         val controller = try { Robolectric.buildActivity(MainActivity::class.java).setup() } catch (e: Throwable) {
             harness(size, "Delphis (main screen)", e); return
         }
@@ -402,7 +403,7 @@ class LayoutCheckTest {
 
     private fun withBottomCompanion(main: MainActivity, block: (Activity) -> Unit) {
         MenuCompanion.show(main) // remembers Delphis' Home (no second display here, so nothing starts)
-        RuntimeEnvironment.setQualifiers(bottom.qualifiers)
+        RuntimeEnvironment.setQualifiers(bottom.qualifiers); RuntimeEnvironment.setFontScale(1f)
         val controller = try { Robolectric.buildActivity(MenuCompanionActivity::class.java).setup() } catch (e: Throwable) {
             harness(bottom, "Bottom screen · Home", e); return
         }
@@ -414,7 +415,7 @@ class LayoutCheckTest {
 
     private fun inGameMenu(size: Size, cls: Class<out Activity>, s: GameSession, name: String) {
         step("${size.id}: starting $name")
-        RuntimeEnvironment.setQualifiers(size.qualifiers)
+        RuntimeEnvironment.setQualifiers(size.qualifiers); RuntimeEnvironment.setFontScale(size.fontScale)
         PadGlyphs.labels = size.labels
         val app = ApplicationProvider.getApplicationContext<android.app.Application>()
         val intent = s.writeTo(Intent(app, cls)).putExtra(InGameMenuActivity.EXTRA_OPEN, true)
