@@ -55,7 +55,7 @@ fun CameraChip(onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(14.dp)
     androidx.compose.foundation.layout.Column(
-        Modifier.width(56.dp).heightIn(min = if (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 480) 32.dp else 40.dp).focusRing(shape).channel(shape).clickable(onClick = onClick),
+        Modifier.width(56.dp).heightIn(min = if (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 480) 28.dp else 40.dp).focusRing(shape).channel(shape).clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
         androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.PhotoCamera, null, Modifier.size(16.dp), tint = c.text)

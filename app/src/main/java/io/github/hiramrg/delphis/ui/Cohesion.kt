@@ -143,7 +143,7 @@ fun <T> IconTabs(options: List<Triple<T, String, String>>, selected: T, onSelect
     // grows with Android's text size instead of cutting the names.
     val short = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 480
     Row(
-        modifier.heightIn(min = if (short) 32.dp else height).height(IntrinsicSize.Min).clip(track).background(if (c.dark) Color(0xFF15181C) else c.bar).padding(3.dp),
+        modifier.heightIn(min = if (short) 28.dp else height).height(IntrinsicSize.Min).clip(track).background(if (c.dark) Color(0xFF15181C) else c.bar).padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         options.forEach { (v, icon, label) ->
@@ -151,7 +151,7 @@ fun <T> IconTabs(options: List<Triple<T, String, String>>, selected: T, onSelect
             val fg = if (on) c.onAccent else c.textDim
             val cell = Modifier.weight(1f).fillMaxHeight().rememberFocus("tab-$label").focusRing(shape, width = 2.5.dp).clip(shape)
                 .background(if (on) c.accent else Color.Transparent).clickable { onSelect(v) }
-            if (short) Row(cell.padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally)) {
+            if (short) Row(cell.padding(horizontal = 6.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally)) {
                 Text(icon, fontSize = 13.sp, color = fg, maxLines = 1)
                 Text(label, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1)
             } else Column(cell.padding(vertical = 3.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {

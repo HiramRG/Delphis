@@ -245,7 +245,7 @@ private fun resTag(l: io.github.hiramrg.delphis.core.Resolution.Level, recommend
 /** The shortest an option row may be (name and its few words, one line each). */
 private val MIN_ROW = 32.dp
 /** The shortest a row may be with just the name. */
-private val MIN_ROW_BRIEF = 20.dp
+private val MIN_ROW_BRIEF = 19.dp
 
 /**
  * The Picture choices as a plain list (no pictures), the same on the game page, the one-screen menu and the
