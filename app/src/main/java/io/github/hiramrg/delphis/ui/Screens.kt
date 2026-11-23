@@ -1692,7 +1692,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                         shown?.let { PresetIcon(it, Modifier.size(60.dp, 44.dp)) }
                     }
                     Column(Modifier.weight(1f)) {
-                        Row(Modifier.fillMaxWidth().height(ControlSize.S), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(Modifier.fillMaxWidth().heightIn(min = ControlSize.S), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Box(Modifier.weight(1f)) {
                                 when {
                                     shown == null -> Text("CONTROLS", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp, maxLines = 1)

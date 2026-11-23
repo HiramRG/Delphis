@@ -134,7 +134,7 @@ fun ToggleRow(title: String, sub: String?, on: Boolean, onChange: (Boolean) -> U
  * name). The in-game menu's Controls / Achievements / Picture / Saves.
  */
 @Composable
-fun <T> IconTabs(options: List<Triple<T, String, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier, height: Dp = 44.dp) {
+fun <T> IconTabs(options: List<Triple<T, String, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier, height: Dp = 40.dp) {
     val c = LocalWii.current
     val track = RoundedCornerShape(14.dp)
     val shape = RoundedCornerShape(11.dp)
