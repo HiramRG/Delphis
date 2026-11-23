@@ -1696,7 +1696,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
                             Box(Modifier.weight(1f)) {
                                 when {
                                     shown == null -> Text("CONTROLS", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.textDim, letterSpacing = 1.sp, maxLines = 1)
-                                    p.browsing -> HintText(PadGlyphs.or("Ⓐ USE THESE CONTROLS", "TAP TO USE THESE CONTROLS"), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, letterSpacing = 1.sp, maxLines = 1)
+                                    p.browsing -> HintText(PadGlyphs.or("Ⓐ USE THESE CONTROLS", "TAP TO USE THESE CONTROLS"), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = c.accentText, letterSpacing = 1.sp)
                                     else -> SelectedControlsTitle(10.sp)
                                 }
                             }
