@@ -1785,7 +1785,7 @@ private fun GameChip(text: String, key: String?, on: Boolean = false, warn: Bool
     val c = LocalWii.current
     val shape = ChipShape
     Row(
-        modifier.height(height).channel(shape, lit = on || outline)
+        modifier.heightIn(min = height).channel(shape, lit = on || outline)
             .then(if (warn) Modifier.border(2.dp, c.orange, shape) else Modifier)
             .clickable(onClick = onClick).padding(start = 14.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),

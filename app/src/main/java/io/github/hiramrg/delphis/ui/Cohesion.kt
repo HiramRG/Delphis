@@ -138,17 +138,25 @@ fun <T> IconTabs(options: List<Triple<T, String, String>>, selected: T, onSelect
     val c = LocalWii.current
     val track = RoundedCornerShape(14.dp)
     val shape = RoundedCornerShape(11.dp)
-    Row(modifier.height(height).clip(track).background(if (c.dark) Color(0xFF15181C) else c.bar).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+    // Short screens (a phone, the Thor's bottom screen): icon beside the name, one line, so the tab's content
+    // keeps its room. Taller ones: icon over the name. Either way every tab is the same width, and the row
+    // grows with Android's text size instead of cutting the names.
+    val short = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 480
+    Row(
+        modifier.heightIn(min = if (short) 32.dp else height).height(IntrinsicSize.Min).clip(track).background(if (c.dark) Color(0xFF15181C) else c.bar).padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
         options.forEach { (v, icon, label) ->
             val on = v == selected
             val fg = if (on) c.onAccent else c.textDim
-            Column(
-                Modifier.weight(1f).fillMaxHeight().rememberFocus("tab-$label").focusRing(shape, width = 2.5.dp).clip(shape)
-                    .background(if (on) c.accent else Color.Transparent).clickable { onSelect(v) },
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-            ) {
-                Text(icon, fontSize = 14.sp, color = fg, maxLines = 1, lineHeight = 15.sp)
-                Text(label, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1, lineHeight = 12.sp)
+            val cell = Modifier.weight(1f).fillMaxHeight().rememberFocus("tab-$label").focusRing(shape, width = 2.5.dp).clip(shape)
+                .background(if (on) c.accent else Color.Transparent).clickable { onSelect(v) }
+            if (short) Row(cell.padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally)) {
+                Text(icon, fontSize = 13.sp, color = fg, maxLines = 1)
+                Text(label, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1)
+            } else Column(cell.padding(vertical = 3.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Text(icon, fontSize = 14.sp, color = fg, maxLines = 1)
+                Text(label, fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1)
             }
         }
     }
@@ -159,7 +167,7 @@ fun <T> IconTabs(options: List<Triple<T, String, String>>, selected: T, onSelect
 fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier, height: Dp = 30.dp) {
     val c = LocalWii.current
     val shape = RoundedCornerShape(50)
-    Row(modifier.height(height).clip(shape).background(if (c.dark) Color(0xFF15181C) else c.bar).padding(3.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.heightIn(min = height).height(IntrinsicSize.Min).clip(shape).background(if (c.dark) Color(0xFF15181C) else c.bar).padding(3.dp), verticalAlignment = Alignment.CenterVertically) {
         val group = options.joinToString("|") { it.second }
         options.forEach { (v, label) ->
             val on = v == selected
@@ -184,7 +192,7 @@ fun PanelBtn(label: String, key: String?, primary: Boolean, modifier: Modifier =
     val c = LocalWii.current
     val shape = ButtonShape
     Row(
-        modifier.height(if (small) ControlSize.S else ControlSize.M).rememberFocus("btn-$label").focusRing(shape).channel(shape, primary)
+        modifier.heightIn(min = if (small) ControlSize.S else ControlSize.M).rememberFocus("btn-$label").focusRing(shape).channel(shape, primary)
             .clickable(enabled = enabled, onClick = onClick).padding(horizontal = if (small) 12.dp else 16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (small) 6.dp else 8.dp, Alignment.CenterHorizontally),
     ) {
