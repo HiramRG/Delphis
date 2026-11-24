@@ -65,7 +65,7 @@ class LayoutCheckTest {
     private val bottom = Size("bottom", "Thor bottom 451×393", "w451dp-h393dp-land-hdpi", false, ButtonLabels.NINTENDO)
     private val phone = Size("phone", "Phone 820×370", "w820dp-h370dp-land-hdpi", true, ButtonLabels.XBOX)
     // Text at 130%: Android's larger font / display size (the Galaxy Tab report: cut chips and tabs).
-    private val tablet = Size("tablet", "Tablet 1480×924 · text 130%", "w1480dp-h924dp-land-mdpi", true, null, 1.3f)
+    private val tablet = Size("tablet", "Tablet 1480×924 · Android text 130% (Delphis 115%)", "w1480dp-h924dp-land-mdpi", true, null, 1.3f)
     private val sizes = listOf(thor, bottom, phone, tablet)
 
     private val out = File("build/layout-check").apply { deleteRecursively(); mkdirs() }

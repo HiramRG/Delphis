@@ -146,7 +146,7 @@ fun WiiTheme(dark: Boolean, content: @Composable () -> Unit) {
         outline = c.cardBorder,
     )
     val d = androidx.compose.ui.platform.LocalDensity.current
-    CompositionLocalProvider(LocalWii provides c, androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, d.fontScale * TEXT_SCALE)) {
+    CompositionLocalProvider(LocalWii provides c, androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, TextCap.capped(d.fontScale) * TEXT_SCALE)) {
         MaterialTheme(colorScheme = scheme) {
             Surface(Modifier.fillMaxSize().wiiStripes(c), color = Color.Transparent, contentColor = c.text, content = content)
         }

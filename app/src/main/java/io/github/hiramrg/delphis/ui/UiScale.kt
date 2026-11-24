@@ -64,11 +64,9 @@ fun ScaledDialog(
     val f = LocalUiScale.current
     Dialog(onDismissRequest, properties) {
         val body: @Composable () -> Unit = { if (translateKeys) PadKeysBox(onBack = onDismissRequest, content = content) else content() }
-        if (f == 1f) body()
-        else {
-            val d = LocalDensity.current
-            CompositionLocalProvider(LocalUiScale provides f, LocalDensity provides Density(d.density * f, d.fontScale), content = body)
-        }
+        // A dialog window starts again from Android's own sizes: put back the Interface size and the text cap.
+        val d = LocalDensity.current
+        CompositionLocalProvider(LocalUiScale provides f, LocalDensity provides Density(d.density * f, TextCap.capped(d.fontScale)), content = body)
     }
 }
 
@@ -107,4 +105,23 @@ fun PadKeysBox(onBack: () -> Unit, content: @Composable () -> Unit) {
         },
         propagateMinConstraints = true,
     ) { content() }
+}
+
+/**
+ * Delphis follows Android's text size up to [MAX] (115 %) and stops there: past that, the approved layouts
+ * would have to change shape (wrap, grow) to keep every word visible. Applied to each activity's context,
+ * so screens, dialogs, pop-ups and plain views all get it.
+ */
+object TextCap {
+    const val MAX = 1.15f
+
+    fun capped(fontScale: Float): Float = if (fontScale > MAX) MAX else fontScale
+
+    fun wrap(base: android.content.Context): android.content.Context {
+        val c = base.resources.configuration
+        if (c.fontScale <= MAX) return base
+        val n = android.content.res.Configuration(c)
+        n.fontScale = MAX
+        return base.createConfigurationContext(n)
+    }
 }

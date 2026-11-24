@@ -84,6 +84,8 @@ object MenuCompanion {
 }
 
 class MenuCompanionActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(TextCap.wrap(newBase))
+
     private var focusSink: View? = null
     private var lastBounce = 0L
 

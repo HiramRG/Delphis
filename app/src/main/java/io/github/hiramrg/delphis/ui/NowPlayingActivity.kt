@@ -88,6 +88,8 @@ import io.github.hiramrg.delphis.core.BottomScreen
 private val EDGE_MIN = 28.dp
 
 open class NowPlayingActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(TextCap.wrap(newBase))
+
     companion object {
         /** Set when the game came back from the background and this screen is shown again. */
         const val EXTRA_RESUMED = "delphis.resumed"

@@ -54,6 +54,8 @@ sealed interface Screen {
 }
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(TextCap.wrap(newBase))
+
     lateinit var prefs: Prefs
     lateinit var bridge: DolphinBridge
     lateinit var library: GameLibrary
