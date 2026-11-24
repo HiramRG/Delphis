@@ -1784,25 +1784,24 @@ private fun screenChipLabel(sc: io.github.hiramrg.delphis.core.GameScreen.Choice
 private fun GameChip(text: String, key: String?, short: String? = null, on: Boolean = false, warn: Boolean = false, outline: Boolean = false, height: androidx.compose.ui.unit.Dp = ControlSize.M, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = ChipShape
-    val style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
-    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
-        // [short] replaces the words when the whole chip wouldn't fit (never cut).
-        val measurer = androidx.compose.ui.text.rememberTextMeasurer()
-        val dens = androidx.compose.ui.platform.LocalDensity.current
-        val shown = if (short == null || constraints.maxWidth == androidx.compose.ui.unit.Constraints.Infinity) text else {
-            val need = measurer.measure(text, style, maxLines = 1).size.width + with(dens) { (14.dp + 10.dp + if (key != null) 8.dp + 26.dp else 0.dp).roundToPx() }
-            if (need > constraints.maxWidth) short else text
-        }
+    val chip: @Composable (String) -> Unit = { label ->
         Row(
-            Modifier.then(if (constraints.hasBoundedWidth && constraints.minWidth == constraints.maxWidth) Modifier.fillMaxWidth() else Modifier)
-                .heightIn(min = height).channel(shape, lit = on || outline)
+            Modifier.heightIn(min = height).channel(shape, lit = on || outline)
                 .then(if (warn) Modifier.border(2.dp, c.orange, shape) else Modifier)
                 .clickable(onClick = onClick).padding(start = 14.dp, end = 10.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         ) {
-            Text(shown, style = style, color = if (warn) c.orange else c.text, maxLines = 1, onTextLayout = { TextFit.check(shown, it) })
+            Text(label, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = if (warn) c.orange else c.text, maxLines = 1, onTextLayout = { TextFit.check(label, it) })
             if (key != null) KeyIcon(key)
         }
+    }
+    if (short == null) { Box(modifier, propagateMinConstraints = true) { chip(text) }; return }
+    // [short] replaces the words when the whole chip wouldn't fit (never cut).
+    androidx.compose.ui.layout.Layout(contents = listOf({ chip(text) }, { chip(short) }), modifier = modifier) { (full, brief), cons ->
+        val f = full.first()
+        val use = if (!cons.hasBoundedWidth || f.maxIntrinsicWidth(cons.maxHeight.coerceAtMost(10_000)) <= cons.maxWidth) f else brief.first()
+        val p = use.measure(cons)
+        layout(p.width, p.height) { p.place(0, 0) }
     }
 }
 
