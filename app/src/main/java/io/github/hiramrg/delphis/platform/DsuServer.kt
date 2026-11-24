@@ -33,6 +33,7 @@ object DsuServer {
     private var x = 0f
     private var y = 0f
     private var faceButtons = 0
+    private var saveButtons = 0
 
     @Volatile var requests = 0; private set
     @Volatile var packetsSent = 0; private set
@@ -87,7 +88,7 @@ object DsuServer {
         val s = socket ?: return
         val to = client ?: return
         if (SystemClock.uptimeMillis() - lastRequestAt > 5000) return // Dolphin isn't listening
-        for ((id, tx, ty) in list) send(s, to, Dsu.padData(serverId, ++counter, id, tx, ty, faceButtons))
+        for ((id, tx, ty) in list) send(s, to, Dsu.padData(serverId, ++counter, id, tx, ty, faceButtons, saveButtons))
     }
 
     private fun send(s: DatagramSocket, to: SocketAddress, bytes: ByteArray) {
@@ -132,6 +133,18 @@ object DsuServer {
     /** Lets go of every touch button (leaving the trackpad). */
     fun releaseTouchButtons() {
         sender.post { if (faceButtons != 0) { faceButtons = 0; sendTouches(listOf(encoder.current())) } }
+    }
+
+    /** Dolphin is reading Delphis' pad right now (it asks every second while a game runs). */
+    val listening: Boolean get() = running && lastRequestAt != 0L && SystemClock.uptimeMillis() - lastRequestAt < 5000
+
+    /** Holds [Dsu.SAVE_BUTTON] or [Dsu.LOAD_BUTTON] for [holdMs], then lets go. False when Dolphin isn't listening. */
+    fun press(button: Int, holdMs: Long = 300): Boolean {
+        ensureStarted()
+        if (!listening) return false
+        sender.post { saveButtons = saveButtons or button; sendTouches(listOf(encoder.current())) }
+        sender.postDelayed({ saveButtons = saveButtons and button.inv(); sendTouches(listOf(encoder.current())) }, holdMs)
+        return true
     }
 
     fun status(): String =

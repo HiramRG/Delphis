@@ -168,7 +168,13 @@ internal fun buildReport(act: MainActivity): String = buildString {
     }
     appendLine("gyro aiming: left/right=${prefs.gyroHorizontal.name} speed=${prefs.gyroSensitivity}")
     appendLine("close-games helper: " + (if (io.github.hiramrg.delphis.platform.DolphinExitService.isEnabled(act)) "on" else "off"))
-    appendLine("automatic saves: when the screen turns off=${prefs.saveOnSleep}, every=${if (prefs.timedSaveMinutes > 0) "${prefs.timedSaveMinutes} min" else "off"}, low battery=${if (prefs.lowBatteryLevel > 0) "${prefs.lowBatteryLevel}%" else "off"}")
+    appendLine("automatic saves: when the screen turns off=${prefs.saveOnSleep}, low battery=${if (prefs.lowBatteryLevel > 0) "${prefs.lowBatteryLevel}%" else "off"} (timed saves removed)")
+    val dolphinCode = act.bridge.dolphinVersion()
+    appendLine(
+        "background saves (Dolphin's save button, Config/Hotkeys.ini): " + when (prefs.silentSaves(dolphinCode)) {
+            true -> "work with this Dolphin"; false -> "don't work with this Dolphin (needs Android hotkeys)"; null -> "not tried yet with this Dolphin"
+        } + " · Dolphin version code $dolphinCode · pad ${if (io.github.hiramrg.delphis.platform.DsuServer.listening) "being read" else "not being read"}",
+    )
     val sleepLog = prefs.sleepSaveLog
     appendLine("save when the screen turns off (test): " + if (sleepLog.isEmpty()) "not tried yet (close the device or press power during a game)" else "${sleepLog.count { it.contains("· SAVED ") }} of ${sleepLog.size} tries saved (newest first)")
     sleepLog.forEach { appendLine("  $it") }

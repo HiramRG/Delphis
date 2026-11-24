@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -59,33 +60,60 @@ fun SavesSettings(act: MainActivity) {
     val c = LocalWii.current
     val prefs = act.prefs
     var sleep by remember { mutableStateOf(prefs.saveOnSleep) }
-    var every by remember { mutableStateOf(prefs.timedSaveMinutes) }
-    var toast by remember { mutableStateOf(prefs.timedSaveToast) }
     var battery by remember { mutableStateOf(prefs.lowBatteryLevel) }
-    CapsLabel("Automatic saves")
+    // Whether this Dolphin saves with Delphis' hidden save button (true / false / not tried yet).
+    val quiet = remember(act.setupVersion) { act.bridge.silentSaves() }
+    val can = quiet != false
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f)) { CapsLabel("Automatic saves while you play") }
+        when (quiet) {
+            true -> StatusPill("✓ Saves in the background", c.green)
+            false -> StatusPill("! Needs a newer Dolphin", c.orange)
+            null -> {}
+        }
+    }
     GroupCard {
-        ToggleRow(
-            "Save when $deviceWord sleeps",
-            "Closing it or pressing power during a game saves first. Still being tested: Diagnostics shows whether it worked each time.", sleep,
-        ) { sleep = it; prefs.saveOnSleep = it }
-        RowDivider()
-        ChoiceRow(
-            "Also save every", "While you play, without leaving the game (it pauses for about a second). Covers a battery that runs out, a crash or a sleep that came too fast.",
-            listOf(0 to "Off", 10 to "10 min", 20 to "20 min", 30 to "30 min"), every,
-        ) { every = it; prefs.timedSaveMinutes = it }
-        if (every > 0) {
-            RowDivider()
-            ToggleRow("Show a pop-up for timed saves", "A small \"Saved\" at the top of the game for 2 seconds.", toast) { toast = it; prefs.timedSaveToast = it }
+        Box(Modifier.alpha(if (can) 1f else 0.45f)) {
+            ToggleRow("Save when $deviceWord sleeps", "Closing it or pressing power during a game saves first. Diagnostics shows whether it worked each time.", sleep && can) {
+                if (can) { sleep = it; prefs.saveOnSleep = it }
+            }
         }
         RowDivider()
-        ChoiceRow(
-            "Save when the battery gets low", "Once per charge, when the battery reaches this level and isn't charging.",
-            listOf(0 to "Off", 15 to "15%", 10 to "10%", 5 to "5%"), battery,
-        ) { battery = it; prefs.lowBatteryLevel = it }
+        Box(Modifier.alpha(if (can) 1f else 0.45f)) {
+            ChoiceRow(
+                "Save when the battery gets low", "Once per charge, when the battery reaches this level and isn't charging.",
+                listOf(0 to "Off", 15 to "15%", 10 to "10%", 5 to "5%"), if (can) battery else 0,
+            ) { if (can) { battery = it; prefs.lowBatteryLevel = it } }
+        }
+        RowDivider()
+        Text(
+            when (quiet) {
+                true -> "Dolphin saves on its own: the game keeps running and nothing opens on screen."
+                false -> "This Dolphin can only save through its menu, which would interrupt the game. Update Dolphin to a development build from November 2026 or newer (or the next release) to turn these on."
+                null -> "These save in the background with Dolphin's own save button, so the game is never interrupted. It needs a Dolphin development build from November 2026 or newer: Delphis checks the first time you save during a game."
+            },
+            fontSize = 12.sp, lineHeight = 15.sp, color = when (quiet) { true -> c.green; false -> c.orange; null -> c.textDim },
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+        )
+    }
+    CapsLabel("Always")
+    GroupCard {
+        SettingRow("When you open Delphis' menu, load a save or quit", "The game is already paused then, so nothing is interrupted. Games with autosave turned off on their page are skipped.") {
+            StatusPill("✓ On", c.green)
+        }
     }
     Text(
-        "These are autosaves like the one when you quit: Delphis keeps the 3 newest earlier ones, and kept saves are never touched. Games with autosave turned off on their page are skipped.",
+        "These are autosaves like the one when you quit: Delphis keeps the 3 newest earlier ones, and kept saves are never touched.",
         fontSize = 12.sp, color = c.textDim, lineHeight = 15.sp, modifier = Modifier.padding(horizontal = 6.dp),
+    )
+}
+
+/** A small rounded status tag (green ✓ / orange !). */
+@Composable
+private fun StatusPill(text: String, color: androidx.compose.ui.graphics.Color) {
+    Text(
+        text, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = color, maxLines = 1,
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.14f)).padding(horizontal = 9.dp, vertical = 3.dp),
     )
 }
 

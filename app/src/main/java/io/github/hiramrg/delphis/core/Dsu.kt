@@ -22,6 +22,16 @@ object Dsu {
     const val TOUCH_X_MAX = 1000 // Dolphin's TOUCH_X_AXIS_MAX
     const val TOUCH_Y_MAX = 500 // Dolphin's TOUCH_Y_AXIS_MAX
 
+    /**
+     * Delphis' hidden save / load buttons: Dolphin's hotkeys "Save State Slot 9" / "Load State Slot 9" are put on
+     * PS / Share of Delphis' pad (Config/Hotkeys.ini), so pressing them saves or loads the Quick Save slot without
+     * opening anything. Only Dolphin builds with Android hotkeys (development builds from Oct 31 2026) react.
+     */
+    const val SAVE_BUTTON = 2
+    const val LOAD_BUTTON = 1
+    const val SAVE_INPUT = "PS"
+    const val LOAD_INPUT = "Share"
+
     const val VERSION = 1001
     const val TYPE_VERSION = 0x100000
     const val TYPE_PORTS = 0x100001
@@ -99,8 +109,9 @@ object Dsu {
     /**
      * Pad 0's state: sticks centred, touch 1 down at ([touchX], [touchY]) with id [touchId]. Bit i of
      * [faceButtons] presses face button i (Square, Cross, Circle, Triangle; the trackpad's touch buttons).
+     * [saveButtons]: [SAVE_BUTTON] holds PS, [LOAD_BUTTON] holds Share (Dolphin's save / load hotkeys).
      */
-    fun padData(serverId: Int, counter: Int, touchId: Int, touchX: Int, touchY: Int, faceButtons: Int = 0): ByteArray = message(100, TYPE_PAD_DATA, serverId) {
+    fun padData(serverId: Int, counter: Int, touchId: Int, touchX: Int, touchY: Int, faceButtons: Int = 0, saveButtons: Int = 0): ByteArray = message(100, TYPE_PAD_DATA, serverId) {
         put(0); put(2); put(3); put(1) // pad 0, connected, generic, USB
         put(ByteArray(6) { if (it == 5) 1 else 0 })
         put(5) // battery full
@@ -109,7 +120,10 @@ object Dsu {
         // Digital face bits (states2: Triangle 0x10, Circle 0x20, Cross 0x40, Square 0x80), PS, touch button.
         val digital = (if (faceButtons and 1 != 0) 0x80 else 0) or (if (faceButtons and 2 != 0) 0x40 else 0) or
             (if (faceButtons and 4 != 0) 0x20 else 0) or (if (faceButtons and 8 != 0) 0x10 else 0)
-        put(0); put(digital.toByte()); put(0); put(0)
+        put((if (saveButtons and LOAD_BUTTON != 0) 0x01 else 0).toByte()) // states1: Share
+        put(digital.toByte())
+        put((if (saveButtons and SAVE_BUTTON != 0) 1 else 0).toByte()) // PS
+        put(0) // touch button
         put(128.toByte()); put(128.toByte()); put(128.toByte()); put(128.toByte()) // sticks centred
         repeat(4) { put(0) } // analog d-pad
         for (i in 0 until 4) put((if (faceButtons and (1 shl i) != 0) 255 else 0).toByte()) // Square, Cross, Circle, Triangle (what Dolphin reads)

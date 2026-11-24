@@ -5,14 +5,14 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 62
+    const val RELEASE = 63
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("A tidier game page.", "Buttons and chips now share one set of sizes. Autosave and Remember moved to the bottom bar, and Saves and Play line up under the cover."),
-        Item("Nothing cut with big text.", "Delphis follows Android's text size up to 115%, so every button and label stays whole on phones and tablets.", fix = true),
-        Item("No more duplicate saves.", "The same save no longer shows twice, and the duplicate Sideways Wii Remote preset is gone.", fix = true),
+        Item("Saves that don't interrupt.", "With a Dolphin development build from November 2026 or newer, Delphis saves through Dolphin's own save button: the game keeps running and nothing opens. Settings → Saves shows whether your Dolphin can."),
+        Item("Timed saves are off for now.", "They had to open Dolphin's menu in the middle of a game. Saves when you open the menu, load or quit work as before.", fix = true),
+        Item("Each save shows once.", "A save you load keeps its real time and is no longer listed twice.", fix = true),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

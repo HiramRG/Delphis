@@ -247,6 +247,18 @@ object DolphinConfigWriter {
 
     val DSU_CLIENT_INI = listOf("Config", "DSUClient.ini")
 
+    val HOTKEYS_INI = listOf("Config", "Hotkeys.ini")
+    const val SAVE_HOTKEY = "Save State/Save State Slot 9"
+    const val LOAD_HOTKEY = "Load State/Load State Slot 9"
+
+    /**
+     * Config/Hotkeys.ini with Dolphin's "Save State Slot 9" / "Load State Slot 9" on Delphis' hidden pad buttons
+     * (the Quick Save slot), keeping every other hotkey. Older Dolphins ignore the file on Android.
+     */
+    fun hotkeysIni(existing: String): String = IniEditor(existing).apply {
+        set("Hotkeys", mapOf(SAVE_HOTKEY to "`${Dsu.DEVICE}:${Dsu.SAVE_INPUT}`", LOAD_HOTKEY to "`${Dsu.DEVICE}:${Dsu.LOAD_INPUT}`"))
+    }.toString()
+
     /** Dolphin's Quick Save/Load slot: NativeLibrary.SaveState(9) → StateSaves/<GAMEID>.s09. */
     fun quickStatePath(gameId: String) = listOf("StateSaves", "$gameId.s09")
 

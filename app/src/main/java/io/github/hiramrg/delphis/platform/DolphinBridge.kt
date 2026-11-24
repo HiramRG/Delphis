@@ -77,6 +77,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             val existing = readText(tree, iniPath) ?: ""
             writeText(tree, iniPath, DolphinConfigWriter.mergeGameIni(existing, preset))
             if (preset.isTrackpad) ensureTrackpadOverlay(tree)
+            ensureSaveButtons(tree)
             prefs.lastApplied = "$gameId|${preset.id}"
             ApplyResult.Ok
         } catch (e: Exception) {
@@ -185,6 +186,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             val existing = readText(tree, path) ?: ""
             writeText(tree, path, DolphinConfigWriter.mergeGlobalConfig(existing, preset, controller))
             if (preset.isTrackpad) ensureTrackpadOverlay(tree)
+            ensureSaveButtons(tree)
             prefs.lastApplied = "|${preset.id}"
             ApplyResult.Ok
         } catch (e: Exception) {
@@ -359,14 +361,17 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
      * (Android then ends it) before the game starts, whether or not a game was running.
      */
     private suspend fun restartForTouchSetting() {
-        val want = overlayWanted ?: return
-        if (android.os.Build.VERSION.SDK_INT < 34 || prefs.overlayInDolphin == want) return
+        val want = overlayWanted
+        if (android.os.Build.VERSION.SDK_INT < 34) { prefs.dolphinRestartNeeded = false; return }
+        val forButtons = prefs.dolphinRestartNeeded
+        if ((want == null || prefs.overlayInDolphin == want) && !forButtons) return
         val pkg = installedPackage() ?: return
         val label = runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault("Dolphin")
         val closed = runCatching { DolphinExitService.dismissFromRecents(label) }.getOrDefault(false)
-        CrashLog.event("Dolphin restarted for touch controls ${if (want) "on" else "off"}: ${if (closed) "closed from Recent apps" else "no Recent apps card (not running?)"}")
+        CrashLog.event("Dolphin restarted for ${if (forButtons) "the save buttons" else "touch controls ${if (want == true) "on" else "off"}"}: ${if (closed) "closed from Recent apps" else "no Recent apps card (not running?)"}")
         // Not found usually means Dolphin isn't running, so it reads the new setting when it starts.
-        prefs.overlayInDolphin = want
+        if (want != null) prefs.overlayInDolphin = want
+        prefs.dolphinRestartNeeded = false
         kotlinx.coroutines.delay(if (closed) 900 else 200)
     }
 
@@ -415,6 +420,33 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             if (changed) CrashLog.event("trackpad: Dolphin set up to read Delphis' trackpad (DSU server 127.0.0.1:${io.github.hiramrg.delphis.core.Dsu.PORT})")
         }.onFailure { CrashLog.event("trackpad: couldn't set up Dolphin for the trackpad: ${it.message}") }
     }
+
+    /**
+     * Delphis' hidden save / load buttons: Delphis' pad in Dolphin's DSU servers and Dolphin's "Save / Load State
+     * Slot 9" hotkeys on it (Config/Hotkeys.ini). Dolphin reads both when it starts. Older Dolphins ignore them.
+     */
+    private fun ensureSaveButtons(tree: Uri) {
+        DsuServer.ensureStarted()
+        runCatching {
+            var changed = false
+            val dsu = readText(tree, DolphinConfigWriter.DSU_CLIENT_INI) ?: ""
+            DolphinConfigWriter.dsuClientIni(dsu).let { if (it != dsu) { writeText(tree, DolphinConfigWriter.DSU_CLIENT_INI, it); changed = true } }
+            val hk = readText(tree, DolphinConfigWriter.HOTKEYS_INI) ?: ""
+            DolphinConfigWriter.hotkeysIni(hk).let { if (it != hk) { writeText(tree, DolphinConfigWriter.HOTKEYS_INI, it); changed = true } }
+            prefs.trackpadServerSetUp = true // keeps the pad server running from app start
+            if (changed) { prefs.dolphinRestartNeeded = true; CrashLog.event("save buttons: Dolphin's save / load hotkeys put on Delphis' pad") }
+        }.onFailure { CrashLog.event("save buttons: couldn't set up Dolphin's hotkeys: ${it.message}") }
+    }
+
+    /** Dolphin's version code (the hidden save button's result is remembered per version). */
+    fun dolphinVersion(): Long = runCatching {
+        val pkg = installedPackage() ?: return 0L
+        val info = context.packageManager.getPackageInfo(pkg, 0)
+        if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
+    }.getOrDefault(0L)
+
+    /** Whether this Dolphin saves with the hidden button: true / false / null (not tried yet). */
+    fun silentSaves(): Boolean? = prefs.silentSaves(dolphinVersion())
 
     /** Config/DSUClient.ini, for Diagnostics. */
     fun dsuClientSettings(): String? {
@@ -534,7 +566,18 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
     }
 
     /** When the game's Quick Save state was last written, or null if there is none. */
-    fun quickStateTime(gameId: String): Long? {
+    /**
+     * When the latest autosave was made. A save Delphis put into the slot (loading one, restoring one) keeps its own
+     * time, not the moment it was written there. For "did the file change" checks use [quickStateModified].
+     */
+    fun quickStateTime(gameId: String): Long? = quickStateModified(gameId)?.let { savedTime(gameId, it) }
+
+    /** [mtime] of the Quick Save slot → the save's own time (see [quickStateTime]). */
+    private fun savedTime(gameId: String, mtime: Long): Long =
+        prefs.slotOrigin(gameId)?.takeIf { kotlin.math.abs(it.first - mtime) < 1000 }?.second ?: mtime
+
+    /** The Quick Save slot file's last-modified time. */
+    fun quickStateModified(gameId: String): Long? {
         val tree = prefs.dolphinTreeUri ?: return null
         return runCatching {
             val uri = resolve(tree, DolphinConfigWriter.quickStatePath(gameId), create = false) ?: return null
@@ -547,7 +590,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
     fun hasAutosave(gameId: String?): Boolean = gameId != null && quickStateTime(gameId) != null
 
     private suspend fun stateTime(gameId: String): Long? =
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { quickStateTime(gameId) }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { quickStateModified(gameId) }
 
     /** (time, size) of the game's Quick Save file. */
     private suspend fun stateInfo(gameId: String): Pair<Long, Long>? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -615,6 +658,37 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             else -> Unit
         }
         return false
+    }
+
+    /**
+     * Saves with Delphis' hidden save button (Dolphin's "Save State Slot 9" hotkey): Dolphin saves in the background
+     * and nothing opens on screen. True: saved. False: the button didn't save (an older Dolphin, or Dolphin wasn't
+     * reading input). Null: not tried (this Dolphin is known not to, or Dolphin isn't reading Delphis' pad).
+     * [inFront]: the game was on screen, so a miss counts towards "this Dolphin can't".
+     */
+    private suspend fun silentSave(gameId: String, picture: android.graphics.Bitmap?, inFront: Boolean): Boolean? {
+        val version = dolphinVersion()
+        if (prefs.silentSaves(version) == false) return null
+        if (!DsuServer.listening) { lastSaveNote = "Dolphin isn't reading Delphis' save button"; return null }
+        waitUntilWritten(gameId, 6_000)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { backupCurrentAutosave(gameId) }
+        val before = stateInfo(gameId)
+        if (!DsuServer.press(io.github.hiramrg.delphis.core.Dsu.SAVE_BUTTON)) return null
+        val started = kotlinx.coroutines.withTimeoutOrNull(4_000) {
+            while (stateInfo(gameId) == before) kotlinx.coroutines.delay(250)
+        } != null
+        if (!started) {
+            if (inFront) prefs.silentSaveTried(version, false)
+            lastSaveNote = "Dolphin's save button didn't save" + if (inFront) "" else " (game not in front)"
+            CrashLog.event("silent save of $gameId: nothing written" + if (inFront) "" else " (game wasn't in front)")
+            return false
+        }
+        prefs.silentSaveTried(version, true)
+        if (!waitUntilWritten(gameId, 20_000)) CrashLog.event("silent save of $gameId: still changing after 20 s")
+        CrashLog.event("autosaved $gameId (in the background)")
+        lastSaveNote = "saved in the background" + (if (picture == null) " (no picture)" else "")
+        if (picture != null) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { quickStateTime(gameId)?.let { storePicture(gameId, it, picture) } }
+        return true
     }
 
     /** After launching: loads the game's Quick Save state once it has booted. */
@@ -698,7 +772,8 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         val pics = picDir.list()?.toList().orEmpty()
         fun pic(t: Long) = SavePictures.nearest(pics, t)?.let { java.io.File(picDir, it) }
         val latest = files[DolphinConfigWriter.quickStatePath(gameId).last()]
-        latest?.let { (uri, t, size) -> out += SaveEntry(SaveKind.LATEST, t, size, SaveSlots.QUICK, uri = uri, picture = pic(t)) }
+        val latestAt = latest?.let { savedTime(gameId, it.second) }
+        latest?.let { (uri, _, size) -> out += SaveEntry(SaveKind.LATEST, latestAt!!, size, SaveSlots.QUICK, uri = uri, picture = pic(latestAt)) }
         // An earlier autosave that's the same save as the latest one (or a newer earlier one) isn't a second save:
         // loading the latest autosave used to leave such a copy. It's removed.
         val seen = mutableSetOf<String>()
@@ -709,7 +784,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         }
         backups.forEach { out += SaveEntry(SaveKind.EARLIER, it.savedAt, it.size, backup = it, picture = pic(it.savedAt)) }
         // Pictures of autosaves that are gone (only when the slot could be read, so a missing folder deletes nothing).
-        if (latest != null) SavePictures.unused(pics, backups.map { it.savedAt } + latest.second).forEach { java.io.File(picDir, it).delete() }
+        if (latest != null) SavePictures.unused(pics, backups.map { it.savedAt } + latestAt!!).forEach { java.io.File(picDir, it).delete() }
         SaveSlots.ownSlots(files.keys, gameId).forEach { (slot, name) ->
             val (uri, t, size) = files.getValue(name)
             out += SaveEntry(SaveKind.SLOT, t, size, slot, uri = uri)
@@ -717,8 +792,11 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         return out
     }
 
-    /** Writes [file] into the game's Quick Save slot; [picture] (the save's, as JPEG bytes) goes with it. */
-    private fun writeQuickSlot(gameId: String, file: java.io.File, picture: ByteArray? = null) {
+    /**
+     * Writes [file] into the game's Quick Save slot; [picture] (the save's, as JPEG bytes) goes with it. [savedAt]:
+     * the save's own time, which it keeps in the Saves list (null = it's a new save, now).
+     */
+    private fun writeQuickSlot(gameId: String, file: java.io.File, picture: ByteArray? = null, savedAt: Long? = null) {
         val tree = prefs.dolphinTreeUri ?: error("no Dolphin folder")
         val uri = resolve(tree, DolphinConfigWriter.quickStatePath(gameId), create = true) ?: error("couldn't open the save slot")
         // Written twice if needed: a save Dolphin was still finishing could land on top of it.
@@ -728,6 +806,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             val size = latestAutosave(gameId)?.third
             if (size == file.length()) {
                 if (attempt > 0) CrashLog.event("save slot of $gameId: Dolphin was still writing, wrote it again")
+                prefs.setSlotOrigin(gameId, quickStateModified(gameId), savedAt)
                 if (picture != null) quickStateTime(gameId)?.let { writePicture(gameId, it, picture) }
                 return
             }
@@ -770,7 +849,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         SaveKind.SLOT, SaveKind.KEPT -> runCatching {
             val picture = pictureBytes(entry)
             val staged = stage(gameId, entry)
-            try { backupCurrentAutosave(gameId); writeQuickSlot(gameId, staged, picture) } finally { staged.delete() }
+            try { backupCurrentAutosave(gameId); writeQuickSlot(gameId, staged, picture, entry.savedAt) } finally { staged.delete() }
             CrashLog.event("${if (entry.kind == SaveKind.KEPT) "kept save" else "Dolphin slot ${entry.slot}"} of $gameId put in the Quick Save slot")
             true
         }.getOrElse { CrashLog.event("couldn't use ${if (entry.kind == SaveKind.KEPT) "a kept save" else "slot ${entry.slot}"} of $gameId: ${it.message}"); false }
@@ -804,9 +883,11 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         val staged = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             runCatching { stage(gameId, entry) }.getOrElse { CrashLog.event("load save of $gameId: ${it.message}"); null }
         } ?: return false
+        val inFront = DolphinExitService.gameInFront()
         try {
-            autoSave(pkg, gameId)
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { backupCurrentAutosave(gameId); writeQuickSlot(gameId, staged, picture) }
+            val savedQuietly = inFront && silentSave(gameId, DolphinExitService.gamePicture(), true) == true
+            if (!savedQuietly) autoSave(pkg, gameId)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { backupCurrentAutosave(gameId); writeQuickSlot(gameId, staged, picture, entry.savedAt) }
         } catch (e: Exception) {
             CrashLog.event("load save of $gameId: ${e.message}")
             if (entry.kind == SaveKind.EARLIER) entry.backup?.file?.let { staged.renameTo(it) } // nothing is lost
@@ -815,20 +896,31 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             if (staged.exists() && entry.kind != SaveKind.EARLIER) staged.delete()
         }
         staged.delete()
-        val result = DolphinExitService.quickLoad(pkg, bootMs = 0)
+        // Dolphin's own load button when this Dolphin is known to have it and the game is on screen: no menu.
+        val quiet = inFront && silentSaves() == true && DolphinExitService.gameInFront() &&
+            DsuServer.press(io.github.hiramrg.delphis.core.Dsu.LOAD_BUTTON)
+        if (quiet) kotlinx.coroutines.delay(1_200)
+        val result = if (quiet) DolphinExitService.StateResult.DONE else DolphinExitService.quickLoad(pkg, bootMs = 0)
         val what = when (entry.kind) { SaveKind.KEPT -> "kept save"; SaveKind.LATEST -> "latest autosave"; SaveKind.EARLIER -> "earlier autosave"; SaveKind.SLOT -> "Dolphin slot ${entry.slot}" }
-        CrashLog.event("load $what of $gameId in game: ${result ?: "helper not running"}")
+        CrashLog.event("load $what of $gameId in game${if (quiet) " (Dolphin's load button)" else ""}: ${result ?: "helper not running"}")
         return result == DolphinExitService.StateResult.DONE
     }
 
     /**
-     * In game: "Save now" (or the quick save buttons), a fresh autosave without leaving the game; Dolphin's menu
-     * is closed again afterwards. [shot]: the picture, if it was already taken. Needs the helper.
+     * In game: "Save now" (or the quick save buttons), a fresh autosave without leaving the game. With a Dolphin that
+     * has hotkeys it saves in the background; otherwise Dolphin's menu opens and closes again, unless
+     * [backgroundOnly]. [shot]: the picture, if it was already taken. Needs the helper.
      */
-    suspend fun saveNow(gameId: String, shot: android.graphics.Bitmap? = null): Boolean {
+    suspend fun saveNow(gameId: String, shot: android.graphics.Bitmap? = null, backgroundOnly: Boolean = false): Boolean {
         val pkg = installedPackage() ?: return false
         if (!DolphinExitService.running) return false
-        return autoSave(pkg, gameId, shot, closeMenu = true)
+        val inFront = DolphinExitService.gameInFront()
+        val picture = shot ?: if (inFront) DolphinExitService.gamePicture() else null
+        // Dolphin's own save button first: nothing opens, the game keeps going.
+        if (inFront || backgroundOnly) silentSave(gameId, picture, inFront)?.let { if (it) return true }
+        // [backgroundOnly] (automatic saves): never open Dolphin's menu in the middle of a game.
+        if (backgroundOnly) return false
+        return autoSave(pkg, gameId, picture, capture = false, closeMenu = true)
     }
 
     // ------------------------------------------------------------------ for backups
@@ -970,6 +1062,11 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             val uri = resolve(tree, DolphinConfigWriter.quickStatePath(gameId), create = false) ?: return false
             val dir = backupDir(gameId).apply { mkdirs() }
             val target = java.io.File(dir, AutosaveBackups.fileName(savedAt))
+            // The same save already kept under another time (it was loaded, then kept again): not a second copy.
+            val size = latestAutosave(gameId)?.third ?: 0L
+            val fp = fingerprint(size) { resolver.openInputStream(uri) }
+            val dupe = fp != null && !target.exists() && autosaveBackups(gameId).any { fingerprint(it.size) { it.file.inputStream() } == fp }
+            if (dupe) { pruneBackups(gameId); return true }
             if (!target.exists()) {
                 val tmp = java.io.File(dir, target.name + ".tmp")
                 resolver.openInputStream(uri)?.use { input -> tmp.outputStream().use { input.copyTo(it, 256 * 1024) } }
@@ -1011,7 +1108,8 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
                 resolver.openOutputStream(uri, "wt")?.use { out -> chosen.inputStream().use { it.copyTo(out, 256 * 1024) } }
                     ?: error("couldn't write the save slot")
                 chosen.delete()
-                if (picture != null) quickStateTime(gameId)?.let { writePicture(gameId, it, picture) }
+                prefs.setSlotOrigin(gameId, quickStateModified(gameId), backup.savedAt)
+                if (picture != null) writePicture(gameId, backup.savedAt, picture)
             } catch (e: Exception) {
                 chosen.renameTo(backup.file) // put it back so nothing is lost
                 throw e

@@ -428,14 +428,38 @@ class Prefs(context: Context) {
     var saveOnSleep: Boolean
         get() = sp.getBoolean("save_on_sleep", true)
         set(v) = sp.edit().putBoolean("save_on_sleep", v).apply()
-    /** Also autosave every N minutes while playing (0 = off). */
-    var timedSaveMinutes: Int
-        get() = sp.getInt("timed_save_minutes", 10)
-        set(v) = sp.edit().putInt("timed_save_minutes", v).apply()
-    /** Show the small "Saved" pop-up for timed saves. */
-    var timedSaveToast: Boolean
-        get() = sp.getBoolean("timed_save_toast", true)
-        set(v) = sp.edit().putBoolean("timed_save_toast", v).apply()
+    /**
+     * Whether this Dolphin saves with Delphis' hidden save button (Dolphin's hotkeys), by Dolphin version code:
+     * true = it did, false = it didn't twice while the game was in front, null = not tried yet with this version.
+     */
+    fun silentSaves(dolphinVersion: Long): Boolean? {
+        val v = sp.getString("silent_saves", null)?.split(':') ?: return null
+        if (v.size < 2 || v[0] != dolphinVersion.toString()) return null
+        return when (v[1]) { "yes" -> true; "no" -> false; else -> null }
+    }
+    /** A try of the hidden save button with the game in front: [worked], or a miss (two misses = doesn't work). */
+    fun silentSaveTried(dolphinVersion: Long, worked: Boolean) {
+        val v = sp.getString("silent_saves", null)?.split(':')
+        val misses = if (v != null && v.size >= 3 && v[0] == dolphinVersion.toString()) v[2].toIntOrNull() ?: 0 else 0
+        val value = if (worked) "$dolphinVersion:yes:0" else if (misses + 1 >= 2) "$dolphinVersion:no:${misses + 1}" else "$dolphinVersion:unknown:${misses + 1}"
+        sp.edit().putString("silent_saves", value).apply()
+    }
+    /** Dolphin settings it only reads when it starts (the save buttons) changed: restart it before the next game. */
+    var dolphinRestartNeeded: Boolean
+        get() = sp.getBoolean("dolphin_restart_needed", false)
+        set(v) = sp.edit().putBoolean("dolphin_restart_needed", v).apply()
+    /**
+     * When Delphis put a save into the Quick Save slot: the slot file's time right after ([first]) and the save's own
+     * time ([second]), so the save keeps its real time instead of the moment it was loaded.
+     */
+    fun slotOrigin(gameId: String): Pair<Long, Long>? = sp.getString("slot_origin_$gameId", null)?.split(':')?.let { p ->
+        val a = p.getOrNull(0)?.toLongOrNull(); val b = p.getOrNull(1)?.toLongOrNull()
+        if (a != null && b != null) a to b else null
+    }
+    fun setSlotOrigin(gameId: String, slotTime: Long?, savedAt: Long?) {
+        if (slotTime == null || savedAt == null) sp.edit().remove("slot_origin_$gameId").apply()
+        else sp.edit().putString("slot_origin_$gameId", "$slotTime:$savedAt").apply()
+    }
     /** Save once per charge when the battery reaches this % (0 = off). */
     var lowBatteryLevel: Int
         get() = sp.getInt("low_battery_level", 10)

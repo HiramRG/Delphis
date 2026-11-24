@@ -91,7 +91,7 @@ class DolphinExitService : AccessibilityService() {
             }
         }
 
-        /** A game started ([running]) or ended: the automatic saves (screen off, timed, low battery) follow it. */
+        /** A game started ([running]) or ended: the automatic saves (screen off, low battery) follow it. */
         fun gameSession(running: Boolean) {
             val s = instance ?: return
             s.handler.post { if (running) s.startAutoSaves() else s.stopAutoSaves() }
@@ -211,6 +211,9 @@ class DolphinExitService : AccessibilityService() {
         fun trackpadUp() {}
         @Suppress("UNUSED_PARAMETER") fun trackpadRecenter(topDisplayId: Int) = DsuServer.recenter()
         fun trackpadReset() = DsuServer.reset()
+
+        /** The game is on screen and nothing of Delphis covers it (what the hidden save button needs). */
+        fun gameInFront(): Boolean = instance?.gameInFront() ?: false
 
         /** True if Dolphin's game screen is up. */
         fun gameShowing(pkg: String): Boolean = instance?.find(pkg, "frame_emulation_fragment") != null
@@ -445,21 +448,7 @@ class DolphinExitService : AccessibilityService() {
             if (android.os.Build.VERSION.SDK_INT >= 33) registerReceiver(r, f, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(r, f)
             autoReceiver = r
         }.onFailure { CrashLog.event("automatic saves: couldn't watch the screen / battery: ${it.message}") }
-        // Timed saves: checked every minute, saved when the latest autosave is older than the chosen time.
-        autoJob = scope.launch {
-            while (true) {
-                kotlinx.coroutines.delay(60_000)
-                val p = Prefs(this@DolphinExitService)
-                val min = p.timedSaveMinutes
-                val id = GameWatch.session?.info?.gameId ?: continue
-                if (min <= 0 || !p.autoSaveFor(id) || quickBusy || !screenOn() || !gameInFront()) continue
-                val bridge = DolphinBridge(this@DolphinExitService, p)
-                val last = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.quickStateTime(id) } ?: 0L
-                if (System.currentTimeMillis() - last < min * 60_000L) continue
-                automaticSave(id, timed = true)
-            }
-        }
-        CrashLog.event("automatic saves on (screen off, timed, low battery)")
+        CrashLog.event("automatic saves on (screen off, low battery)")
     }
 
     fun stopAutoSaves() {
@@ -467,8 +456,8 @@ class DolphinExitService : AccessibilityService() {
         autoReceiver?.let { runCatching { unregisterReceiver(it) } }; autoReceiver = null
     }
 
-    /** A timed or low-battery save, with its small pop-up. */
-    private suspend fun automaticSave(id: String, timed: Boolean, batteryLine: String? = null): Boolean {
+    /** A low-battery save, with its small pop-up. Only in the background (Dolphin's save button): never Dolphin's menu. */
+    private suspend fun automaticSave(id: String, batteryLine: String): Boolean {
         if (quickBusy) return false
         quickBusy = true
         try {
@@ -476,12 +465,11 @@ class DolphinExitService : AccessibilityService() {
             val display = gameDisplay()
             val shot = picture()
             val bridge = DolphinBridge(this, p)
-            val ok = bridge.saveNow(id, shot)
-            CrashLog.event("${if (timed) "timed" else "low battery"} save: ${if (ok) "saved" else "not saved (${DolphinBridge.lastSaveNote})"}")
+            val ok = bridge.saveNow(id, shot, backgroundOnly = true)
+            CrashLog.event("low battery save: ${if (ok) "saved" else "not saved (${DolphinBridge.lastSaveNote})"}")
             if (ok) {
                 val time = io.github.hiramrg.delphis.ui.formatSaveTime(System.currentTimeMillis())
-                if (!timed) saveToast.done(display, shot, batteryLine ?: "Battery low: game saved", "Keep playing, or plug in · $time", 4_500, saveToast.amberEdge)
-                else if (p.timedSaveToast) saveToast.done(display, shot, "Saved", "Timed autosave · $time", 2_000)
+                saveToast.done(display, shot, batteryLine, "Keep playing, or plug in · $time", 4_500, saveToast.amberEdge)
             }
             return ok
         } finally { quickBusy = false }
@@ -498,8 +486,9 @@ class DolphinExitService : AccessibilityService() {
         val at = p.lowBatteryLevel
         val id = GameWatch.session?.info?.gameId ?: return
         if (at <= 0 || pct > at || lowBatterySaved || !p.autoSaveFor(id) || quickBusy || !screenOn() || !gameInFront()) return
+        if (DolphinBridge(this, p).silentSaves() == false) return // this Dolphin can't save in the background
         lowBatterySaved = true
-        scope.launch { if (!automaticSave(id, timed = false, batteryLine = "Battery at $pct%: game saved")) lowBatterySaved = false }
+        scope.launch { if (!automaticSave(id, batteryLine = "Battery at $pct%: game saved")) lowBatterySaved = false }
     }
 
     /**
@@ -511,6 +500,7 @@ class DolphinExitService : AccessibilityService() {
         val p = Prefs(this)
         val id = GameWatch.session?.info?.gameId ?: return
         if (!p.saveOnSleep || !p.autoSaveFor(id)) return
+        if (DolphinBridge(this, p).silentSaves() == false) return // this Dolphin can't save in the background
         val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
         if (quickBusy || sleepSaving) { p.sleepSaveLog = listOf("$stamp · SKIPPED · another save was running") + p.sleepSaveLog; return }
         sleepSaving = true; quickBusy = true
@@ -526,10 +516,10 @@ class DolphinExitService : AccessibilityService() {
             var after: Long? = null
             try {
                 val bridge = DolphinBridge(this@DolphinExitService, p)
-                val before = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.quickStateTime(id) }
+                val before = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.quickStateModified(id) }
                 DolphinBridge.lastSaveNote = ""
-                ok = kotlinx.coroutines.withTimeoutOrNull(18_000) { bridge.saveNow(id) } ?: false
-                after = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.quickStateTime(id) }
+                ok = kotlinx.coroutines.withTimeoutOrNull(18_000) { bridge.saveNow(id, backgroundOnly = true) } ?: false
+                after = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { bridge.quickStateModified(id) }
                 val secs = (android.os.SystemClock.elapsedRealtime() - t0) / 1000.0
                 val line = "$stamp · ${if (ok) "SAVED" else "NOT SAVED"} in ${"%.1f".format(java.util.Locale.US, secs)} s · " +
                     (DolphinBridge.lastSaveNote.ifEmpty { "took longer than 18 s" }) +
