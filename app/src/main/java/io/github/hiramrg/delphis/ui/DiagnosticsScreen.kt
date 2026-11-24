@@ -119,8 +119,8 @@ fun DiagnosticsScreen(act: MainActivity) {
 private fun StatusRow(title: String, sub: String, ok: Boolean?) {
     val c = LocalWii.current
     SettingRow(title, sub) {
-        if (ok == true) Text("✓", fontSize = markSp(15f), fontWeight = FontWeight.Black, color = c.green)
-        if (ok == false) Text("!", fontSize = markSp(15f), fontWeight = FontWeight.Black, color = c.orange)
+        if (ok == true) Text("✓", fontSize = markSp(15f), lineHeight = markSp(15f), fontWeight = FontWeight.Black, color = c.green)
+        if (ok == false) Text("!", fontSize = markSp(15f), lineHeight = markSp(15f), fontWeight = FontWeight.Black, color = c.orange)
     }
 }
 

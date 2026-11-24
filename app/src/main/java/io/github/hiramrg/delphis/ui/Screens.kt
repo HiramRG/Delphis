@@ -1784,21 +1784,25 @@ private fun screenChipLabel(sc: io.github.hiramrg.delphis.core.GameScreen.Choice
 private fun GameChip(text: String, key: String?, short: String? = null, on: Boolean = false, warn: Boolean = false, outline: Boolean = false, height: androidx.compose.ui.unit.Dp = ControlSize.M, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = ChipShape
-    Row(
-        modifier.heightIn(min = height).channel(shape, lit = on || outline)
-            .then(if (warn) Modifier.border(2.dp, c.orange, shape) else Modifier)
-            .clickable(onClick = onClick).padding(start = 14.dp, end = 10.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-    ) {
-        // [short] replaces the words when they don't fit (never cut).
-        var useShort by remember(text) { mutableStateOf(false) }
-        val shown = if (useShort && short != null) short else text
-        Text(
-            shown, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = if (warn) c.orange else c.text, maxLines = 1,
-            modifier = if (short != null) Modifier.weight(1f, fill = false) else Modifier,
-            onTextLayout = { if (short != null && !useShort && it.hasVisualOverflow) useShort = true else TextFit.check(shown, it) },
-        )
-        if (key != null) KeyIcon(key)
+    val style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
+        // [short] replaces the words when the whole chip wouldn't fit (never cut).
+        val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+        val dens = androidx.compose.ui.platform.LocalDensity.current
+        val shown = if (short == null || constraints.maxWidth == androidx.compose.ui.unit.Constraints.Infinity) text else {
+            val need = measurer.measure(text, style, maxLines = 1).size.width + with(dens) { (14.dp + 10.dp + if (key != null) 8.dp + 26.dp else 0.dp).roundToPx() }
+            if (need > constraints.maxWidth) short else text
+        }
+        Row(
+            Modifier.then(if (constraints.hasBoundedWidth && constraints.minWidth == constraints.maxWidth) Modifier.fillMaxWidth() else Modifier)
+                .heightIn(min = height).channel(shape, lit = on || outline)
+                .then(if (warn) Modifier.border(2.dp, c.orange, shape) else Modifier)
+                .clickable(onClick = onClick).padding(start = 14.dp, end = 10.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        ) {
+            Text(shown, style = style, color = if (warn) c.orange else c.text, maxLines = 1, onTextLayout = { TextFit.check(shown, it) })
+            if (key != null) KeyIcon(key)
+        }
     }
 }
 
@@ -2248,7 +2252,7 @@ private fun SelectDot(selected: Boolean) {
         Modifier.padding(end = 8.dp).size(20.dp).clip(RoundedCornerShape(50)).background(if (selected) c.accent else Color.Transparent)
             .border(2.dp, if (selected) c.accent else c.cardBorder, RoundedCornerShape(50)),
         contentAlignment = Alignment.Center,
-    ) { if (selected) Text("✓", fontSize = markSp(11f), fontWeight = FontWeight.Black, color = c.onAccent) }
+    ) { if (selected) Text("✓", fontSize = markSp(11f), lineHeight = markSp(11f), fontWeight = FontWeight.Black, color = c.onAccent) }
 }
 
 @Composable

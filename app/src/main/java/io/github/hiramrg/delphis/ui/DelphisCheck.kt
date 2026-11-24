@@ -154,7 +154,7 @@ private fun CheckRow(item: DelphisCheck.Item) {
             DelphisCheck.Level.FIX -> "!" to c.orange
         }
         Box(Modifier.size(20.dp).clip(CircleShape).background(tint.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
-            Text(mark, fontSize = markSp(12f), fontWeight = FontWeight.Black, color = tint, maxLines = 1)
+            Text(mark, fontSize = markSp(12f), lineHeight = markSp(12f), fontWeight = FontWeight.Black, color = tint, maxLines = 1)
         }
         Column(Modifier.weight(1f)) {
             Text(item.title, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text, lineHeight = 15.sp, maxLines = 2)

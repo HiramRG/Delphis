@@ -232,7 +232,7 @@ class LayoutCheckTest {
                 }
                 show(act, size, "Settings → Controllers (testing the button)", after = { act.shortcutTest = null }) {
                     act.screen = Screen.Settings; act.settingsSection = SettingsSection.CONTROLS
-                    act.shortcutTest = "Nothing arrived. If you pressed the Xbox button, this device keeps it, so use View + Menu (now both work)."
+                    act.shortcutTest = "Nothing arrived. This device keeps the Xbox button, so use View + Menu (both work now)."
                 }
                 show(act, size, "Pop-up: game still open", popupOnly = true, after = { act.runningPrompt = false; GameWatch.session = null }) {
                     act.screen = Screen.Home; GameWatch.session = session(games[1], "gamecube"); act.runningPrompt = true

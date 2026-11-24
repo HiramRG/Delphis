@@ -283,7 +283,7 @@ private fun RaStatusRow(ok: Boolean, who: String, role: String, line: String, wa
         Box(
             Modifier.size(30.dp).clip(RoundedCornerShape(50)).background(if (ok) c.green.copy(alpha = 0.18f) else c.orange.copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center,
-        ) { Text(if (ok) "✓" else "!", fontSize = markSp(15f), fontWeight = FontWeight.Black, color = if (ok) c.green else c.orange) }
+        ) { Text(if (ok) "✓" else "!", fontSize = markSp(15f), lineHeight = markSp(15f), fontWeight = FontWeight.Black, color = if (ok) c.green else c.orange) }
         Column(Modifier.weight(1f)) {
             Text(
                 androidx.compose.ui.text.buildAnnotatedString {
