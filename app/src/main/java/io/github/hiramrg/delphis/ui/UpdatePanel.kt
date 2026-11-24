@@ -29,6 +29,7 @@ import io.github.hiramrg.delphis.ui.MainActivity.UpdateState
  * Settings → Updates → Update channel. Stable (everyone) only gets a build after it worked on Beta; Beta
  * (testers) gets every new build first. Switching re-checks for updates on the new channel.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun UpdateChannelCard(act: MainActivity) {
     val prefs = act.prefs
@@ -57,7 +58,7 @@ fun UpdateChannelCard(act: MainActivity) {
                 } + if (channel == "stable" && built == "beta") " · you'll get Stable once it's newer than build $installed" else "",
                 fontSize = 12.sp, color = c.textDim, lineHeight = 15.sp,
             )
-            Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ChannelStep("New build", c.cardBorder)
                 Text("→", fontSize = 12.sp, color = c.textDim)
                 ChannelStep("Beta · Thor, phone, tablet", Color(0xFFF5A623))

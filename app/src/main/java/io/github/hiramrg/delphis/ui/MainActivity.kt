@@ -212,7 +212,7 @@ class MainActivity : ComponentActivity() {
             if (shortcutTest == "waiting") {
                 // Nothing came through: some tablets keep the Home button for themselves. "Both" leaves the other way in.
                 prefs.menuShortcut = 2
-                shortcutTest = "Nothing arrived. If you pressed the ${names.home}, this device keeps it, so use ${names.combo} (now both work)."
+                shortcutTest = "Nothing arrived. This device keeps the ${names.home}, so use ${names.combo} (both work now)."
                 stopShortcutTest()
             }
         }

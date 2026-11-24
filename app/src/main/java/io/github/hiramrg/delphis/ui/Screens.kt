@@ -560,7 +560,7 @@ fun PlatformTag(p: Platform, small: Boolean = false) {
     val gc = p == Platform.GAMECUBE
     val fg = if (gc) Color.White else Color(0xFF1A6FB5)
     Row(
-        Modifier.height(if (small) 19.dp else 22.dp).clip(RoundedCornerShape(50)).background(if (gc) CubePurple else WiiWhite).padding(horizontal = if (small) 7.dp else 9.dp),
+        Modifier.heightIn(min = if (small) 19.dp else 22.dp).clip(RoundedCornerShape(50)).background(if (gc) CubePurple else WiiWhite).padding(horizontal = if (small) 7.dp else 9.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         // Same line icons as the rail: the remote for Wii, the cube for GameCube.
@@ -1660,7 +1660,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             // Saves (R2): pick which save Play continues from.
             // As wide as the cover (one column of equal-width controls).
             if (saves.isNotEmpty()) GameChip("↺ Saves (${saves.size})", "R2", modifier = Modifier.fillMaxWidth()) { showSaves = true }
-            else if (shots.isNotEmpty()) GameChip("📷 Screenshots (${shots.size})", "R2", modifier = Modifier.fillMaxWidth()) { showShots = true }
+            else if (shots.isNotEmpty()) GameChip("📷 Screenshots (${shots.size})", "R2", short = "📷 Screenshots", modifier = Modifier.fillMaxWidth()) { showShots = true }
             Spacer(Modifier.height(2.dp))
             GameButton("▶", if (shown == null) "Choose a style" else "Play", "A", primary = true, enabled = shown != null) { p.play() }
         }
@@ -1781,7 +1781,7 @@ private fun screenChipLabel(sc: io.github.hiramrg.delphis.core.GameScreen.Choice
 
 /** A chip in the game page's top row: text, then the button that toggles it in small grey type ("L1"). */
 @Composable
-private fun GameChip(text: String, key: String?, on: Boolean = false, warn: Boolean = false, outline: Boolean = false, height: androidx.compose.ui.unit.Dp = ControlSize.M, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun GameChip(text: String, key: String?, short: String? = null, on: Boolean = false, warn: Boolean = false, outline: Boolean = false, height: androidx.compose.ui.unit.Dp = ControlSize.M, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = LocalWii.current
     val shape = ChipShape
     Row(
@@ -1790,7 +1790,14 @@ private fun GameChip(text: String, key: String?, on: Boolean = false, warn: Bool
             .clickable(onClick = onClick).padding(start = 14.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {
-        Text(text, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = if (warn) c.orange else c.text, maxLines = 1, onTextLayout = { TextFit.check(text, it) })
+        // [short] replaces the words when they don't fit (never cut).
+        var useShort by remember(text) { mutableStateOf(false) }
+        val shown = if (useShort && short != null) short else text
+        Text(
+            shown, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = if (warn) c.orange else c.text, maxLines = 1,
+            modifier = if (short != null) Modifier.weight(1f, fill = false) else Modifier,
+            onTextLayout = { if (short != null && !useShort && it.hasVisualOverflow) useShort = true else TextFit.check(shown, it) },
+        )
         if (key != null) KeyIcon(key)
     }
 }
@@ -2241,7 +2248,7 @@ private fun SelectDot(selected: Boolean) {
         Modifier.padding(end = 8.dp).size(20.dp).clip(RoundedCornerShape(50)).background(if (selected) c.accent else Color.Transparent)
             .border(2.dp, if (selected) c.accent else c.cardBorder, RoundedCornerShape(50)),
         contentAlignment = Alignment.Center,
-    ) { if (selected) Text("✓", fontSize = 11.sp, fontWeight = FontWeight.Black, color = c.onAccent) }
+    ) { if (selected) Text("✓", fontSize = markSp(11f), fontWeight = FontWeight.Black, color = c.onAccent) }
 }
 
 @Composable
@@ -2286,7 +2293,7 @@ private fun ThemeCard(title: String, sub: String, previews: List<WiiColors>, sel
             SelectDot(selected)
             Column {
                 Text(title, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
-                Text(sub, fontSize = 11.sp, color = c.textDim, maxLines = 1)
+                Text(sub, fontSize = 11.sp, color = c.textDim, maxLines = 2, lineHeight = 13.sp)
             }
         }
     }

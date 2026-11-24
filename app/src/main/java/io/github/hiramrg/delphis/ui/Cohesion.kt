@@ -537,3 +537,7 @@ object TextFit {
         }
     }
 }
+
+/** Text size for a mark (✓, !, i) inside a fixed-size circle: it keeps its size whatever Android's text size, so it always fits its circle. */
+@Composable
+fun markSp(size: Float): androidx.compose.ui.unit.TextUnit = (size / androidx.compose.ui.platform.LocalDensity.current.fontScale).sp

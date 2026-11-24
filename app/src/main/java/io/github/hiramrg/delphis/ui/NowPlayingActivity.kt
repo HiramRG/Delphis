@@ -1186,7 +1186,7 @@ open class NowPlayingActivity : ComponentActivity() {
                             Text("back to the game", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LocalWii.current.textDim)
                         }
                     } else Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        change(Modifier.weight(1f)); edit(Modifier.weight(0.85f)); restart(Modifier.weight(1f)); quit(Modifier.weight(1.2f))
+                        change(Modifier.weight(0.95f)); edit(Modifier.weight(1f)); restart(Modifier.weight(1f)); quit(Modifier.weight(1.15f))
                     }
                 }
             }
