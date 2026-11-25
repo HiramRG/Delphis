@@ -456,6 +456,9 @@ class Prefs(context: Context) {
         val a = p.getOrNull(0)?.toLongOrNull(); val b = p.getOrNull(1)?.toLongOrNull()
         if (a != null && b != null) a to b else null
     }
+    /** The time of the save made of where you were just before loading a save in game ("Before loading"). */
+    fun beforeLoading(gameId: String): Long? = sp.getLong("before_loading_$gameId", 0L).takeIf { it > 0 }
+    fun setBeforeLoading(gameId: String, savedAt: Long?) = sp.edit().putLong("before_loading_$gameId", savedAt ?: 0L).apply()
     fun setSlotOrigin(gameId: String, slotTime: Long?, savedAt: Long?) {
         if (slotTime == null || savedAt == null) sp.edit().remove("slot_origin_$gameId").apply()
         else sp.edit().putString("slot_origin_$gameId", "$slotTime:$savedAt").apply()

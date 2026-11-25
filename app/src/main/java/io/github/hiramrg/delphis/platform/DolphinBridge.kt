@@ -739,6 +739,10 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         val name: String? = null, val file: java.io.File? = null, val picture: java.io.File? = null, val keptId: Long = 0,
         /** This kept save / Dolphin slot is also what's in the Quick Save slot now (loaded from it), so no separate latest row. */
         val current: Boolean = false,
+        /** The latest autosave is a save you loaded (it keeps that save's time). */
+        val loaded: Boolean = false,
+        /** This earlier autosave is where you were just before loading a save (while that save is still the latest). */
+        val beforeLoading: Boolean = false,
     ) {
         /** The save the game continues from: the latest autosave, or the kept save / slot standing in for it. */
         val isLatest: Boolean get() = kind == SaveKind.LATEST || current
@@ -792,7 +796,10 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         kept.forEachIndexed { i, k ->
             out += SaveEntry(SaveKind.KEPT, k.savedAt, k.file.length(), name = k.name, file = k.file, picture = k.picture, keptId = k.id, current = latestFp != null && keptFps[i] == latestFp)
         }
-        if (latest != null && latestShown) latest.let { (uri, _, size) -> out += SaveEntry(SaveKind.LATEST, latestAt!!, size, SaveSlots.QUICK, uri = uri, picture = pic(latestAt)) }
+        // A save Delphis put into the slot that's still there: it was loaded (see writeQuickSlot / slotOrigin).
+        val loadedNow = latest != null && prefs.slotOrigin(gameId)?.let { kotlin.math.abs(it.first - latest.second) < 1000 } == true
+        val beforeAt = if (loadedNow) prefs.beforeLoading(gameId) else null
+        if (latest != null && latestShown) latest.let { (uri, _, size) -> out += SaveEntry(SaveKind.LATEST, latestAt!!, size, SaveSlots.QUICK, uri = uri, picture = pic(latestAt), loaded = loadedNow) }
         // An earlier autosave that's the same save as the latest one, a kept save, a slot or a newer earlier one isn't
         // a second save: it's removed.
         val seen = mutableSetOf<String>()
@@ -803,7 +810,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             val fp = fingerprint(b.size) { b.file.inputStream() } ?: return@filter true
             if (seen.add(fp)) true else { CrashLog.event("removed a duplicate earlier autosave of $gameId"); b.file.delete(); false }
         }
-        backups.forEach { out += SaveEntry(SaveKind.EARLIER, it.savedAt, it.size, backup = it, picture = pic(it.savedAt)) }
+        backups.forEach { out += SaveEntry(SaveKind.EARLIER, it.savedAt, it.size, backup = it, picture = pic(it.savedAt), beforeLoading = beforeAt != null && kotlin.math.abs(it.savedAt - beforeAt) < 1000) }
         // Pictures of autosaves that are gone (only when the slot could be read, so a missing folder deletes nothing).
         if (latest != null) SavePictures.unused(pics, backups.map { it.savedAt } + latestAt!!).forEach { java.io.File(picDir, it).delete() }
         val currentSlot = if (latestFp != null && !latestShown && latestFp !in keptFps) slotFps.indexOf(latestFp) else -1
@@ -878,7 +885,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         SaveKind.SLOT, SaveKind.KEPT -> runCatching {
             val picture = pictureBytes(entry)
             val staged = stage(gameId, entry)
-            try { backupCurrentAutosave(gameId); writeQuickSlot(gameId, staged, picture, entry.savedAt) } finally { staged.delete() }
+            try { backupCurrentAutosave(gameId); prefs.setBeforeLoading(gameId, quickStateTime(gameId)); writeQuickSlot(gameId, staged, picture, entry.savedAt) } finally { staged.delete() }
             CrashLog.event("${if (entry.kind == SaveKind.KEPT) "kept save" else "Dolphin slot ${entry.slot}"} of $gameId put in the Quick Save slot")
             true
         }.getOrElse { CrashLog.event("couldn't use ${if (entry.kind == SaveKind.KEPT) "a kept save" else "slot ${entry.slot}"} of $gameId: ${it.message}"); false }
@@ -913,13 +920,27 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             runCatching { stage(gameId, entry) }.getOrElse { CrashLog.event("load save of $gameId: ${it.message}"); null }
         } ?: return false
         val inFront = DolphinExitService.gameInFront()
+        // Where you are now, before anything covers it: the "Before loading" save's picture.
+        val now = DolphinExitService.gamePicture()
+        // Covered unless both steps can use Dolphin's own buttons (nothing to see then).
+        val covered = !(inFront && silentSaves() == true)
+        if (covered) {
+            val bmp = picture?.let { runCatching { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }.getOrNull() }
+            val what = if (entry.kind == SaveKind.KEPT) entry.name ?: io.github.hiramrg.delphis.ui.formatSaveTime(entry.savedAt) else io.github.hiramrg.delphis.ui.formatSaveTime(entry.savedAt)
+            DolphinExitService.showSaveCover(bmp, "LOADING SAVE", what, "Where you are now is saved first")
+        }
         try {
-            val savedQuietly = inFront && silentSave(gameId, DolphinExitService.gamePicture(), true) == true
-            if (!savedQuietly) autoSave(pkg, gameId)
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { backupCurrentAutosave(gameId); writeQuickSlot(gameId, staged, picture, entry.savedAt) }
+            val savedQuietly = inFront && silentSave(gameId, now, true) == true
+            if (!savedQuietly) autoSave(pkg, gameId, now, capture = false)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                backupCurrentAutosave(gameId)
+                prefs.setBeforeLoading(gameId, quickStateTime(gameId))
+                writeQuickSlot(gameId, staged, picture, entry.savedAt)
+            }
         } catch (e: Exception) {
             CrashLog.event("load save of $gameId: ${e.message}")
             if (entry.kind == SaveKind.EARLIER) entry.backup?.file?.let { staged.renameTo(it) } // nothing is lost
+            if (covered) DolphinExitService.hideSaveCover()
             return false
         } finally {
             if (staged.exists() && entry.kind != SaveKind.EARLIER) staged.delete()
@@ -930,6 +951,8 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             DsuServer.press(io.github.hiramrg.delphis.core.Dsu.LOAD_BUTTON)
         if (quiet) kotlinx.coroutines.delay(1_200)
         val result = if (quiet) DolphinExitService.StateResult.DONE else DolphinExitService.quickLoad(pkg, bootMs = 0)
+        // A moment for Dolphin to show the loaded spot, then the cover fades.
+        if (covered) DolphinExitService.hideSaveCover(700)
         val what = when (entry.kind) { SaveKind.KEPT -> "kept save"; SaveKind.LATEST -> "latest autosave"; SaveKind.EARLIER -> "earlier autosave"; SaveKind.SLOT -> "Dolphin slot ${entry.slot}" }
         CrashLog.event("load $what of $gameId in game${if (quiet) " (Dolphin's load button)" else ""}: ${result ?: "helper not running"}")
         return result == DolphinExitService.StateResult.DONE
@@ -949,7 +972,13 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         if (inFront || backgroundOnly) silentSave(gameId, picture, inFront)?.let { if (it) return true }
         // [backgroundOnly] (automatic saves): never open Dolphin's menu in the middle of a game.
         if (backgroundOnly) return false
-        return autoSave(pkg, gameId, picture, capture = false, closeMenu = true)
+        // Dolphin's menu has to open: cover the game so the menu and the taps aren't seen.
+        DolphinExitService.showSaveCover(picture, "SAVING", "Saving your game", "Back to the game in a moment")
+        try {
+            return autoSave(pkg, gameId, picture, capture = false, closeMenu = true)
+        } finally {
+            DolphinExitService.hideSaveCover(400)
+        }
     }
 
     // ------------------------------------------------------------------ for backups
@@ -1136,6 +1165,7 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             if (!backup.file.renameTo(chosen)) error("couldn't prepare the copy")
             try {
                 backupCurrentAutosave(gameId)
+                prefs.setBeforeLoading(gameId, quickStateTime(gameId))
                 val uri = resolve(tree, DolphinConfigWriter.quickStatePath(gameId), create = true) ?: error("couldn't open the save slot")
                 resolver.openOutputStream(uri, "wt")?.use { out -> chosen.inputStream().use { it.copyTo(out, 256 * 1024) } }
                     ?: error("couldn't write the save slot")

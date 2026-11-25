@@ -71,7 +71,7 @@ import kotlinx.coroutines.launch
 fun saveLabel(e: SaveEntry): String = when (e.kind) {
     SaveKind.KEPT -> e.name ?: "Kept save"
     SaveKind.LATEST -> "Latest"
-    SaveKind.EARLIER -> "Earlier"
+    SaveKind.EARLIER -> if (e.beforeLoading) "Before loading" else "Earlier"
     SaveKind.SLOT -> "Slot ${e.slot}"
 }
 
@@ -169,10 +169,13 @@ fun SavesList(
                         Text(saveLabel(e), fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 2, lineHeight = 16.sp)
                         Text(formatSaveTime(e.savedAt), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1, lineHeight = 13.sp)
                     }
+                    if (e.current) Text("Loaded", fontSize = 11.sp, fontWeight = FontWeight.Black, color = if (c.dark) Color(0xFF5BD08A) else Color(0xFF2E9E57), maxLines = 1, modifier = Modifier.padding(start = 8.dp))
                 } else {
                     Text(formatSaveTime(e.savedAt), fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Text(saveLabel(e), fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1)
-                    if (e.isLatest && latestTag != null) {
+                    if (e.loaded || e.current) {
+                        Text("Loaded", fontSize = 11.sp, fontWeight = FontWeight.Black, color = if (c.dark) Color(0xFF5BD08A) else Color(0xFF2E9E57), maxLines = 1, modifier = Modifier.padding(start = 8.dp))
+                    } else if (e.isLatest && latestTag != null) {
                         Text(latestTag, fontSize = 11.sp, fontWeight = FontWeight.Black, color = if (c.dark) Color(0xFF5BD08A) else Color(0xFF2E9E57), maxLines = 1, modifier = Modifier.padding(start = 8.dp))
                     }
                 }
@@ -449,14 +452,14 @@ class SaveFlow(
 private fun saveCaps(e: SaveEntry) = when (e.kind) {
     SaveKind.KEPT -> "Kept save"
     SaveKind.LATEST -> "Autosave · latest"
-    SaveKind.EARLIER -> "Autosave · earlier"
+    SaveKind.EARLIER -> if (e.beforeLoading) "Autosave · before loading" else "Autosave · earlier"
     SaveKind.SLOT -> "Dolphin save slot ${e.slot}"
 }
 
 private fun saveAbout(e: SaveEntry) = when (e.kind) {
     SaveKind.KEPT -> "Stays until you delete it."
     SaveKind.LATEST -> "Your latest autosave. New autosaves replace it, unless you keep it."
-    SaveKind.EARLIER -> "Delphis keeps the 3 newest earlier autosaves. Keep it to hold on to it."
+    SaveKind.EARLIER -> if (e.beforeLoading) "Where you were just before you loaded a save. Keep it to hold on to it." else "Delphis keeps the 3 newest earlier autosaves. Keep it to hold on to it."
     SaveKind.SLOT -> "Made in Dolphin's own menu."
 }
 

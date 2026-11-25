@@ -674,7 +674,7 @@ open class NowPlayingActivity : ComponentActivity() {
                 if (panelMode) delay(700)
                 val ok = bridge.loadSaveInGame(id, e)
                 savesBusy = false; saveCursor = 0; savesVersion++
-                savesStatus = if (ok) "Loaded the save from ${formatSaveTime(e.savedAt)}. Your progress from before is the newest earlier autosave." to false
+                savesStatus = if (ok) "Loaded ${if (e.kind == io.github.hiramrg.delphis.platform.DolphinBridge.SaveKind.KEPT) e.name ?: formatSaveTime(e.savedAt) else formatSaveTime(e.savedAt)}. Where you were is kept as \u201cBefore loading\u201d." to false
                 else "Couldn't load it. Try again, or use Dolphin's menu → Load State." to true
                 if (!ok && panelMode) DolphinExitService.openMenu()
             }

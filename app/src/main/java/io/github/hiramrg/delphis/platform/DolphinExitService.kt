@@ -117,6 +117,14 @@ class DolphinExitService : AccessibilityService() {
         suspend fun quickLoad(pkg: String, bootMs: Long = 6000): StateResult? = instance?.pressQuickLoad(pkg, bootMs)
         suspend fun syncTouchButtons(pkg: String, show: Boolean): String = instance?.syncTouchButtonsImpl(pkg, show) ?: "helper off"
 
+        /** Covers the game while Delphis saves / loads through Dolphin's menu (see [SaveCover]). */
+        fun showSaveCover(picture: android.graphics.Bitmap?, caps: String, title: String, line: String): Boolean {
+            val s = instance ?: return false
+            s.handler.post { s.saveCover.show(s.gameDisplay(), picture, caps, title, line) }
+            return true
+        }
+        fun hideSaveCover(delayMs: Long = 0) { instance?.let { s -> s.handler.post { s.saveCover.hide(delayMs) } } }
+
         /** Covers the top screen with the loading screen (no-op without the service). Returns whether it's showing. */
         fun showLoading(phase: LoadingOverlay.Phase, title: String?, gameId: String?, line: String, displayId: Int?): Boolean {
             val s = instance ?: return false
@@ -254,6 +262,7 @@ class DolphinExitService : AccessibilityService() {
     private val exitBottom by lazy { LoadingOverlay(this) }
     private val sideFill by lazy { SideFill(this) }
     private val saveToast by lazy { SaveToast(this) }
+    private val saveCover by lazy { SaveCover(this) }
     private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)
     private val pill by lazy { DelphisPill(this) { openInGameMenu() } }
     /** While the pill is up: shown only while Dolphin's game is in front (not Delphis' menu, Home or another app). */
@@ -405,7 +414,7 @@ class DolphinExitService : AccessibilityService() {
                 saveToast.busy(display, pic, "Loading…", line)
                 val ok = bridge.loadSaveInGame(id, latest)
                 CrashLog.event("quick load button: ${if (ok) "loaded" else "not loaded"}")
-                if (ok) saveToast.done(display, pic, "Loaded", "Your progress from before is the newest earlier autosave")
+                if (ok) saveToast.done(display, pic, "Loaded", "Where you were is kept as \u201cBefore loading\u201d")
                 else saveToast.failed(display, "Couldn't load it", "Try again, or use Dolphin's menu → Load State")
             } finally { quickBusy = false }
         }
@@ -595,7 +604,10 @@ class DolphinExitService : AccessibilityService() {
 
     /** The game is what's on its screen: no Delphis menu or loading screen over it, no other app in front. */
     private fun gameVisible(): Boolean {
-        if (GameWatch.menuOpen || loading.showing) return false
+        if (GameWatch.menuOpen || loading.showing || saveCover.showing) return false
+        // Two screens: the game has the top screen to itself (Delphis is on the bottom one), and Dolphin's view
+        // often can't be read there, so a running game counts as visible.
+        if (GameWatch.session != null && DeviceInfo.hasSecondScreen(this)) return true
         val top = topScreenApp()
         if (top != null && top !in DolphinBridge.KNOWN_PACKAGES) return false
         return DolphinBridge.KNOWN_PACKAGES.any { runCatching { find(it, "frame_emulation_fragment") != null }.getOrDefault(false) }
