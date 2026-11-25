@@ -147,14 +147,15 @@ private fun AchievementRow(a: Achievement, rarity: Int? = null, dim: Boolean = t
         BadgeImage(a.badgeUrl(), 34.dp)
         Spacer(Modifier.width(9.dp))
         Column(Modifier.weight(1f)) {
-            Text(a.title, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(a.description, fontSize = 10.5.sp, color = Color(0xFFA3ADB8), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            // Tight line heights (Material's 24 sp would make each row twice as tall): more achievements on screen.
+            Text(a.title, fontSize = 12.5.sp, lineHeight = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(a.description, fontSize = 10.5.sp, lineHeight = 13.sp, color = Color(0xFFA3ADB8), maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         Column(Modifier.padding(start = 6.dp), horizontalAlignment = Alignment.End) {
-            Text((if (a.unlocked) "✓ " else "") + "${a.points} pts", fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, color = AchGold, maxLines = 1)
+            Text((if (a.unlocked) "✓ " else "") + "${a.points} pts", fontSize = 10.5.sp, lineHeight = 13.sp, fontWeight = FontWeight.ExtraBold, color = AchGold, maxLines = 1)
             // Next up: how many players have it.
             if (rarity != null) Text(
-                "${io.github.hiramrg.delphis.core.rarityName(rarity)} · ${if (rarity < 1) "<1" else rarity}%", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                "${io.github.hiramrg.delphis.core.rarityName(rarity)} · ${if (rarity < 1) "<1" else rarity}%", fontSize = 9.5.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1,
                 color = if (rarity < 15) Color(0xFFC9A0FF) else Color(0xFFA3ADB8),
             )
         }
