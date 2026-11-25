@@ -88,15 +88,18 @@ fun AchievementsChip(p: GameProgress, onClick: () -> Unit, modifier: Modifier = 
     )
 }
 
-private enum class AchFilter(val label: String) { ALL("All"), UNLOCKED("Unlocked"), LOCKED("Locked") }
+enum class AchFilter(val label: String) { ALL("All"), UNLOCKED("Unlocked"), LOCKED("Locked") }
 
 /** The game's list: header with progress, a filter, then every achievement (unlocked first). */
 @Composable
 fun AchievementList(
     p: GameProgress, modifier: Modifier, onClose: (() -> Unit)? = null, closeLabel: String = "✕",
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
+    /** Set when the filter lives elsewhere (the in-game tab's bottom buttons): no filter row here then. */
+    shownFilter: AchFilter? = null,
 ) {
-    var filter by remember { mutableStateOf(AchFilter.ALL) }
+    var ownFilter by remember { mutableStateOf(AchFilter.ALL) }
+    val filter = shownFilter ?: ownFilter
     val items = remember(p, filter) {
         p.sorted.filter { when (filter) { AchFilter.ALL -> true; AchFilter.UNLOCKED -> it.unlocked; AchFilter.LOCKED -> !it.unlocked } }
     }
@@ -118,7 +121,7 @@ fun AchievementList(
         Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF15181C))) {
             Box(Modifier.fillMaxHeight().fillMaxWidth(p.percent / 100f).background(Brush.horizontalGradient(listOf(AchGold, Color(0xFFF5D27A)))))
         }
-        SegmentedPill(AchFilter.entries.map { it to it.label }, filter, { filter = it }, Modifier.padding(bottom = 4.dp))
+        if (shownFilter == null) SegmentedPill(AchFilter.entries.map { it to it.label }, filter, { ownFilter = it }, Modifier.padding(bottom = 4.dp))
         LazyColumn(Modifier.weight(1f), state = listState) {
             items(items, key = { it.id }) { AchievementRow(it) }
             if (items.isEmpty()) item {

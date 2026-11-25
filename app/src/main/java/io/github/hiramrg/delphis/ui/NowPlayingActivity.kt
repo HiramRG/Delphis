@@ -779,6 +779,7 @@ open class NowPlayingActivity : ComponentActivity() {
         // RetroAchievements: unlock badges (top screen over the game, bottom screen here, or both) and the 🏆 list.
         val achievements = rememberAchievements(prefs, s.key, s.info)
         var showAchievements by remember { mutableStateOf(false) }
+        var achFilter by remember { mutableStateOf(AchFilter.ALL) }
         var bottomPopup by remember { mutableStateOf<io.github.hiramrg.delphis.platform.Achievements.Popup?>(null) }
         LaunchedEffect(startedAt) {
             val ctx = this@NowPlayingActivity
@@ -1007,7 +1008,7 @@ open class NowPlayingActivity : ComponentActivity() {
                         AchievementList(
                             achievements,
                             Modifier.weight(1f).fillMaxWidth().clip(shape).background(Color(0xFF1F242A)).border(2.dp, Color(0xFF6B5A2E), shape).padding(8.dp),
-                            onClose = { showAchievements = false },
+                            shownFilter = achFilter,
                         )
                     } else if (panelMode && PadGlyphs.touch) WiiCard(Modifier.weight(1f).fillMaxWidth(), radius = 18.dp, padding = 14.dp) {
                         // No controller: what's really on screen is Dolphin's touch buttons, not a controller map.
@@ -1134,6 +1135,14 @@ open class NowPlayingActivity : ComponentActivity() {
                         PanelBtn("Cancel", null, false, Modifier.weight(1f)) { cancelPicture() }
                         PanelBtn("Later", null, false, Modifier.weight(1f), enabled = pictureChanged) { showPicture = false }
                         PanelBtn("Apply & restart", null, true, Modifier.weight(1.6f), enabled = pictureChanged) { apply() }
+                    }
+                } else if (mode == Mode.VIEW && showAchievements && achievements != null) {
+                    // Achievements: its own row like Picture and Saves. Touch only: no controller buttons or icons.
+                    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AchFilter.entries.forEach { f ->
+                            PanelBtn(f.label, null, achFilter == f, Modifier.weight(if (f == AchFilter.UNLOCKED) 1.25f else 1f)) { achFilter = f }
+                        }
+                        PanelBtn("Back", null, false, Modifier.weight(1f)) { showAchievements = false }
                     }
                 } else if (mode == Mode.CHANGE) {
                     val cand = changeCandidate ?: preset
