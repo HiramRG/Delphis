@@ -172,7 +172,7 @@ fun SavesList(
                 } else {
                     Text(formatSaveTime(e.savedAt), fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Text(saveLabel(e), fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1)
-                    if (e.kind == SaveKind.LATEST && latestTag != null) {
+                    if (e.isLatest && latestTag != null) {
                         Text(latestTag, fontSize = 11.sp, fontWeight = FontWeight.Black, color = if (c.dark) Color(0xFF5BD08A) else Color(0xFF2E9E57), maxLines = 1, modifier = Modifier.padding(start = 8.dp))
                     }
                 }
@@ -624,7 +624,7 @@ fun SavesDialog(
     val scope = rememberCoroutineScope()
     val keys = !PadGlyphs.touch
     // Start on the save Play continues from.
-    var index by remember { mutableIntStateOf(entries.indexOfFirst { it.kind == SaveKind.LATEST }.coerceAtLeast(0)) }
+    var index by remember { mutableIntStateOf(entries.indexOfFirst { it.isLatest }.coerceAtLeast(0)) }
     var status by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     val flow = remember(actions) {
         SaveFlow(scope, actions ?: SaveActions({ _, _ -> KeepResult.FAILED }, { false }), yourNames, onPlay) { msg, bad -> status = msg to bad; index = 0; onChanged() }

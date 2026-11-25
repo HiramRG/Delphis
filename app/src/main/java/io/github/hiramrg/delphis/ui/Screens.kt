@@ -1496,7 +1496,7 @@ fun GameScreen(act: MainActivity, game: GameEntry) {
             }
         }
     }
-    val latestSave = saves.firstOrNull { it.kind == io.github.hiramrg.delphis.platform.DolphinBridge.SaveKind.LATEST }
+    val latestSave = saves.firstOrNull { it.isLatest }
 
     // Multiplayer: who plays this game (only offered when a controller besides the Thor is connected).
     val pads = io.github.hiramrg.delphis.platform.rememberPads(act.prefs)

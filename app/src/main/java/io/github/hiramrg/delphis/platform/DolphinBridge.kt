@@ -30,6 +30,9 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
     private val resolver: ContentResolver get() = context.contentResolver
 
     companion object {
+        /** Save fingerprints by file, with the size and time they were read at. */
+        private val fingerprints = java.util.concurrent.ConcurrentHashMap<String, Pair<String, String>>()
+
         /** How the last autosave went, in words (for Diagnostics: the sleep save test). */
         @Volatile var lastSaveNote = ""
 
@@ -734,7 +737,12 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
     data class SaveEntry(
         val kind: SaveKind, val savedAt: Long, val size: Long, val slot: Int = 0, val backup: AutosaveBackup? = null, val uri: Uri? = null,
         val name: String? = null, val file: java.io.File? = null, val picture: java.io.File? = null, val keptId: Long = 0,
-    )
+        /** This kept save / Dolphin slot is also what's in the Quick Save slot now (loaded from it), so no separate latest row. */
+        val current: Boolean = false,
+    ) {
+        /** The save the game continues from: the latest autosave, or the kept save / slot standing in for it. */
+        val isLatest: Boolean get() = kind == SaveKind.LATEST || current
+    }
 
     /** The game's StateSaves files: name → (uri, last modified, size). */
     private fun stateFiles(gameId: String): Map<String, Triple<Uri, Long, Long>> {
@@ -767,17 +775,30 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         if (gameId.isNullOrBlank()) return emptyList()
         val files = stateFiles(gameId)
         val out = mutableListOf<SaveEntry>()
-        keptSaves(gameId).forEach { k -> out += SaveEntry(SaveKind.KEPT, k.savedAt, k.file.length(), name = k.name, file = k.file, picture = k.picture, keptId = k.id) }
         val picDir = pictureDir(gameId)
         val pics = picDir.list()?.toList().orEmpty()
         fun pic(t: Long) = SavePictures.nearest(pics, t)?.let { java.io.File(picDir, it) }
         val latest = files[DolphinConfigWriter.quickStatePath(gameId).last()]
         val latestAt = latest?.let { savedTime(gameId, it.second) }
-        latest?.let { (uri, _, size) -> out += SaveEntry(SaveKind.LATEST, latestAt!!, size, SaveSlots.QUICK, uri = uri, picture = pic(latestAt)) }
-        // An earlier autosave that's the same save as the latest one (or a newer earlier one) isn't a second save:
-        // loading the latest autosave used to leave such a copy. It's removed.
+        val latestFp = latest?.let { (uri, t, size) -> cachedFingerprint("slot:$uri", size, t) { resolver.openInputStream(uri) } }
+        // Each save once: a loaded kept save or Dolphin slot is also in the Quick Save slot, and the next autosave
+        // used to keep yet another copy of it as an earlier autosave. The kept save / slot is shown (marked as the
+        // one the game continues from); the copies aren't.
+        val kept = keptSaves(gameId)
+        val keptFps = kept.map { k -> cachedFingerprint("kept:${k.file.path}", k.file.length(), k.file.lastModified()) { k.file.inputStream() } }
+        val slots = SaveSlots.ownSlots(files.keys, gameId).map { (slot, name) -> slot to files.getValue(name) }
+        val slotFps = slots.map { (_, f) -> cachedFingerprint("slot:${f.first}", f.third, f.second) { resolver.openInputStream(f.first) } }
+        val latestShown = latestFp == null || (latestFp !in keptFps && latestFp !in slotFps)
+        kept.forEachIndexed { i, k ->
+            out += SaveEntry(SaveKind.KEPT, k.savedAt, k.file.length(), name = k.name, file = k.file, picture = k.picture, keptId = k.id, current = latestFp != null && keptFps[i] == latestFp)
+        }
+        if (latest != null && latestShown) latest.let { (uri, _, size) -> out += SaveEntry(SaveKind.LATEST, latestAt!!, size, SaveSlots.QUICK, uri = uri, picture = pic(latestAt)) }
+        // An earlier autosave that's the same save as the latest one, a kept save, a slot or a newer earlier one isn't
+        // a second save: it's removed.
         val seen = mutableSetOf<String>()
-        latest?.let { (uri, _, size) -> fingerprint(size) { resolver.openInputStream(uri) }?.let { seen += it } }
+        latestFp?.let { seen += it }
+        keptFps.filterNotNull().forEach { seen += it }
+        slotFps.filterNotNull().forEach { seen += it }
         val backups = autosaveBackups(gameId).filter { b ->
             val fp = fingerprint(b.size) { b.file.inputStream() } ?: return@filter true
             if (seen.add(fp)) true else { CrashLog.event("removed a duplicate earlier autosave of $gameId"); b.file.delete(); false }
@@ -785,9 +806,10 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
         backups.forEach { out += SaveEntry(SaveKind.EARLIER, it.savedAt, it.size, backup = it, picture = pic(it.savedAt)) }
         // Pictures of autosaves that are gone (only when the slot could be read, so a missing folder deletes nothing).
         if (latest != null) SavePictures.unused(pics, backups.map { it.savedAt } + latestAt!!).forEach { java.io.File(picDir, it).delete() }
-        SaveSlots.ownSlots(files.keys, gameId).forEach { (slot, name) ->
-            val (uri, t, size) = files.getValue(name)
-            out += SaveEntry(SaveKind.SLOT, t, size, slot, uri = uri)
+        val currentSlot = if (latestFp != null && !latestShown && latestFp !in keptFps) slotFps.indexOf(latestFp) else -1
+        slots.forEachIndexed { i, (slot, f) ->
+            val (uri, t, size) = f
+            out += SaveEntry(SaveKind.SLOT, t, size, slot, uri = uri, current = i == currentSlot)
         }
         return out
     }
@@ -812,6 +834,13 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             }
         }
         error("Dolphin kept writing its own save over it")
+    }
+
+    /** [fingerprint], remembered while the file's size and time stay the same. */
+    private fun cachedFingerprint(key: String, size: Long, mtime: Long, open: () -> java.io.InputStream?): String? {
+        val stamp = "$size:$mtime"
+        fingerprints[key]?.let { (s, fp) -> if (s == stamp) return fp }
+        return fingerprint(size, open)?.also { fingerprints[key] = stamp to it }
     }
 
     /** Size + checksums of the first and last 64 KB: equal for two copies of the same save. */
@@ -1065,7 +1094,10 @@ class DolphinBridge(private val context: Context, private val prefs: Prefs) {
             // The same save already kept under another time (it was loaded, then kept again): not a second copy.
             val size = latestAutosave(gameId)?.third ?: 0L
             val fp = fingerprint(size) { resolver.openInputStream(uri) }
-            val dupe = fp != null && !target.exists() && autosaveBackups(gameId).any { fingerprint(it.size) { it.file.inputStream() } == fp }
+            val dupe = fp != null && !target.exists() && (
+                autosaveBackups(gameId).any { fingerprint(it.size) { it.file.inputStream() } == fp } ||
+                    keptSaves(gameId).any { k -> cachedFingerprint("kept:${k.file.path}", k.file.length(), k.file.lastModified()) { k.file.inputStream() } == fp }
+                )
             if (dupe) { pruneBackups(gameId); return true }
             if (!target.exists()) {
                 val tmp = java.io.File(dir, target.name + ".tmp")
