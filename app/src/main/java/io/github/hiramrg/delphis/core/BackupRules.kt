@@ -3,7 +3,7 @@ package io.github.hiramrg.delphis.core
 /** Which of Delphis' settings go into a backup, and how a restore merges them with what's on the device. */
 object BackupRules {
     /** Favorites and play time (merged, never replaced). */
-    val PLAY_KEYS = setOf("favorites", "last_played", "sessions", "play_time")
+    val PLAY_KEYS = setOf("favorites", "last_played", "sessions", "play_time", "play_days")
 
     /**
      * Never backed up: secrets (the RetroAchievements key and account), folder permissions that only work on this

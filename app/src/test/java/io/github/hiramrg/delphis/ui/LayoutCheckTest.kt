@@ -131,6 +131,11 @@ class LayoutCheckTest {
             menuSounds = false
             markPlayed(games[2].key); markPlayed(games[1].key); markPlayed(games[0].key)
             addPlayTime(games[0].key, 3 * 3_600_000L)
+            addPlayTime(games[1].key, 95 * 60_000L)
+            addPlayTime(games[2].key, 25 * 60_000L)
+            // A made-up fortnight for Settings → Play stats.
+            val today = java.time.LocalDate.now()
+            putPlayDays((0L..13L).associate { d -> today.minusDays(d).toString() to listOf(20L, 55L, 0L, 35L, 80L, 120L, 95L)[(d % 7).toInt()] * 60_000L })
         }
 
         for (size in listOf(thor, phone, tablet)) withMain(size) { act ->
@@ -312,6 +317,31 @@ class LayoutCheckTest {
             io.github.hiramrg.delphis.platform.ResumeNotice.failed.value = null
         }
         TestHooks.padVendor = null
+        // The Achievements tab with its own buttons, on each filter (Next up shows how rare each one is).
+        run {
+            val (g, preset, _) = inGame.first()
+            val ach = { id: Int, title: String, desc: String, pts: Int, earned: String?, awarded: Int ->
+                io.github.hiramrg.delphis.core.RetroAchievements.Achievement(id, title, desc, pts, "00000", earned, id, awarded)
+            }
+            TestHooks.achievements = io.github.hiramrg.delphis.core.RetroAchievements.GameProgress(
+                95, g.info.title, listOf(
+                    ach(1, "Lucky Guesses", "In a Red Toad House, obtain every item", 5, "2026-11-20 10:00:00", 9000),
+                    ach(2, "Power Up Plethora", "Have at least one of each power-up in your inventory", 5, "2026-11-21 10:00:00", 7000),
+                    ach(3, "Coin Collector", "Collect 1,000 coins", 10, null, 6200),
+                    ach(4, "Star Coin Hunter", "Get all the Star Coins in World 2", 10, null, 2100),
+                    ach(5, "Perfect Flagpole", "Grab the very top of every flagpole in World 1 without using a Mini Mushroom", 25, null, 400),
+                    ach(6, "Untouchable", "Finish World 8 without taking damage", 50, null, 30),
+                ), players = 10000,
+            )
+            for (f in io.github.hiramrg.delphis.ui.AchFilter.entries) {
+                TestHooks.achievementsTab = f.ordinal
+                inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Achievements · ${f.label} (Thor)")
+                inGameMenu(phone, InGameMenuActivity::class.java, session(g, preset), "In-game Achievements · ${f.label}")
+                inGameMenu(tablet, InGameMenuActivity::class.java, session(g, preset), "In-game Achievements · ${f.label}")
+            }
+            TestHooks.achievementsTab = -1
+            TestHooks.achievements = null
+        }
         // The Saves tab: autosaves and Dolphin's slots; then the same tab with the helper stopped.
         run {
             val (g, preset, _) = inGame.first()
@@ -319,8 +349,8 @@ class LayoutCheckTest {
             TestHooks.saves = listOf(
                 SaveEntry(SaveKind.KEPT, now - 7_000_000, 40_000_000, name = "Before the castle", picture = testPicture(1), keptId = 1),
                 SaveEntry(SaveKind.KEPT, now - 95_000_000, 40_000_000, name = "Hidden exit found in the second world, near the tower", picture = testPicture(2), keptId = 2),
-                SaveEntry(SaveKind.LATEST, now - 60_000, 40_000_000, 9, picture = testPicture(3)),
-                SaveEntry(SaveKind.EARLIER, now - 1_200_000, 40_000_000, picture = testPicture(4)),
+                SaveEntry(SaveKind.LATEST, now - 60_000, 40_000_000, 9, picture = testPicture(3), loaded = true),
+                SaveEntry(SaveKind.EARLIER, now - 1_200_000, 40_000_000, picture = testPicture(4), beforeLoading = true),
                 SaveEntry(SaveKind.EARLIER, now - 8_000_000, 40_000_000, picture = testPicture(5)),
                 SaveEntry(SaveKind.EARLIER, now - 30_000_000, 40_000_000),
                 SaveEntry(SaveKind.SLOT, now - 90_000_000, 40_000_000, 1),

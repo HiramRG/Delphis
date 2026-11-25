@@ -2093,7 +2093,7 @@ fun SettingsSection.title(act: MainActivity): String = if (this == SettingsSecti
 
 enum class SettingsSection(val label: String) {
     APPEARANCE("Appearance"), SOUND("Sound"), CONTROLS("Controls"), GYRO("Gyro aiming"), CLOSING("Closing games"),
-    DISPLAY("Display"), BOTTOM("Bottom screen"), SAVES("Saves"), ACHIEVEMENTS("Achievements"), LIBRARY("Library & folders"), BACKUP("Backup"),
+    DISPLAY("Display"), BOTTOM("Bottom screen"), SAVES("Saves"), ACHIEVEMENTS("Achievements"), STATS("Play stats"), LIBRARY("Library & folders"), BACKUP("Backup"),
     FRONTENDS("Frontends"), UPDATES("Updates"), HELP("Diagnostics"),
 }
 
@@ -2154,6 +2154,7 @@ fun SettingsScreen(act: MainActivity) {
                     SettingsSection.ACHIEVEMENTS -> AchievementsSettings(act) { t, sub, on, change -> SwitchRow(t, sub, on, change) }
                     SettingsSection.LIBRARY -> LibrarySettings(act)
                     SettingsSection.SAVES -> SavesSettings(act)
+                    SettingsSection.STATS -> PlayStatsSettings(act)
                     SettingsSection.BACKUP -> BackupSettings(act)
                     SettingsSection.FRONTENDS -> FrontendSettings(act)
                     SettingsSection.UPDATES -> UpdatePanel(act)
@@ -2209,6 +2210,7 @@ private fun settingsIcon(s: SettingsSection): androidx.compose.ui.graphics.vecto
     SettingsSection.ACHIEVEMENTS -> Icons.Outlined.EmojiEvents
     SettingsSection.LIBRARY -> Icons.Outlined.Folder
     SettingsSection.SAVES -> Icons.Outlined.Save
+    SettingsSection.STATS -> Icons.Outlined.BarChart
     SettingsSection.BACKUP -> Icons.Outlined.Backup
     SettingsSection.FRONTENDS -> Icons.Outlined.Launch
     SettingsSection.UPDATES -> Icons.Outlined.Download

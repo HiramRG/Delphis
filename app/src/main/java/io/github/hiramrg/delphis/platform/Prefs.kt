@@ -126,6 +126,19 @@ class Prefs(context: Context) {
         if (ms <= 0) return
         val m = playTime()
         writeMap("play_time", m + (gameKey to (m[gameKey] ?: 0L) + ms))
+        writeMap("play_days", io.github.hiramrg.delphis.core.PlayStats.add(playDays(), java.time.LocalDate.now(), ms))
+    }
+
+    /** Replaces the per-day record (restoring it; the layout check's made-up week). */
+    fun putPlayDays(m: Map<String, Long>) = writeMap("play_days", m)
+
+    /** Time played per day, all games together ("yyyy-MM-dd" → ms; counted from build 355 on). */
+    fun playDays(): Map<String, Long> = readMap("play_days")
+
+    /** Settings → Play stats → Reset: forgets a game's total time and its number of sessions. */
+    fun resetPlayTime(gameKey: String) {
+        writeMap("play_time", playTime() - gameKey)
+        writeMap("sessions", sessions() - gameKey)
     }
 
     /** "Don't ask again" on the prompt to turn on the close-games helper. */

@@ -27,6 +27,8 @@ object RetroAchievements {
         /** When it was unlocked (RA's "yyyy-MM-dd HH:mm:ss", UTC), or null while locked. */
         val earnedAt: String?,
         val displayOrder: Int = 0,
+        /** How many players have it (RetroAchievements' NumAwarded). */
+        val awarded: Int = 0,
     ) {
         val unlocked: Boolean get() = earnedAt != null
         fun badgeUrl(): String = "$MEDIA/Badge/$badge" + (if (unlocked) "" else "_lock") + ".png"
@@ -37,7 +39,14 @@ object RetroAchievements {
         val gameId: Int, val title: String, val achievements: List<Achievement>, val savedAt: Long? = null,
         /** About the game (RetroAchievements' game page): year, genre, developer, title-screen picture URL. */
         val year: String? = null, val genre: String? = null, val developer: String? = null, val titleImage: String? = null,
+        /** How many players have played the set (NumDistinctPlayers): with [Achievement.awarded], how rare each one is. */
+        val players: Int = 0,
     ) {
+        /** Share of players who have [a], 0–100, or null when RetroAchievements didn't say. */
+        fun rarity(a: Achievement): Int? = if (players <= 0) null else (a.awarded * 100 / players).coerceIn(0, 100)
+        /** Locked ones, the ones most players have first (the easiest next); the game's own order without numbers. */
+        val nextUp: List<Achievement> get() =
+            achievements.filter { !it.unlocked }.sortedWith(compareByDescending<Achievement> { it.awarded }.thenBy { it.displayOrder }.thenBy { it.id })
         val total: Int get() = achievements.size
         val unlocked: Int get() = achievements.count { it.unlocked }
         val pointsTotal: Int get() = achievements.sumOf { it.points }
@@ -104,7 +113,7 @@ object RetroAchievements {
                 ?: a.optString("DateEarned").takeIf { it.isNotBlank() && it != "null" }
             list += Achievement(
                 a.optInt("ID"), a.optString("Title"), a.optString("Description"), a.optInt("Points"),
-                a.optString("BadgeName"), earned, a.optInt("DisplayOrder", 0),
+                a.optString("BadgeName"), earned, a.optInt("DisplayOrder", 0), a.optInt("NumAwarded", 0),
             )
         }
         fun str(k: String) = o.optString(k).takeIf { it.isNotBlank() && it != "null" }
@@ -113,6 +122,7 @@ object RetroAchievements {
             year = str("Released")?.let { Regex("(19|20)\\d{2}").find(it)?.value },
             genre = str("Genre"), developer = str("Developer") ?: str("Publisher"),
             titleImage = (str("ImageTitle") ?: str("ImageIngame"))?.takeIf { it.endsWith(".png") || it.endsWith(".jpg") }?.let { MEDIA + it },
+            players = o.optInt("NumDistinctPlayers", 0),
         )
     }.getOrNull()
 
@@ -162,4 +172,12 @@ object RetroAchievements {
         val a = normalize(discTitle); val b = normalize(raTitle)
         return a.isNotEmpty() && b.isNotEmpty() && (a == b || a.startsWith(b) || b.startsWith(a))
     }
+}
+
+/** "Common" (40 % of players or more), "Uncommon" (15–39 %), "Rare" (5–14 %), "Very rare" (under 5 %). */
+fun rarityName(percent: Int): String = when {
+    percent >= 40 -> "Common"
+    percent >= 15 -> "Uncommon"
+    percent >= 5 -> "Rare"
+    else -> "Very rare"
 }

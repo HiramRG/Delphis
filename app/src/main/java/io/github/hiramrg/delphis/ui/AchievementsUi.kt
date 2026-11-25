@@ -61,7 +61,8 @@ private val AchGoldBorder = Color(0xFF6B5A2E)
 fun rememberAchievements(prefs: Prefs, key: String, info: GameInfo): GameProgress? {
     val context = LocalContext.current
     val version by Achievements.version.collectAsState()
-    val p by produceState<GameProgress?>(null, key, version) {
+    val p by produceState<GameProgress?>(io.github.hiramrg.delphis.platform.TestHooks.achievements, key, version) {
+        io.github.hiramrg.delphis.platform.TestHooks.achievements?.let { value = it; return@produceState }
         value = if (prefs.raList && Achievements.account(prefs) != null) Achievements.progress(context, prefs, key, info) else null
     }
     return p
@@ -88,7 +89,7 @@ fun AchievementsChip(p: GameProgress, onClick: () -> Unit, modifier: Modifier = 
     )
 }
 
-enum class AchFilter(val label: String) { ALL("All"), UNLOCKED("Unlocked"), LOCKED("Locked") }
+enum class AchFilter(val label: String) { NEXT("Next up"), ALL("All"), UNLOCKED("Unlocked") }
 
 /** The game's list: header with progress, a filter, then every achievement (unlocked first). */
 @Composable
@@ -101,7 +102,7 @@ fun AchievementList(
     var ownFilter by remember { mutableStateOf(AchFilter.ALL) }
     val filter = shownFilter ?: ownFilter
     val items = remember(p, filter) {
-        p.sorted.filter { when (filter) { AchFilter.ALL -> true; AchFilter.UNLOCKED -> it.unlocked; AchFilter.LOCKED -> !it.unlocked } }
+        when (filter) { AchFilter.ALL -> p.sorted; AchFilter.UNLOCKED -> p.sorted.filter { it.unlocked }; AchFilter.NEXT -> p.nextUp }
     }
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -122,8 +123,17 @@ fun AchievementList(
             Box(Modifier.fillMaxHeight().fillMaxWidth(p.percent / 100f).background(Brush.horizontalGradient(listOf(AchGold, Color(0xFFF5D27A)))))
         }
         if (shownFilter == null) SegmentedPill(AchFilter.entries.map { it to it.label }, filter, { ownFilter = it }, Modifier.padding(bottom = 4.dp))
+        // A new filter starts at the top of its list.
+        LaunchedEffect(filter) { runCatching { listState.scrollToItem(0) } }
         LazyColumn(Modifier.weight(1f), state = listState) {
-            items(items, key = { it.id }) { AchievementRow(it) }
+            if (filter == AchFilter.NEXT && items.isNotEmpty()) item(key = "next-caption") {
+                Text(
+                    if (p.players > 0) "EASIEST NEXT · MOST PLAYERS HAVE THESE" else "STILL TO UNLOCK",
+                    fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = Color(0xFF9FD8F0), maxLines = 1,
+                    modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 2.dp),
+                )
+            }
+            items(items, key = { it.id }) { AchievementRow(it, rarity = if (filter == AchFilter.NEXT) p.rarity(it) else null, dim = filter != AchFilter.NEXT) }
             if (items.isEmpty()) item {
                 Text(if (filter == AchFilter.UNLOCKED) "Nothing unlocked yet." else "All unlocked!", fontSize = 12.sp, color = Color(0xFF8E9AA6), modifier = Modifier.padding(10.dp))
             }
@@ -132,15 +142,22 @@ fun AchievementList(
 }
 
 @Composable
-private fun AchievementRow(a: Achievement) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp, horizontal = 4.dp).alpha(if (a.unlocked) 1f else 0.6f), verticalAlignment = Alignment.CenterVertically) {
+private fun AchievementRow(a: Achievement, rarity: Int? = null, dim: Boolean = true) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp, horizontal = 4.dp).alpha(if (a.unlocked || !dim) 1f else 0.6f), verticalAlignment = Alignment.CenterVertically) {
         BadgeImage(a.badgeUrl(), 34.dp)
         Spacer(Modifier.width(9.dp))
         Column(Modifier.weight(1f)) {
             Text(a.title, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(a.description, fontSize = 10.5.sp, color = Color(0xFFA3ADB8), maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
-        Text((if (a.unlocked) "✓ " else "") + "${a.points} pts", fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, color = AchGold, modifier = Modifier.padding(start = 6.dp))
+        Column(Modifier.padding(start = 6.dp), horizontalAlignment = Alignment.End) {
+            Text((if (a.unlocked) "✓ " else "") + "${a.points} pts", fontSize = 10.5.sp, fontWeight = FontWeight.ExtraBold, color = AchGold, maxLines = 1)
+            // Next up: how many players have it.
+            if (rarity != null) Text(
+                "${io.github.hiramrg.delphis.core.rarityName(rarity)} · ${if (rarity < 1) "<1" else rarity}%", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                color = if (rarity < 15) Color(0xFFC9A0FF) else Color(0xFFA3ADB8),
+            )
+        }
     }
 }
 

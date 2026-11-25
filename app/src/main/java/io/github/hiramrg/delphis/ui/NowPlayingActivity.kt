@@ -778,8 +778,8 @@ open class NowPlayingActivity : ComponentActivity() {
 
         // RetroAchievements: unlock badges (top screen over the game, bottom screen here, or both) and the 🏆 list.
         val achievements = rememberAchievements(prefs, s.key, s.info)
-        var showAchievements by remember { mutableStateOf(false) }
-        var achFilter by remember { mutableStateOf(AchFilter.ALL) }
+        var showAchievements by remember { mutableStateOf(io.github.hiramrg.delphis.platform.TestHooks.achievementsTab >= 0) }
+        var achFilter by remember { mutableStateOf(AchFilter.entries.getOrNull(io.github.hiramrg.delphis.platform.TestHooks.achievementsTab) ?: AchFilter.ALL) }
         var bottomPopup by remember { mutableStateOf<io.github.hiramrg.delphis.platform.Achievements.Popup?>(null) }
         LaunchedEffect(startedAt) {
             val ctx = this@NowPlayingActivity
@@ -1140,7 +1140,7 @@ open class NowPlayingActivity : ComponentActivity() {
                     // Achievements: its own row like Picture and Saves. Touch only: no controller buttons or icons.
                     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AchFilter.entries.forEach { f ->
-                            PanelBtn(f.label, null, achFilter == f, Modifier.weight(if (f == AchFilter.UNLOCKED) 1.25f else 1f)) { achFilter = f }
+                            PanelBtn(f.label, null, achFilter == f, Modifier.weight(if (f == AchFilter.ALL) 0.85f else 1.2f)) { achFilter = f }
                         }
                         PanelBtn("Back", null, false, Modifier.weight(1f)) { showAchievements = false }
                     }

@@ -5,13 +5,13 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 65
+    const val RELEASE = 66
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("A cover while saving and loading.", "When Delphis has to use Dolphin's menu to save or load, the game is covered by a short \"Saving\" or \"Loading save\" screen, so the menu never flashes by."),
-        Item("Clearer Saves list.", "After loading, where you were is labelled \"Before loading\" with its picture, and the save you loaded is marked \"Loaded\".", fix = true),
+        Item("Play stats.", "Settings → Play stats: this week's play time by day, your most played games and their sessions, and Reset for a game's time."),
+        Item("Next up achievements.", "The in-game Achievements tab has its own buttons now. \"Next up\" lists the ones you haven't unlocked, the ones most players have first, marked Common to Very rare."),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

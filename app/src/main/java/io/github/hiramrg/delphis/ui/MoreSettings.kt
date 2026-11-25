@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -258,4 +260,101 @@ private fun RestoreDialog(act: MainActivity, preview: Backup.Preview) {
         }
     }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+}
+
+/** Settings → Play stats: this week by day, most played games (with Reset), totals. */
+@Composable
+fun PlayStatsSettings(act: MainActivity) {
+    val c = LocalWii.current
+    val prefs = act.prefs
+    var version by remember { mutableStateOf(0) }
+    val today = remember { java.time.LocalDate.now() }
+    val days = remember(version, act.statsVersion) { prefs.playDays() }
+    val time = remember(version, act.statsVersion) { prefs.playTime() }
+    val sessions = remember(version, act.statsVersion) { prefs.sessions() }
+    val week = remember(days) { io.github.hiramrg.delphis.core.PlayStats.week(days, today) }
+    val weekTotal = week.sumOf { it.ms }
+    val lastWeek = io.github.hiramrg.delphis.core.PlayStats.lastWeekTotal(days, today)
+    val first = io.github.hiramrg.delphis.core.PlayStats.firstDay(days)
+    val top = remember(time, sessions) { io.github.hiramrg.delphis.core.PlayStats.mostPlayed(time, sessions) }
+    val titles = remember(act.games) { act.games.associate { it.key to it.info.title } }
+    var resetting by remember { mutableStateOf<String?>(null) }
+
+    CapsLabel("This week")
+    GroupCard {
+        Column(Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(io.github.hiramrg.delphis.core.PlayStats.format(weekTotal), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = c.text, maxLines = 1)
+                Spacer(Modifier.width(10.dp))
+                Text("Today: " + io.github.hiramrg.delphis.core.PlayStats.format(week.firstOrNull { it.today }?.ms ?: 0L), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.textDim, maxLines = 1, modifier = Modifier.padding(bottom = 3.dp))
+            }
+            // Compared with last week only once there's a whole earlier week to compare with.
+            val countedLastWeek = first != null && !first.isAfter(today.with(java.time.DayOfWeek.MONDAY).minusDays(7))
+            Text(
+                if (countedLastWeek) io.github.hiramrg.delphis.core.PlayStats.compare(weekTotal, lastWeek)
+                else "Counting day by day since ${(first ?: today).dayOfMonth} ${(first ?: today).month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())}",
+                fontSize = 12.sp, fontWeight = FontWeight.Bold, lineHeight = 15.sp,
+                color = if (countedLastWeek && weekTotal >= lastWeek) c.green else c.textDim,
+            )
+            val max = (week.maxOfOrNull { it.ms } ?: 0L).coerceAtLeast(60_000L)
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                week.forEach { d ->
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(Modifier.height(96.dp).fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
+                            val f = if (d.ms <= 0) 0f else (d.ms.toFloat() / max).coerceIn(0.04f, 1f)
+                            Box(
+                                Modifier.fillMaxWidth(0.62f).fillMaxHeight(if (d.ms <= 0) 0.03f else f).clip(RoundedCornerShape(5.dp))
+                                    .background(if (d.ms <= 0) c.cardBorder else c.accent),
+                            )
+                        }
+                        Text(
+                            d.label, fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(top = 4.dp),
+                            fontWeight = if (d.today) FontWeight.Black else FontWeight.Bold,
+                            color = when { d.today -> c.accentText; d.future -> c.textDim.copy(alpha = 0.5f); else -> c.textDim },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    CapsLabel("Most played")
+    GroupCard {
+        if (top.isEmpty()) Text(
+            "Nothing yet: play a game for a minute and it shows here.", fontSize = 12.sp, color = c.textDim,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+        )
+        val most = top.firstOrNull()?.ms ?: 1L
+        top.forEachIndexed { i, g ->
+            if (i > 0) RowDivider()
+            SettingRow(
+                titles[g.key] ?: g.key,
+                io.github.hiramrg.delphis.core.PlayStats.format(g.ms) + " · " + if (g.sessions == 1L) "1 session" else "${g.sessions} sessions",
+            ) {
+                Box(Modifier.width(70.dp).height(6.dp).clip(RoundedCornerShape(3.dp)).background(c.cardBorder)) {
+                    Box(Modifier.fillMaxHeight().fillMaxWidth((g.ms.toFloat() / most).coerceIn(0.05f, 1f)).background(c.accent))
+                }
+                Spacer(Modifier.width(10.dp))
+                PanelBtn("Reset", null, false, small = true) { resetting = g.key }
+            }
+        }
+    }
+    val totalMs = time.values.sum()
+    Text(
+        "All time: ${io.github.hiramrg.delphis.core.PlayStats.format(totalMs)} across ${time.count { it.value >= 60_000 }} games · ${sessions.values.sum()} sessions. " +
+            "Only time with the screen on counts.",
+        fontSize = 12.sp, color = c.textDim, lineHeight = 15.sp, modifier = Modifier.padding(horizontal = 6.dp),
+    )
+    resetting?.let { key ->
+        ConfirmDialog(
+            "Play stats", "Reset play time for ${titles[key] ?: key}?", "Its time played and number of sessions go back to zero. This week's chart stays as it is.",
+            confirm = "Reset", onCancel = { resetting = null },
+        ) {
+            prefs.resetPlayTime(key)
+            resetting = null
+            version++
+            act.statsVersion++
+            Notices.done(act, "Play time reset")
+        }
+    }
 }

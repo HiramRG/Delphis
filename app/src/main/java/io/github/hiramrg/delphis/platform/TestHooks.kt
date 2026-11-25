@@ -31,6 +31,10 @@ object TestHooks {
     @Volatile @JvmField var screenshots: List<Screenshots.Shot> = emptyList()
     @Volatile @JvmField var screenshotsDialog = false
 
+    /** Made-up RetroAchievements progress for the in-game Achievements tab, opened on filter [achievementsTab] (-1 = closed). */
+    @Volatile @JvmField var achievements: io.github.hiramrg.delphis.core.RetroAchievements.GameProgress? = null
+    @Volatile @JvmField var achievementsTab = -1
+
     /** The layout check pretends this controller is connected (one screen): vendor id, e.g. 0x045e = Xbox. */
     @Volatile @JvmField var padVendor: Int? = null
 
