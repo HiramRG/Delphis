@@ -5,13 +5,12 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 66
+    const val RELEASE = 67
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("Play stats.", "Settings → Play stats: this week's play time by day, your most played games and their sessions, and Reset for a game's time."),
-        Item("Next up achievements.", "The in-game Achievements tab has its own buttons now. \"Next up\" lists the ones you haven't unlocked, the ones most players have first, marked Common to Very rare."),
+        Item("Trackpad games: every tab has its buttons.", "Picture, Saves and Achievements no longer show the trackpad's Recenter and Speed row, so Apply & restart is there again.", fix = true),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */
