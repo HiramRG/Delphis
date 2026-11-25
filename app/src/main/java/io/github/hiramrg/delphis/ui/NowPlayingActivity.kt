@@ -904,6 +904,8 @@ open class NowPlayingActivity : ComponentActivity() {
                         val resumeFocus = remember { androidx.compose.ui.focus.FocusRequester() }
                         LaunchedEffect(openSignal) { delay(150); runCatching { resumeFocus.requestFocus() } }
                         // D-pad down goes straight to the action buttons instead of stopping at the map's toggle.
+                        // 📷 in the header like on the Thor (not a tab); the menu steps aside first, so the picture is of the game.
+                        TopChip("📷", modifier = Modifier.padding(end = 6.dp)) { takeScreenshot() }
                         PanelBtn("▶ Resume", if (showPicture || showSaves) null else "A", false, Modifier.focusRequester(resumeFocus).focusProperties { if (mode == Mode.VIEW && !(preset.isTrackpad && padView)) down = changeFocus }) { resumeGame() }
                     } else {
                         // Trackpad on screen: the action row is replaced by the pad's controls, so Quit stays up here.
@@ -942,14 +944,12 @@ open class NowPlayingActivity : ComponentActivity() {
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     if (panelMode) KeyIcon("L1")
-                    // Equal-width tabs, icon over name: they fit with any text size.
+                    // Tabs: icon beside the name on short screens (width by name), icon over the name on tall ones.
                     IconTabs(
                         tabs.map { when (it) { 1 -> Triple(it, "🏆", "Achievements"); 2 -> Triple(it, "▭", "Picture"); 3 -> Triple(it, "↺", "Saves"); else -> Triple(it, "🎮", "Controls") } },
                         tab, { selectTab(it) }, Modifier.weight(1f),
                     )
                     if (panelMode) KeyIcon("R1")
-                    // 📷 (one screen): a button beside the tabs, not a tab; the menu steps aside first, so the picture is of the game.
-                    if (panelMode) CameraChip { takeScreenshot() }
                 }
                 Spacer(Modifier.height(8.dp))
 
