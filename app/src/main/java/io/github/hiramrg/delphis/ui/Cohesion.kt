@@ -134,7 +134,7 @@ fun ToggleRow(title: String, sub: String?, on: Boolean, onChange: (Boolean) -> U
  * name). The in-game menu's Controls / Achievements / Picture / Saves.
  */
 @Composable
-fun <T> IconTabs(options: List<Triple<T, String, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier, height: Dp = 40.dp) {
+fun <T> IconTabs(options: List<Triple<T, String, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier, height: Dp = 40.dp, iconsWhenShort: Boolean = true) {
     val c = LocalWii.current
     val track = RoundedCornerShape(14.dp)
     val shape = RoundedCornerShape(11.dp)
@@ -150,10 +150,10 @@ fun <T> IconTabs(options: List<Triple<T, String, String>>, selected: T, onSelect
         options.forEach { (v, icon, label) ->
             val on = v == selected
             val fg = if (on) c.onAccent else c.textDim
-            val cell = Modifier.weight(if (short) label.length + 5f else 1f).fillMaxHeight().rememberFocus("tab-$label").focusRing(shape, width = 2.5.dp).clip(shape)
+            val cell = Modifier.weight(if (short) label.length + (if (iconsWhenShort) 5f else 2f) else 1f).fillMaxHeight().rememberFocus("tab-$label").focusRing(shape, width = 2.5.dp).clip(shape)
                 .background(if (on) c.accent else Color.Transparent).clickable { onSelect(v) }
             if (short) Row(cell.padding(horizontal = 6.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally)) {
-                Text(icon, fontSize = 13.sp, color = fg, maxLines = 1)
+                if (iconsWhenShort) Text(icon, fontSize = 13.sp, color = fg, maxLines = 1)
                 Text(label, fontSize = 12.5.sp, fontWeight = FontWeight.ExtraBold, color = fg, maxLines = 1)
             } else Column(cell.padding(vertical = 3.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Text(icon, fontSize = 14.sp, color = fg, maxLines = 1)
