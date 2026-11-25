@@ -139,8 +139,9 @@ fun <T> IconTabs(options: List<Triple<T, String, String>>, selected: T, onSelect
     val track = RoundedCornerShape(14.dp)
     val shape = RoundedCornerShape(11.dp)
     // Short screens (a phone, the Thor's bottom screen): icon beside the name, one line, so the tab's content
-    // keeps its room. Taller ones: icon over the name. Either way every tab is the same width, and the row
-    // grows with Android's text size instead of cutting the names.
+    // keeps its room. Taller ones: icon over the name. Taller screens keep every tab the same width; the row
+    // grows with Android's text size instead of cutting the names. Side by side, a tab's width follows its name
+    // (icon + words), so a long name like "Achievements" fits next to short ones.
     val short = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 480
     Row(
         modifier.heightIn(min = if (short) 28.dp else height).height(IntrinsicSize.Min).clip(track).background(if (c.dark) Color(0xFF15181C) else c.bar).padding(3.dp),
@@ -149,7 +150,7 @@ fun <T> IconTabs(options: List<Triple<T, String, String>>, selected: T, onSelect
         options.forEach { (v, icon, label) ->
             val on = v == selected
             val fg = if (on) c.onAccent else c.textDim
-            val cell = Modifier.weight(1f).fillMaxHeight().rememberFocus("tab-$label").focusRing(shape, width = 2.5.dp).clip(shape)
+            val cell = Modifier.weight(if (short) label.length + 5f else 1f).fillMaxHeight().rememberFocus("tab-$label").focusRing(shape, width = 2.5.dp).clip(shape)
                 .background(if (on) c.accent else Color.Transparent).clickable { onSelect(v) }
             if (short) Row(cell.padding(horizontal = 6.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally)) {
                 Text(icon, fontSize = 13.sp, color = fg, maxLines = 1)
