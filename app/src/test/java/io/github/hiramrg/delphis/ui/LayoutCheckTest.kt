@@ -288,6 +288,9 @@ class LayoutCheckTest {
             val (g, preset, _) = inGame.first()
             inGameMenu(bottom, NowPlayingActivity::class.java, session(g, preset), "In-game Picture · ${if (tab == 1) "Look" else "Sharpness"} (Thor)")
         }
+        // A trackpad game: Picture keeps Cancel · Later · Apply & restart (not the pad's Recenter / Speed row).
+        TestHooks.pictureTab = 1
+        inGameMenu(bottom, NowPlayingActivity::class.java, session(game("REDE41", "Red Steel", Platform.WII), "redsteel-trackpad"), "In-game Picture · trackpad game (Thor)")
         TestHooks.pictureTab = null
         // Change controls, in the same box (controller on one screen, touch on the Thor).
         TestHooks.inGameChange = true

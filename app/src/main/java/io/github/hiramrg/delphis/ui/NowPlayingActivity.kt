@@ -839,7 +839,7 @@ open class NowPlayingActivity : ComponentActivity() {
         val dimmedNow by rememberUpdatedState(look != BottomScreen.Look.BRIGHT)
         // Touches on the trackpad aim; they never wake, dim or get swallowed.
         val padHit by rememberUpdatedState<(androidx.compose.ui.geometry.Offset) -> Boolean> { p ->
-            mode == Mode.VIEW && padView && !showAchievements && padBounds?.contains(p) == true
+            mode == Mode.VIEW && padView && !showAchievements && !showPicture && !showSaves && padBounds?.contains(p) == true
         }
 
         // Window brightness: the chosen normal level when bright (the system level until one is chosen);
@@ -907,7 +907,7 @@ open class NowPlayingActivity : ComponentActivity() {
                         PanelBtn("▶ Resume", if (showPicture || showSaves) null else "A", false, Modifier.focusRequester(resumeFocus).focusProperties { if (mode == Mode.VIEW && !(preset.isTrackpad && padView)) down = changeFocus }) { resumeGame() }
                     } else {
                         // Trackpad on screen: the action row is replaced by the pad's controls, so Quit stays up here.
-                        if (preset.isTrackpad && padView && mode == Mode.VIEW) TopChip("Quit") { if (prefs.skipExitWarning) closingGame { backToMainMenu() } else confirmExit = true }
+                        if (preset.isTrackpad && padView && mode == Mode.VIEW && !showPicture && !showSaves && !showAchievements) TopChip("Quit") { if (prefs.skipExitWarning) closingGame { backToMainMenu() } else confirmExit = true }
                         TopChip("📷", modifier = Modifier.padding(end = 6.dp)) { takeScreenshot() }
                         TopChip("☀", on = showBrightness) {
                             showPicture = false; showSaves = false
@@ -1092,10 +1092,12 @@ open class NowPlayingActivity : ComponentActivity() {
 
                 // ---------------- bottom bar
                 // Multiplayer: what's different for Xbox / PlayStation players (the map uses the Thor's letters).
-                if (mode == Mode.VIEW && !(preset.isTrackpad && padView) && io.github.hiramrg.delphis.platform.Pads.multiplayer(startPlayers)) {
+                if (mode == Mode.VIEW && !showPicture && !showSaves && !showAchievements && !(preset.isTrackpad && padView) && io.github.hiramrg.delphis.platform.Pads.multiplayer(startPlayers)) {
                     ButtonLetterNotes(startPlayers, Modifier.padding(top = 5.dp))
                 }
-                if (mode == Mode.VIEW && preset.isTrackpad && padView) {
+                // The trackpad's own row belongs to the Controls tab only: Picture, Saves and Achievements keep their
+                // buttons (Apply & restart, Save now, the filters) like with any other preset.
+                if (mode == Mode.VIEW && preset.isTrackpad && padView && !showPicture && !showSaves && !showAchievements) {
                     Row(Modifier.fillMaxWidth().padding(top = 6.dp).alpha(fade), verticalAlignment = Alignment.CenterVertically) {
                         PanelBtn("◎ Recenter", null, false) { recenterPointer() }
                         Spacer(Modifier.weight(1f))

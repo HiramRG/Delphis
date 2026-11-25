@@ -849,7 +849,10 @@ class DolphinExitService : AccessibilityService() {
     private fun dolphinBack(pkg: String): Boolean {
         val active = runCatching { rootInActiveWindow?.packageName?.toString() }.getOrNull()
         if (active != null && active != pkg && active != packageName && active != "com.android.systemui") {
-            CrashLog.event("Back not sent: another app is in front")
+            // A system window (Android's "keeps stopping" dialog, the launcher) is named: it says what happened.
+            // Other apps stay unnamed in the report.
+            val system = runCatching { (packageManager.getApplicationInfo(active, 0).flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0 }.getOrDefault(false)
+            CrashLog.event("Back not sent: " + if (system) "a system window is in front ($active)" else "another app is in front")
             return false
         }
         return performGlobalAction(GLOBAL_ACTION_BACK)
