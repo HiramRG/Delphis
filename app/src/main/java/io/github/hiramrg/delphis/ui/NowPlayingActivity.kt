@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import io.github.hiramrg.delphis.core.Brightness
 import io.github.hiramrg.delphis.core.GameDatabase
 import io.github.hiramrg.delphis.core.KeptSaves
 import io.github.hiramrg.delphis.core.Preset
@@ -77,7 +78,8 @@ import io.github.hiramrg.delphis.core.BottomScreen
 /**
  * The bottom screen while a game runs:
  *  - top-left back arrow closes the game and Dolphin and returns to Delphis,
- *  - top-right brightness pill opens a panel: normal brightness, Auto-dim for this session and
+ *  - top-right brightness pill opens a panel: Match the top screen / own level, Auto-dim (this time or always
+ *    for this game) and
  *    "Turn screen off" (black at minimum brightness until the next touch),
  *  - the controls in the middle: main actions as big tiles, everything else in a small grid,
  *  - "Change preset" and "Edit preset" at the bottom (both restart the game to apply).
@@ -238,7 +240,18 @@ open class NowPlayingActivity : ComponentActivity() {
             padsAtStart += DeviceInfo.gamepads().map { it.name }
             getSystemService(android.hardware.input.InputManager::class.java).registerInputDeviceListener(padListener, android.os.Handler(android.os.Looper.getMainLooper()))
         }
-        if (!panelMode) preferLowRefreshRate()
+        if (!panelMode) {
+            preferLowRefreshRate()
+            // Thor: the bottom screen starts at its right level before its first frame (matched to the top by
+            // default), instead of the bottom panel's own brightness, so both screens look the same at launch.
+            topNow = topLevel(); topAutoNow = topAuto()
+            startLevel = if (prefs.bottomMatchTop) topNow else Brightness.levelOf(prefs.bottomPercent)
+            setWindowBrightness(startLevel)
+            runCatching {
+                for (key in listOf(android.provider.Settings.System.SCREEN_BRIGHTNESS, "screen_brightness_float", android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE))
+                    contentResolver.registerContentObserver(android.provider.Settings.System.getUriFor(key), false, brightnessObserver)
+            }
+        }
         // One screen: a game starting (Dolphin, launched next, covers this), or the menu opened again after
         // Android closed it (the game kept running: same session, no new start).
         val reopened = panelMode && (intent.getBooleanExtra(InGameMenuActivity.EXTRA_OPEN, false) || intent.getBooleanExtra(InGameMenuActivity.EXTRA_QUIT, false))
@@ -481,6 +494,7 @@ open class NowPlayingActivity : ComponentActivity() {
             return
         }
         if (panelMode) runCatching { getSystemService(android.hardware.input.InputManager::class.java).unregisterInputDeviceListener(padListener) }
+        else runCatching { contentResolver.unregisterContentObserver(brightnessObserver) }
         removeFocusSink()
         runCatching { unregisterReceiver(screenReceiver) }
         if (isFinishing && panelMode && !quitting) {
@@ -517,10 +531,33 @@ open class NowPlayingActivity : ComponentActivity() {
         }
     }
 
-    /** The system brightness as a 0-1 window level (where a fade from "bright" starts). */
-    private fun systemBrightness(): Float =
-        runCatching { android.provider.Settings.System.getInt(contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS) / 255f }
-            .getOrDefault(0.5f).coerceIn(0.05f, 1f)
+    /**
+     * The top screen's brightness as a window level (0..1): Android's exact brightness float when it can be
+     * read, otherwise its 0..255 setting converted the way Android converts it. No floor, so a dim top at
+     * night gives an equally dim bottom.
+     */
+    private fun topLevel(): Float {
+        val cr = contentResolver
+        runCatching { android.provider.Settings.System.getFloat(cr, "screen_brightness_float") }.getOrNull()
+            ?.takeIf { it in 0f..1f }?.let { return it.coerceAtLeast(Brightness.MIN_LEVEL) }
+        return runCatching { Brightness.levelOfSetting(android.provider.Settings.System.getInt(cr, android.provider.Settings.System.SCREEN_BRIGHTNESS)) }
+            .getOrDefault(0.4f)
+    }
+
+    /** Auto-brightness on: Android doesn't share the live level, so matching uses the top's last set level. */
+    private fun topAuto(): Boolean = runCatching {
+        android.provider.Settings.System.getInt(contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE) ==
+            android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
+    }.getOrDefault(false)
+
+    /** The top screen's level, kept up to date while the game runs (quick settings change it mid-game). */
+    private var topNow by androidx.compose.runtime.mutableFloatStateOf(0.4f)
+    private var topAutoNow by androidx.compose.runtime.mutableStateOf(false)
+    /** The bottom screen's window level set before the first frame, where the fades start from. */
+    private var startLevel = -1f
+    private val brightnessObserver = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) { topNow = topLevel(); topAutoNow = topAuto() }
+    }
 
     private fun setWindowBrightness(level: Float) {
         window.attributes = window.attributes.apply { screenBrightness = level }
@@ -594,10 +631,12 @@ open class NowPlayingActivity : ComponentActivity() {
             resolve(s.presetId).let { if (io.github.hiramrg.delphis.platform.Pads.multiplayer(startPlayers)) io.github.hiramrg.delphis.core.Players.multiplayerPreset(it) else it }
         }
         var mode by remember { mutableStateOf(if (io.github.hiramrg.delphis.platform.TestHooks.inGameChange) Mode.CHANGE else Mode.VIEW) }
-        // ☀ pill: the bottom screen's normal brightness (awake, or dimming off). The dimmed level is set in Settings.
-        var brightness by remember { mutableIntStateOf(prefs.bottomBrightness ?: (systemBrightness() * 100).roundToInt()) }
-        var brightnessChosen by remember { mutableStateOf(prefs.bottomBrightness != null) }
-        val dimLevel = remember { prefs.brightnessPercent }
+        // ☀ pill: the bottom screen's normal brightness (awake, or dimming off): the top screen's (default) or the
+        // player's own level. "Dim" lowers it by the strength chosen in Settings.
+        var matchTop by remember { mutableStateOf(prefs.bottomMatchTop) }
+        var ownPercent by remember { mutableIntStateOf(prefs.bottomPercent) }
+        val dimStrength = remember { prefs.dimStrength }
+        val normalLevel = if (matchTop) topNow else Brightness.levelOf(ownPercent)
         var showBrightness by remember { mutableStateOf(false) }
         var confirmExit by remember { mutableStateOf(false) }
         var exitDontAsk by remember { mutableStateOf(false) }
@@ -824,7 +863,8 @@ open class NowPlayingActivity : ComponentActivity() {
         // (so it can't press "Main menu" by accident). Menus, dialogs and the editor keep it bright.
         val screenMode = remember { prefs.bottomScreenMode }
         val delayMs = remember { prefs.dimDelaySeconds * 1000L }
-        var autoDim by remember { mutableStateOf(!panelMode && screenMode != BottomScreen.Mode.ON) }
+        var autoDim by remember { mutableStateOf(!panelMode && screenMode != BottomScreen.Mode.ON && !prefs.autoDimOffFor(gid)) }
+        var autoDimAlways by remember { mutableStateOf(prefs.autoDimOffFor(gid)) }
         var idle by remember { mutableStateOf(false) }
         var lastTouch by remember { mutableLongStateOf(0L) }
         val overlayOpen = confirmExit || restartAction != null || helperPrompt != null || busy != null
@@ -835,39 +875,44 @@ open class NowPlayingActivity : ComponentActivity() {
             delay(delayMs)
             idle = true
         }
-        val look = BottomScreen.look(screenMode, autoDim, idle, screenOff, keepBright)
+        // An achievement pop-up lights a dimmed screen up while it shows, then it goes back down (no touch needed).
+        val wakeForAch = remember { prefs.dimWakeForAchievements }
+        val eventWake = !panelMode && wakeForAch && bottomPopup != null
+        val padOnScreen = mode == Mode.VIEW && preset.isTrackpad && padView && !showAchievements && !showPicture && !showSaves
+        val look = BottomScreen.look(screenMode, autoDim, idle, screenOff, keepBright, eventWake, padOnScreen)
         val dimmedNow by rememberUpdatedState(look != BottomScreen.Look.BRIGHT)
         // Touches on the trackpad aim; they never wake, dim or get swallowed.
         val padHit by rememberUpdatedState<(androidx.compose.ui.geometry.Offset) -> Boolean> { p ->
             mode == Mode.VIEW && padView && !showAchievements && !showPicture && !showSaves && padBounds?.contains(p) == true
         }
 
-        // Window brightness: the chosen normal level when bright (the system level until one is chosen);
-        // the dimmed level (never brighter than normal) when dimmed. Changes fade over FADE_MS.
+        // Window brightness: the normal level when bright (the top screen's, or the player's own), a share of it
+        // when dimmed, the minimum when black. Never handed back to Android: that would use the bottom panel's
+        // own brightness, which doesn't match the top. Going down fades slowly, waking is quick.
+        val dimLevel = Brightness.dimmed(normalLevel, dimStrength)
         val target: Float? = when {
             panelMode -> null
-            showBrightness -> Prefs.windowBrightness(brightness)
-            look == BottomScreen.Look.BRIGHT -> if (brightnessChosen) Prefs.windowBrightness(brightness) else null
-            look == BottomScreen.Look.DIM -> Prefs.windowBrightness(minOf(dimLevel, brightness))
-            else -> Prefs.windowBrightness(0)
+            showBrightness || look == BottomScreen.Look.BRIGHT -> normalLevel
+            look == BottomScreen.Look.DIM -> dimLevel
+            else -> Brightness.MIN_LEVEL
         }
-        val level = remember { Animatable(-1f) } // -1 = follow the system brightness
+        val level = remember { Animatable(if (startLevel >= 0f) startLevel else normalLevel) }
+        // While the panel is open the slider moves the screen at once; opening it on a dimmed screen fades up first.
+        var panelSettled by remember { mutableStateOf(false) }
+        LaunchedEffect(showBrightness) {
+            panelSettled = false
+            if (showBrightness) { delay(BottomScreen.FADE_UP_MS + 40L); panelSettled = true }
+        }
         LaunchedEffect(target) {
-            val to = target ?: systemBrightness()
-            if (showBrightness) {
-                level.snapTo(to); setWindowBrightness(to)
-                return@LaunchedEffect
-            }
-            if (level.value < 0f) level.snapTo(systemBrightness())
-            level.animateTo(to, tween(BottomScreen.FADE_MS)) { setWindowBrightness(value) }
-            if (target == null) {
-                level.snapTo(-1f)
-                setWindowBrightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
-            }
+            val to = target ?: return@LaunchedEffect
+            if (showBrightness && panelSettled) { level.snapTo(to); setWindowBrightness(to); return@LaunchedEffect }
+            val ms = if (to >= level.value) BottomScreen.FADE_UP_MS else BottomScreen.FADE_DOWN_MS
+            level.animateTo(to, tween(ms)) { setWindowBrightness(value) }
         }
-        val blackAlpha by animateFloatAsState(if (look == BottomScreen.Look.BLACK) 1f else 0f, tween(BottomScreen.FADE_MS), label = "black")
+        val black = look == BottomScreen.Look.BLACK
+        val blackAlpha by animateFloatAsState(if (black) 1f else 0f, tween(if (black) BottomScreen.FADE_DOWN_MS else BottomScreen.FADE_UP_MS), label = "black")
         // Firmwares that ignore per-display brightness still get darker pixels at the lowest settings.
-        val contentAlpha = if ((look == BottomScreen.Look.DIM && minOf(dimLevel, brightness) <= 5) || brightness <= 3) 0.6f else 1f
+        val contentAlpha = if (!panelMode && ((look == BottomScreen.Look.DIM && dimLevel <= 0.05f) || normalLevel <= 0.03f)) 0.6f else 1f
 
         Box(
             Modifier.fillMaxSize().pointerInput(Unit) {
@@ -1213,10 +1258,23 @@ open class NowPlayingActivity : ComponentActivity() {
                     showBrightness = false
                 }
                 BrightnessPanel(
-                    value = brightness,
-                    onChange = { brightness = it; brightnessChosen = true; prefs.bottomBrightness = it },
+                    percent = if (matchTop) Brightness.percentOf(topNow) else ownPercent,
+                    matched = matchTop,
+                    topPercent = Brightness.percentOf(topNow),
+                    topAuto = topAutoNow,
+                    onChange = { matchTop = false; ownPercent = it; prefs.bottomMatchTop = false; prefs.bottomPercent = it },
+                    onMatch = { on ->
+                        if (!on) { ownPercent = Brightness.percentOf(topNow); prefs.bottomPercent = ownPercent }
+                        matchTop = on; prefs.bottomMatchTop = on
+                    },
                     autoDim = autoDim,
-                    onAutoDim = { autoDim = it },
+                    autoDimSummary = BottomScreen.summary(screenMode, (delayMs / 1000).toInt(), dimStrength, padOnScreen),
+                    offChoice = if (prefs.autoDimRemember && gid != null) autoDimAlways else null,
+                    onAutoDim = { on ->
+                        autoDim = on
+                        if (on && autoDimAlways) { autoDimAlways = false; prefs.setAutoDimOffFor(gid, false) }
+                    },
+                    onOffChoice = { always -> autoDimAlways = always; prefs.setAutoDimOffFor(gid, always) },
                     onScreenOff = { showBrightness = false; screenOff = true },
                     onDismiss = { showBrightness = false },
                 )
@@ -1455,26 +1513,73 @@ open class NowPlayingActivity : ComponentActivity() {
         }
     }
 
-    /** The panel under the brightness pill: normal brightness, Auto-dim for this session, Turn screen off. */
+    /**
+     * The panel under the brightness pill: Match the top screen, the brightness slider (Android's curve, so the
+     * number means what it means on the top screen's slider; a TOP mark when it isn't matched), Auto-dim
+     * (with "This time" / "Always for this game" when it's off) and Turn screen off.
+     */
     @Composable
     private fun BrightnessPanel(
-        value: Int, onChange: (Int) -> Unit, autoDim: Boolean, onAutoDim: (Boolean) -> Unit,
+        percent: Int, matched: Boolean, topPercent: Int, topAuto: Boolean,
+        onChange: (Int) -> Unit, onMatch: (Boolean) -> Unit,
+        autoDim: Boolean, autoDimSummary: String, offChoice: Boolean?, onAutoDim: (Boolean) -> Unit, onOffChoice: (Boolean) -> Unit,
         onScreenOff: () -> Unit, onDismiss: () -> Unit,
     ) {
         val c = LocalWii.current
+        val blue = Color(0xFF5BC8F0)
         Box(Modifier.fillMaxSize().clickable(onClick = onDismiss)) {
             PopupPanel(
                 "Bottom screen", "Brightness",
                 Modifier.align(Alignment.TopEnd).padding(top = 74.dp, end = 10.dp).width(280.dp).clickable(enabled = false) {},
-                corner = { Text("$value", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Glow.Yellow) },
+                corner = {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("$percent", fontSize = 20.sp, lineHeight = 22.sp, fontWeight = FontWeight.ExtraBold, color = if (matched) blue else Glow.Yellow)
+                        Text(if (matched) "SAME AS TOP" else "TOP IS $topPercent", fontSize = 8.5.sp, lineHeight = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp, color = c.textDim)
+                    }
+                },
             ) {
-                PadSlider(value = value.toFloat(), onValueChange = { onChange(it.toInt()) }, valueRange = 0f..100f, step = 5f, thumbColor = Color.White)
-                SettingRow("Auto-dim", "Just for this game session", onClick = { onAutoDim(!autoDim) }) { ThemedToggle(autoDim) }
+                SettingRow(
+                    "Match the top screen",
+                    when { !matched -> "Off: your own level"; topAuto -> "Top uses auto-brightness: its last set level"; else -> "Follows it when you change it" },
+                    onClick = { onMatch(!matched) },
+                ) { ThemedToggle(matched) }
+                if (!matched) TopMark(topPercent / 100f, blue)
+                PadSlider(
+                    value = percent.toFloat(), onValueChange = { onChange(it.roundToInt()) }, valueRange = 0f..100f, step = 5f,
+                    thumbColor = Color.White,
+                )
+                SettingRow("Auto-dim", if (autoDim) autoDimSummary else if (offChoice == true) "Off for this game" else "Off this time", onClick = { onAutoDim(!autoDim) }) { ThemedToggle(autoDim) }
+                if (!autoDim && offChoice != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        WiiChip("This time", selected = !offChoice, onClick = { onOffChoice(false) })
+                        WiiChip("Always for this game", selected = offChoice, onClick = { onOffChoice(true) })
+                    }
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     PanelBtn("Turn screen off", null, false, onClick = onScreenOff)
                 }
                 Text("Tap anywhere to turn it back on", fontSize = 11.sp, color = c.textDim, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
             }
+        }
+    }
+
+    /** "TOP" over the slider, where the top screen's level is (the slider track starts and ends ~16 dp in). */
+    @Composable
+    private fun TopMark(fraction: Float, color: Color) {
+        androidx.compose.ui.layout.Layout(
+            content = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("TOP", fontSize = 8.sp, lineHeight = 9.sp, fontWeight = FontWeight.Black, color = color)
+                    Box(Modifier.width(2.dp).height(7.dp).background(color, RoundedCornerShape(1.dp)))
+                }
+            },
+            modifier = Modifier.fillMaxWidth().padding(bottom = 0.dp),
+        ) { ms, cons ->
+            val p = ms.first().measure(cons.copy(minWidth = 0))
+            val inset = 16.dp.roundToPx()
+            val w = cons.maxWidth
+            val x = (inset + (w - 2 * inset) * fraction.coerceIn(0f, 1f) - p.width / 2f).roundToInt().coerceIn(0, (w - p.width).coerceAtLeast(0))
+            layout(w, p.height) { p.place(x, 0) }
         }
     }
 

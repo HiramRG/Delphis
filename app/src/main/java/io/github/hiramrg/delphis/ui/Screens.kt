@@ -2596,7 +2596,9 @@ private fun BottomScreenSettings(act: MainActivity) {
     val c = LocalWii.current
     var screenMode by remember { mutableStateOf(prefs.bottomScreenMode) }
     var delaySec by remember { mutableIntStateOf(prefs.dimDelaySeconds) }
-    var brightness by remember { mutableFloatStateOf(prefs.brightnessPercent.toFloat()) }
+    var strength by remember { mutableStateOf(prefs.dimStrength) }
+    var wakeAch by remember { mutableStateOf(prefs.dimWakeForAchievements) }
+    var rememberOff by remember { mutableStateOf(prefs.autoDimRemember) }
     var swap by remember { mutableStateOf(prefs.swapScreens) }
     val pick: (BottomScreen.Mode) -> Unit = { screenMode = it; prefs.bottomScreenMode = it }
     CapsLabel("While you play")
@@ -2614,19 +2616,21 @@ private fun BottomScreenSettings(act: MainActivity) {
         }
     }
     if (screenMode == BottomScreen.Mode.DIM) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Dimmed level", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(104.dp))
-            WiiSlider(
-                value = brightness, onValueChange = { brightness = it }, onValueChangeFinished = { prefs.brightnessPercent = brightness.toInt() },
-                valueRange = 0f..100f, modifier = Modifier.weight(1f),
-            )
-            Text("${brightness.toInt()}", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.End, modifier = Modifier.width(34.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("How dim", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(96.dp))
+            io.github.hiramrg.delphis.core.Brightness.Strength.entries.forEach { st ->
+                WiiChip(st.label, selected = strength == st, onClick = { strength = st; prefs.dimStrength = st })
+            }
         }
-        Text("Normal brightness is set with the ☀ button on the in-game bottom screen.", fontSize = 11.sp, color = c.textDim)
+        Text("Compared with the bottom screen's normal brightness, so it still shows when the screens are dim at night.", fontSize = 11.sp, color = c.textDim)
+    }
+    if (screenMode != BottomScreen.Mode.ON) {
+        SwitchRow("Light up for achievements", "A few seconds when one unlocks, then it dims again.", wakeAch) { wakeAch = it; prefs.dimWakeForAchievements = it }
+        SwitchRow("Remember \"Auto-dim off\" for each game", "Offers \"Always for this game\" in game, for games where you watch the bottom screen.", rememberOff) { rememberOff = it; prefs.autoDimRemember = it }
     }
     Text(
-        "Touching the screen lights it up again for the full time; the first touch only wakes it. In game, tap the brightness pill " +
-            "to turn Auto-dim off just for that game, or to turn the bottom screen off.",
+        "The bottom screen matches the top screen's brightness unless you pick your own level with the ☀ button in game. " +
+            "Touching it lights it up again for the full time; the first touch only wakes it. Trackpad games dim instead of going black.",
         fontSize = 12.sp, color = c.textDim,
     )
     SwitchRow("Swap top and bottom screens", "Use if games open on the small screen.", swap) { swap = it; prefs.swapScreens = it }

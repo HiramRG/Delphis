@@ -51,17 +51,49 @@ class Prefs(context: Context) {
         set(v) = sp.edit().putBoolean("invert_motion", v).apply()
 
     /**
-     * Bottom-screen brightness while playing, 0 (dimmest) .. 100 (full).
-     * Older versions stored a 1..4 level instead; that carries over the first time.
+     * In-game bottom screen: true = the same brightness as the top screen (and it follows the top's changes),
+     * false = the player's own level ([bottomPercent]). Players who had picked a level before keep it.
      */
-    /**
-     * The in-game bottom screen's normal brightness (0..100), set with its ☀ pill; used whenever the
-     * screen isn't dimmed. Null = follow the system brightness (until the player picks a level).
-     */
-    var bottomBrightness: Int?
-        get() = if (sp.contains("bottom_brightness")) sp.getInt("bottom_brightness", 50).coerceIn(0, 100) else null
-        set(v) { if (v == null) sp.edit().remove("bottom_brightness").apply() else sp.edit().putInt("bottom_brightness", v.coerceIn(0, 100)).apply() }
+    var bottomMatchTop: Boolean
+        get() = sp.getBoolean("bottom_match", !sp.contains("bottom_brightness"))
+        set(v) = sp.edit().putBoolean("bottom_match", v).apply()
 
+    /** The player's own bottom-screen level, 0..100 on Android's slider curve (core.Brightness). */
+    var bottomPercent: Int
+        get() = when {
+            sp.contains("bottom_level") -> sp.getInt("bottom_level", 50).coerceIn(0, 100)
+            sp.contains("bottom_brightness") -> io.github.hiramrg.delphis.core.Brightness.percentFromOldLinear(sp.getInt("bottom_brightness", 50))
+            else -> 50
+        }
+        set(v) = sp.edit().putInt("bottom_level", v.coerceIn(0, 100)).apply()
+
+    /** How much "Dim" lowers the bottom screen, compared with its normal level. Carries over the old fixed level. */
+    var dimStrength: io.github.hiramrg.delphis.core.Brightness.Strength
+        get() = io.github.hiramrg.delphis.core.Brightness.strengthOf(sp.getString("dim_strength", null))
+            ?: if (sp.contains("brightness_percent") || sp.contains("brightness_level")) io.github.hiramrg.delphis.core.Brightness.strengthFromOldLevel(brightnessPercent)
+            else io.github.hiramrg.delphis.core.Brightness.Strength.MEDIUM
+        set(v) = sp.edit().putString("dim_strength", v.id).apply()
+
+    /** A dimmed bottom screen lights up for a few seconds when an achievement unlocks. */
+    var dimWakeForAchievements: Boolean
+        get() = sp.getBoolean("dim_wake_ach", true)
+        set(v) = sp.edit().putBoolean("dim_wake_ach", v).apply()
+
+    /** Turning Auto-dim off in game offers "Always for this game". */
+    var autoDimRemember: Boolean
+        get() = sp.getBoolean("autodim_remember", true)
+        set(v) = sp.edit().putBoolean("autodim_remember", v).apply()
+
+    /** Games whose Auto-dim was turned off with "Always for this game". */
+    fun autoDimOffFor(gameId: String?): Boolean = gameId != null && autoDimRemember && gameId in (sp.getStringSet("autodim_off_games", null) ?: emptySet())
+    fun setAutoDimOffFor(gameId: String?, off: Boolean) {
+        if (gameId == null) return
+        val s = (sp.getStringSet("autodim_off_games", null) ?: emptySet()).toMutableSet()
+        if (off) s += gameId else s -= gameId
+        sp.edit().putStringSet("autodim_off_games", s).apply()
+    }
+
+    /** The old fixed dimmed level (0..100 of full); only read to carry it over into [dimStrength]. */
     var brightnessPercent: Int
         get() = if (sp.contains("brightness_percent")) sp.getInt("brightness_percent", 12).coerceIn(0, 100)
         else when (sp.getInt("brightness_level", 2)) { 1 -> 2; 2 -> 12; 3 -> 40; else -> 100 }
