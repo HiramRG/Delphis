@@ -1,0 +1,48 @@
+build-tools: 37.0.0
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): false
+Verified using v3 scheme (APK Signature Scheme v3): true
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v3.2 scheme (APK Signature Scheme v3.2): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+V3.0 Signer: certificate DN: CN=Delphis
+V3.0 Signer: certificate SHA-256 digest: b14b3a9114ba63b7119d462654cf48b1eb6a5afe542856e58175a3eb1217ece2
+V3.0 Signer: certificate SHA-1 digest: d88bfff3283ef9b39dfe07982171c7b772782d87
+V3.0 Signer: certificate MD5 digest: f0a987a73ac79a78b2ac93c58c95a67e
+V3.0 Signer: key algorithm: RSA
+V3.0 Signer: key size (bits): 4096
+V3.0 Signer: public key SHA-256 digest: fcc540b8cfacc138f29b537d8f704fb84ba48c5088b8e3a6360708810c8f76bf
+V3.0 Signer: public key SHA-1 digest: 134f3e25d53cf905d7086c428559f35330861e9f
+V3.0 Signer: public key MD5 digest: 56b0695c7427605e2e561db5e9c3950e
+--- lineage
+Signer #1 in lineage certificate DN: CN=Dolphin AC, O=Dolphin AC
+Signer #1 in lineage certificate SHA-256 digest: 23b7ae0771b3b84e68fb83d004259a519d1b05615edb6e5ac584f28162d75e71
+Signer #1 in lineage certificate SHA-1 digest: cf9c9d26f75bb61079ce0135016f3d0505d7fc2c
+Signer #1 in lineage certificate MD5 digest: d6f0778ac1db1211114c7e10c2c886f9
+Signer #1 in lineage key algorithm: RSA
+Signer #1 in lineage key size (bits): 2048
+Signer #1 in lineage public key SHA-256 digest: 4716aaabf24b5abf535a7abf3e17f8ccc54c54302ca84bc5d5a2e0be9123aefd
+Signer #1 in lineage public key SHA-1 digest: e0bdad3b1f4e305797369b6ce522328b2df90e1c
+Signer #1 in lineage public key MD5 digest: 9207345a2e3762cd5cbfa69124f597c0
+Has installed data capability: true
+Has shared UID capability    : true
+Has permission capability    : true
+Has rollback capability      : false
+Has auth capability          : true
+Signer #2 in lineage certificate DN: CN=Delphis
+Signer #2 in lineage certificate SHA-256 digest: b14b3a9114ba63b7119d462654cf48b1eb6a5afe542856e58175a3eb1217ece2
+Signer #2 in lineage certificate SHA-1 digest: d88bfff3283ef9b39dfe07982171c7b772782d87
+Signer #2 in lineage certificate MD5 digest: f0a987a73ac79a78b2ac93c58c95a67e
+Signer #2 in lineage key algorithm: RSA
+Signer #2 in lineage key size (bits): 4096
+Signer #2 in lineage public key SHA-256 digest: fcc540b8cfacc138f29b537d8f704fb84ba48c5088b8e3a6360708810c8f76bf
+Signer #2 in lineage public key SHA-1 digest: 134f3e25d53cf905d7086c428559f35330861e9f
+Signer #2 in lineage public key MD5 digest: 56b0695c7427605e2e561db5e9c3950e
+Has installed data capability: true
+Has shared UID capability    : true
+Has permission capability    : true
+Has rollback capability      : false
+Has auth capability          : true
