@@ -95,7 +95,8 @@ object Players {
         val pointer = PresetLibrary.POINTER_GYRO_ALL + PresetLibrary.POINTER_PRECISION_ALL + PresetLibrary.POINTER_TRACKPAD +
             PresetLibrary.RED_STEEL_TRACKPAD + PresetLibrary.RED_STEEL_TOUCH
         galaxy.associate { it.id to PresetLibrary.GALAXY_RIGHT_STICK } + pointer.associate { it.id to PresetLibrary.POINTER_ADVENTURE } +
-            (PresetLibrary.MKW_WHEEL_GYRO.id to PresetLibrary.MKW_WHEEL_STICK)
+            (PresetLibrary.MKW_WHEEL_GYRO.id to PresetLibrary.MKW_WHEEL_STICK) +
+            (PresetLibrary.RESORT_TILT.id to PresetLibrary.RESORT_SWING)
     }
 
     /**

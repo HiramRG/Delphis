@@ -5,14 +5,12 @@ package io.github.hiramrg.delphis.core
  * and replace [items]; people who already saw this release's notes won't see them again.
  */
 object WhatsNew {
-    const val RELEASE = 68
+    const val RELEASE = 69
 
     data class Item(val title: String, val text: String, val fix: Boolean = false)
 
     val items = listOf(
-        Item("Both screens, same brightness.", "The bottom screen now matches the top screen when a game starts, and follows it if you change it. Pick your own level with ☀ in game.", fix = true),
-        Item("Smoother brightness slider.", "It uses the same curve as Android's slider, so 40 on the bottom looks like 40 on the top."),
-        Item("Gentler Auto-dim.", "Choose how dim (Light, Medium or Strong), it lights up for achievements, and you can turn it off for good in games where you watch the bottom screen."),
+        Item("Wii Sports and Wii Sports Resort presets.", "Swing with the right stick, aim menus with the left. Resort adds twists on L1 / R1 and a Tilt the Thor option. Also for the disc with both games."),
     )
 
     /** Show after an update (never on a fresh install) until this release's notes were seen. */

@@ -257,6 +257,83 @@ object PresetLibrary {
         tip("Hold the Thor level when the race starts. If steering is reversed, turn on \"Invert motion steering\" in Settings and apply again.")
     }
 
+    // ---------------------------------------------------------------- Wii Sports / Wii Sports Resort
+    // Both games are built around swinging the Wii Remote. The swing goes on the right stick (Dolphin's
+    // emulated Swing: a quick flick is a swing, how far and how fast is how hard); the pointer, which
+    // every menu and the Mii select use, goes on the left stick. Only offered for these games
+    // (GameDatabase rules RSP / RZT / SP2), never as a generic layout.
+    val SPORTS_SWING = preset("sports-swing", "Swing on Right Stick", EmulatedController.WIIMOTE_NUNCHUK) {
+        summary = "Flick the right stick to swing: up, down or sideways. Pointer on the left stick for menus. Every sport on one layout."
+        directional(ThorControl.RIGHT_STICK, "Swing (flick)", "Swing")
+        directional(ThorControl.LEFT_STICK, "Pointer, menus (IR)", "IR")
+        button(ThorControl.FACE_EAST, "Confirm, golf swing (A)", "Buttons/A")
+        button(ThorControl.FACE_SOUTH, "Confirm, golf swing (A)", "Buttons/A")
+        button(ThorControl.R2, "Hold to bowl / pitch (B)", "Buttons/B")
+        button(ThorControl.FACE_NORTH, "Left punch (shake Nunchuk)", *NUNCHUK_SHAKE)
+        button(ThorControl.FACE_WEST, "Right punch (shake)", *SHAKE)
+        button(ThorControl.L1, "Lean / spin left (tilt)", "Tilt/Left")
+        button(ThorControl.R1, "Lean / spin right (tilt)", "Tilt/Right")
+        directional(ThorControl.DPAD, "Move & aim (D-pad)", "D-Pad")
+        button(ThorControl.L3, "1", "Buttons/1")
+        button(ThorControl.R3, "Recenter pointer", "IR/Recenter")
+        wiiSystemButtons()
+        option("Extension", "Nunchuk")
+        option("IR/Relative Input", "True")
+        hideIdlePointer()
+        tip("Tennis: flick sideways to hit; the direction picks forehand or backhand, timing matters.")
+        tip("Bowling: hold R2, flick up to roll; L1 / R1 while rolling adds spin.")
+        tip("Golf: hold A, flick down then up; how far you flick is the power.")
+        tip("Boxing: Y and X punch, L1 / R1 dodge. The pointer stays where you leave it; R3 recenters it.")
+    }
+
+    val RESORT_SWING = preset("resort-swing", "Swing + Twist on Sticks", EmulatedController.WIIMOTE_NUNCHUK) {
+        summary = "MotionPlus on. Flick the right stick the way you'd swing; L1 / R1 twist. Pointer on the left stick for menus and archery."
+        directional(ThorControl.RIGHT_STICK, "Swing (flick)", "Swing")
+        directional(ThorControl.LEFT_STICK, "Pointer, archery aim (IR)", "IR")
+        button(ThorControl.FACE_EAST, "A", "Buttons/A")
+        button(ThorControl.FACE_SOUTH, "A", "Buttons/A")
+        button(ThorControl.R2, "Grip, draw, throw (B)", "Buttons/B")
+        button(ThorControl.L2, "Z (Nunchuk)", "Nunchuk/Buttons/Z")
+        button(ThorControl.L1, "Twist left (tilt)", "Tilt/Left")
+        button(ThorControl.R1, "Twist right (tilt)", "Tilt/Right")
+        button(ThorControl.FACE_NORTH, "Left pedal, paddle (shake Nunchuk)", *NUNCHUK_SHAKE)
+        button(ThorControl.FACE_WEST, "Right pedal (shake)", *SHAKE)
+        directional(ThorControl.DPAD, "D-pad", "D-Pad")
+        button(ThorControl.R3, "Recenter pointer", "IR/Recenter")
+        wiiSystemButtons()
+        option("Extension", "Nunchuk")
+        option("Extension/Attach MotionPlus", "True")
+        option("IR/Relative Input", "True")
+        hideIdlePointer()
+        tip("Swordplay: flick the right stick the way you'd slash.")
+        tip("Archery: aim with the left stick, hold R2 and L2 to draw.")
+        tip("Cycling: tap Y and X one after the other to pedal.")
+        tip("Frisbee: hold R2, L1 / R1 for the angle, flick to throw.")
+    }
+
+    val RESORT_TILT = preset("resort-tilt", "Tilt the Thor", EmulatedController.WIIMOTE_NUNCHUK) {
+        summary = "Like Swing + Twist, but the angle comes from tilting the whole Thor: archery, frisbee, the sword's guard, planes."
+        experimental = true
+        tilt(ThorControl.MOTION, "Aim angle (tilt the Thor)")
+        directional(ThorControl.RIGHT_STICK, "Swing (flick)", "Swing")
+        directional(ThorControl.LEFT_STICK, "Pointer, menus (IR)", "IR")
+        button(ThorControl.FACE_EAST, "A", "Buttons/A")
+        button(ThorControl.FACE_SOUTH, "A", "Buttons/A")
+        button(ThorControl.R2, "Grip, draw, throw (B)", "Buttons/B")
+        button(ThorControl.L2, "Z (Nunchuk)", "Nunchuk/Buttons/Z")
+        button(ThorControl.FACE_NORTH, "Shake Nunchuk", *NUNCHUK_SHAKE)
+        button(ThorControl.FACE_WEST, "Shake Wii Remote", *SHAKE)
+        directional(ThorControl.DPAD, "D-pad", "D-Pad")
+        button(ThorControl.R3, "Recenter pointer", "IR/Recenter")
+        wiiSystemButtons()
+        option("Extension", "Nunchuk")
+        option("Extension/Attach MotionPlus", "True")
+        option("IR/Relative Input", "True")
+        hideIdlePointer()
+        tip("Hold the Thor level when the sport starts: that's the center.")
+        tip("Not for Cycling or Canoe: those need both hands on buttons. Use Swing + Twist for them.")
+    }
+
     // ---------------------------------------------------------------- Other sideways platformers
     val DKCR_SIDEWAYS = preset("dkcr-sideways", "Sideways Wii Remote", EmulatedController.WIIMOTE_SIDEWAYS) {
         summary = "Sideways remote with the hand-slap/roll shake on shoulder buttons."
@@ -544,6 +621,7 @@ object PresetLibrary {
         GALAXY_RIGHT_STICK, NSMB_SIDEWAYS, MKW_NUNCHUK, MKW_WHEEL_STICK, MKW_WHEEL_GYRO,
         DKCR_SIDEWAYS, KIRBY_SIDEWAYS, PAPER_MARIO_SIDEWAYS, POINTER_ADVENTURE,
         GENERIC_SIDEWAYS, CLASSIC_CONTROLLER, GAMECUBE, SMASH_GC,
+        SPORTS_SWING, RESORT_SWING, RESORT_TILT,
     ) + GALAXY_PRECISION_ALL + POINTER_PRECISION_ALL +
         listOf(GALAXY_TRACKPAD, POINTER_TRACKPAD, RED_STEEL_TRACKPAD, RED_STEEL_TOUCH)
 

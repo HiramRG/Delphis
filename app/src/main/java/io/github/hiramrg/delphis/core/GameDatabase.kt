@@ -95,6 +95,22 @@ object GameDatabase {
             listOf(PresetLibrary.RED_STEEL_TRACKPAD, PresetLibrary.RED_STEEL_TOUCH),
             more = listOf(PresetLibrary.POINTER_ADVENTURE, PresetLibrary.POINTER_TRACKPAD) + PresetLibrary.POINTER_PRECISION_ALL,
         ),
+        // Wii Sports, Wii Sports Resort and the disc with both: swing presets, only ever offered for these.
+        GameRule(
+            setOf("RSP"), "Wii Sports", listOf("wii sports"),
+            "Wii Sports is all about swinging the Wii Remote. On the Thor you swing with the right stick:",
+            listOf(PresetLibrary.SPORTS_SWING),
+        ),
+        GameRule(
+            setOf("RZT"), "Wii Sports Resort", listOf("wii sports resort", "sports resort"),
+            "Wii Sports Resort needs swings and twists (MotionPlus). Swing with the right stick, or tilt the Thor for angles:",
+            listOf(PresetLibrary.RESORT_SWING, PresetLibrary.RESORT_TILT),
+        ),
+        GameRule(
+            setOf("SP2"), "Wii Sports + Wii Sports Resort", listOf("wii sports + wii sports resort", "sports + wii sports resort", "wii sports and wii sports resort"),
+            "This disc has both games. Swing + Twist works for both; Swing on Right Stick is the Wii Sports layout:",
+            listOf(PresetLibrary.RESORT_SWING, PresetLibrary.SPORTS_SWING, PresetLibrary.RESORT_TILT),
+        ),
         GameRule(
             setOf("RSB"), "Super Smash Bros. Brawl", listOf("smash bros", "brawl"),
             "Brawl supports the GameCube controller, which is the best fit for the Thor:",
