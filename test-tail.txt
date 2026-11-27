@@ -1,0 +1,150 @@
+    [layout] 251 ms · tablet: Game page · Saves · Delete kept save
+    [layout] 290 ms · tablet: Game page · Saves · Rename (keyboard)
+    [layout] 179 ms · tablet: Game page with screenshots
+    [layout] 202 ms · tablet: Game page · Screenshots
+    [layout] 148 ms · tablet: Home · helper stopped
+    [layout] 152 ms · tablet: Settings → Appearance
+    [layout] 134 ms · tablet: Settings → Sound
+    [layout] 147 ms · tablet: Settings → Controls
+    [layout] 130 ms · tablet: Settings → Gyro aiming
+    [layout] 134 ms · tablet: Settings → Closing games
+    [layout] 177 ms · tablet: Settings → Display
+    [layout] 129 ms · tablet: Settings → Saves
+    [layout] 140 ms · tablet: Settings → Achievements
+    [layout] 127 ms · tablet: Settings → Play stats
+    [layout] 122 ms · tablet: Settings → Library & folders
+    [layout] 125 ms · tablet: Settings → Backup
+    [layout] 133 ms · tablet: Settings → Frontends
+    [layout] 130 ms · tablet: Settings → Updates
+    [layout] 139 ms · tablet: Settings → Diagnostics
+    [layout] 181 ms · tablet: Settings → Backup · Make a backup
+    [layout] 159 ms · tablet: Settings → Backup · Restore
+    [layout] 171 ms · tablet: Settings → Display · Xbox hints
+    [layout] 157 ms · tablet: Settings → Controls · Xbox hints
+    [layout] 150 ms · tablet: Diagnostics
+    [layout] 166 ms · tablet: Pop-up: update found
+    [layout] 185 ms · tablet: Pop-up: report a problem
+    [layout] 133 ms · tablet: Notice
+    [layout] 131 ms · tablet: Pop-up: no controller
+    [layout] 135 ms · tablet: Pop-up: check the controller
+    [layout] 153 ms · tablet: Pop-up: press A on a new controller
+    [layout] 134 ms · tablet: Pop-up: close games
+    [layout] 133 ms · tablet: Pop-up: add a controller, step 1
+    [layout] 134 ms · tablet: Pop-up: add a controller, step 2
+    [layout] 132 ms · tablet: Pop-up: add a controller, step 3
+    [layout] 151 ms · tablet: Settings → Controllers (testing the button)
+    [layout] 191 ms · tablet: Pop-up: game still open
+    [layout] 117 ms · bottom: starting In-game menu
+    [layout] 127 ms · bottom: In-game menu
+    [layout] 52 ms · phone: starting In-game menu
+    [layout] 92 ms · phone: In-game menu
+    [layout] 39 ms · tablet: starting In-game menu
+    [layout] 119 ms · tablet: In-game menu
+    [layout] 49 ms · bottom: starting In-game menu (GameCube)
+    [layout] 109 ms · bottom: In-game menu (GameCube)
+    [layout] 35 ms · phone: starting In-game menu (GameCube)
+    [layout] 89 ms · phone: In-game menu (GameCube)
+    [layout] 39 ms · tablet: starting In-game menu (GameCube)
+    [layout] 112 ms · tablet: In-game menu (GameCube)
+    [layout] 48 ms · bottom: starting In-game menu (many controls)
+    [layout] 130 ms · bottom: In-game menu (many controls)
+    [layout] 54 ms · phone: starting In-game menu (many controls)
+    [layout] 81 ms · phone: In-game menu (many controls)
+    [layout] 36 ms · tablet: starting In-game menu (many controls)
+    [layout] 112 ms · tablet: In-game menu (many controls)
+    [layout] 84 ms · bottom: starting In-game menu (trackpad)
+    [layout] 102 ms · bottom: In-game menu (trackpad)
+    [layout] 45 ms · phone: starting In-game menu · Xbox
+    [layout] 83 ms · phone: In-game menu · Xbox
+    [layout] 50 ms · tablet: starting In-game menu · Xbox
+    [layout] 113 ms · tablet: In-game menu · Xbox
+    [layout] 42 ms · phone: starting In-game menu (GameCube) · Xbox
+    [layout] 86 ms · phone: In-game menu (GameCube) · Xbox
+    [layout] 40 ms · tablet: starting In-game menu (GameCube) · Xbox
+    [layout] 112 ms · tablet: In-game menu (GameCube) · Xbox
+    [layout] 36 ms · phone: starting In-game menu (many controls) · Xbox
+    [layout] 83 ms · phone: In-game menu (many controls) · Xbox
+    [layout] 41 ms · tablet: starting In-game menu (many controls) · Xbox
+    [layout] 116 ms · tablet: In-game menu (many controls) · Xbox
+    [layout] 41 ms · phone: starting In-game menu · PlayStation
+    [layout] 84 ms · phone: In-game menu · PlayStation
+    [layout] 41 ms · tablet: starting In-game menu · PlayStation
+    [layout] 124 ms · tablet: In-game menu · PlayStation
+    [layout] 41 ms · phone: starting In-game menu · Switch Pro
+    [layout] 82 ms · phone: In-game menu · Switch Pro
+    [layout] 43 ms · tablet: starting In-game menu · Switch Pro
+    [layout] 114 ms · tablet: In-game menu · Switch Pro
+    [layout] 41 ms · phone: starting In-game menu · 8BitDo
+    [layout] 83 ms · phone: In-game menu · 8BitDo
+    [layout] 39 ms · tablet: starting In-game menu · 8BitDo
+    [layout] 111 ms · tablet: In-game menu · 8BitDo
+    [layout] 41 ms · phone: starting In-game Picture · Look · Xbox
+    [layout] 88 ms · phone: In-game Picture · Look · Xbox
+    [layout] 34 ms · tablet: starting In-game Picture · Look · Xbox
+    [layout] 114 ms · tablet: In-game Picture · Look · Xbox
+    [layout] 40 ms · phone: starting In-game Picture · Sharpness · Xbox
+    [layout] 83 ms · phone: In-game Picture · Sharpness · Xbox
+    [layout] 41 ms · tablet: starting In-game Picture · Sharpness · Xbox
+    [layout] 142 ms · tablet: In-game Picture · Sharpness · Xbox
+    [layout] 50 ms · bottom: starting In-game Picture · Look (Thor)
+    [layout] 83 ms · bottom: In-game Picture · Look (Thor)
+    [layout] 47 ms · bottom: starting In-game Picture · Sharpness (Thor)
+    [layout] 81 ms · bottom: In-game Picture · Sharpness (Thor)
+    [layout] 46 ms · bottom: starting In-game Picture · trackpad game (Thor)
+    [layout] 82 ms · bottom: In-game Picture · trackpad game (Thor)
+    [layout] 49 ms · phone: starting In-game Change controls · Xbox
+    [layout] 82 ms · phone: In-game Change controls · Xbox
+    [layout] 36 ms · tablet: starting In-game Change controls · Xbox
+    [layout] 112 ms · tablet: In-game Change controls · Xbox
+    [layout] 56 ms · bottom: starting In-game Change controls (Thor)
+    [layout] 81 ms · bottom: In-game Change controls (Thor)
+    [layout] 427 ms · tablet: starting In-game autosave not loaded · Xbox
+    [layout] 114 ms · tablet: In-game autosave not loaded · Xbox
+    [layout] 47 ms · bottom: starting In-game autosave not loaded (Thor)
+    [layout] 107 ms · bottom: In-game autosave not loaded (Thor)
+    [layout] 47 ms · bottom: starting In-game autosave not loaded, helper back (Thor)
+    [layout] 97 ms · bottom: In-game autosave not loaded, helper back (Thor)
+    [layout] 52 ms · bottom: starting In-game Achievements · Next up (Thor)
+    [layout] 96 ms · bottom: In-game Achievements · Next up (Thor)
+    [layout] 47 ms · phone: starting In-game Achievements · Next up
+    [layout] 82 ms · phone: In-game Achievements · Next up
+    [layout] 37 ms · tablet: starting In-game Achievements · Next up
+    [layout] 109 ms · tablet: In-game Achievements · Next up
+    [layout] 52 ms · bottom: starting In-game Achievements · All (Thor)
+    [layout] 93 ms · bottom: In-game Achievements · All (Thor)
+    [layout] 44 ms · phone: starting In-game Achievements · All
+    [layout] 84 ms · phone: In-game Achievements · All
+    [layout] 40 ms · tablet: starting In-game Achievements · All
+    [layout] 111 ms · tablet: In-game Achievements · All
+    [layout] 46 ms · bottom: starting In-game Achievements · Unlocked (Thor)
+    [layout] 80 ms · bottom: In-game Achievements · Unlocked (Thor)
+    [layout] 42 ms · phone: starting In-game Achievements · Unlocked
+    [layout] 80 ms · phone: In-game Achievements · Unlocked
+    [layout] 39 ms · tablet: starting In-game Achievements · Unlocked
+    [layout] 114 ms · tablet: In-game Achievements · Unlocked
+    [layout] 42 ms · phone: starting In-game Saves · Xbox
+    [layout] 84 ms · phone: In-game Saves · Xbox
+    [layout] 36 ms · tablet: starting In-game Saves · Xbox
+    [layout] 114 ms · tablet: In-game Saves · Xbox
+    [layout] 39 ms · phone: starting In-game Saves · Kept save · Xbox
+    [layout] 85 ms · phone: In-game Saves · Kept save · Xbox
+    [layout] 34 ms · phone: starting In-game Saves · Rename (keyboard) · Xbox
+    [layout] 99 ms · phone: In-game Saves · Rename (keyboard) · Xbox
+    [layout] 46 ms · tablet: starting In-game Saves · Rename (keyboard) · Xbox
+    [layout] 123 ms · tablet: In-game Saves · Rename (keyboard) · Xbox
+    [layout] 45 ms · bottom: starting In-game Saves · Kept save (Thor)
+    [layout] 83 ms · bottom: In-game Saves · Kept save (Thor)
+    [layout] 66 ms · bottom: starting In-game Saves · Delete kept save (Thor)
+    [layout] 83 ms · bottom: In-game Saves · Delete kept save (Thor)
+    [layout] 57 ms · bottom: starting In-game Saves · Rename (keyboard) (Thor)
+    [layout] 92 ms · bottom: In-game Saves · Rename (keyboard) (Thor)
+    [layout] 41 ms · bottom: starting In-game Saves (Thor)
+    [layout] 83 ms · bottom: In-game Saves (Thor)
+    [layout] 39 ms · bottom: starting In-game Saves, helper stopped (Thor)
+    [layout] 76 ms · bottom: In-game Saves, helper stopped (Thor)
+    [layout] 28 ms · phone: starting In-game Saves, helper stopped · Xbox
+    [layout] 77 ms · phone: In-game Saves, helper stopped · Xbox
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1795802755213.json
+
+BUILD SUCCESSFUL in 2m 22s
+26 actionable tasks: 26 executed
